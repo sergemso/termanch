@@ -15,8 +15,8 @@ thiserror = "1.0"
 tokio = { version = "1.38", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-axum = "0.7"
-tower = "0.4"
+axum = { version = "0.7", features = ["ws"] }
+tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 async-trait = "0.1"
 uuid = { version = "1.7", features = ["serde", "v4"] }
@@ -26,3 +26,5 @@ sha2 = "0.10"
 rand = "0.8"
 clap = { version = "4.5", features = ["derive", "env"] }
 anyhow = "1.0"
+oauth2 = "5.0"
+axum-extra = "0.9"
