@@ -142,12 +142,12 @@ pub fn print_registration_token(secret: &str, server_name: &str) {
 }
 
 pub async fn register_handler(
-    State(state): State<Arc<RegistrationState>>,
+    State(state): State<crate::AppState>,
     Json(req): Json<RegisterRequest>,
 ) -> impl IntoResponse {
     let hmac_token = req.token;
 
-    match state.poll_registration(&hmac_token).await {
+    match state.registration.poll_registration(&hmac_token).await {
         Some(response) => {
             info!("Registration completed for token");
             Json(response).into_response()
