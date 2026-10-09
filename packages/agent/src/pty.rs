@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::env;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -131,8 +132,8 @@ impl PtyManager {
                 ws_ypixel: 0,
             };
             unsafe {
-                nix::ioctl_write_ptr!(TIOCSWINSZ, Winsize);
-                let _ = nix::ioctl(session.master_fd, nix::libc::TIOCSWINSZ, &ws);
+                nix::sys::ioctl::ioctl_write_ptr!(TIOCSWINSZ, Winsize);
+                let _ = nix::sys::ioctl::ioctl(session.master_fd, nix::libc::TIOCSWINSZ, &ws);
             }
             Ok(())
         } else {

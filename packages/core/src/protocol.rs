@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 /// Client → Server (WebSocket)
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum ClientMessage {
     Auth { token: String, server_token: String },
@@ -13,7 +13,7 @@ pub enum ClientMessage {
 }
 
 /// Server → Client (WebSocket)
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum ServerMessage {
     AuthOk {
@@ -65,12 +65,12 @@ impl Display for AgentEventType {
 }
 
 /// Registration (HTTP POST /register)
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct RegisterRequest {
     pub token: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct RegisterResponse {
     pub server_url: String,
     pub server_name: String,
