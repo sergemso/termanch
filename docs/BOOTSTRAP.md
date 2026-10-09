@@ -42,21 +42,21 @@ This guide walks through setting up the cloud infrastructure (Cloudflare + GitHu
 
 You need **two tokens** for different purposes:
 
-**A. Fine-grained PAT (for GitHub Actions secrets/variables):**
+**A. Fine-grained PAT (for GitHub Actions secrets/variables via Terraform):**
 1. Go to **GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**
 2. **Repository access**: `sergemso/termanch` (or your fork)
 3. **Permissions**:
    - Repository → Actions → Read/Write (for secrets/variables)
    - Repository → Administration → Read/Write (for repo settings)
    - Repository → Variables → Read/Write
-3. Save as `GITHUB_ACTIONS_TOKEN`
+3. Save as `GITHUB_ACTIONS_TOKEN` — used as `github_actions_token` in Terraform
 
-**B. Classic PAT (for GitHub CLI / manual API calls):**
+**B. Classic PAT (for GitHub CLI / manual API calls only):**
 1. Go to **GitHub Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)**
 2. **Scopes**: `repo`, `admin:org` (for org-level operations if needed)
-3. Save as `GITHUB_CLASSIC_TOKEN`
+3. Save as `GITHUB_CLASSIC_TOKEN` — used for `gh` CLI and manual API calls
 
-> **Note**: There is NO `admin:oauth_app` scope in GitHub tokens. GitHub OAuth Apps must be created manually (see step 1.5).
+> **Note**: There is NO `admin:oauth_app` scope in GitHub tokens. GitHub OAuth Apps must be created manually (see step 1.4).
 
 ### 1.4 Create GitHub OAuth App (Manual — One-time)
 1. Go to **GitHub Settings → Developer settings → OAuth Apps → New OAuth App**
@@ -83,12 +83,14 @@ cd infra/termanch-cloud
 
 # Create terraform.tfvars
 cat > terraform.tfvars <<EOF
-cloudflare_api_token        = "your-cf-api-token"
-cloudflare_account_id       = "your-cf-account-id"
-cloudflare_zone_name        = "yourdomain.com"
+cloudflare_api_token         = "your-cf-api-token"
+cloudflare_account_id        = "your-cf-account-id"
+cloudflare_zone_name         = "yourdomain.com"
 cloudflare_pages_deploy_token = "your-pages-deploy-token"
-github_actions_token        = "your-fine-grained-pat"
-github_repository           = "sergemso/termanch"
+github_actions_token         = "your-fine-grained-pat"
+github_oauth_client_id       = "your-github-oauth-client-id"
+github_oauth_client_secret   = "your-github-oauth-client-secret"
+github_repository            = "sergemso/termanch"
 EOF
 
 # Initialize and apply (creates everything below)
