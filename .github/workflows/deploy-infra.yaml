@@ -1,5 +1,6 @@
 name: Deploy Cloud Infrastructure
 
+# force re-register workflow_dispatch
 on:
   workflow_dispatch:
     inputs:
