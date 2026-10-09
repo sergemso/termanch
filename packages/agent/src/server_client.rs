@@ -5,7 +5,7 @@ use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 use url::Url;
 
 use crate::pty::PtyManager;
@@ -134,7 +134,10 @@ impl ServerClient {
                 info!("Attached to session: {}", session_id);
                 *current_session = Some(session_id.clone());
 
-                let (rx, _tx) = mpsc::unbounded_channel();
+                let (_rx, _tx): (
+                    mpsc::UnboundedReceiver<Vec<u8>>,
+                    mpsc::UnboundedSender<Vec<u8>>,
+                ) = mpsc::unbounded_channel();
                 let _ = self.pty_manager.attach(&session_id).await;
             }
             ServerMessage::Output { data } => {
@@ -148,7 +151,7 @@ impl ServerClient {
                 info!("Agent event: {} - {} - {}", event, agent, session_id);
             }
             ServerMessage::Error { message } => {
-                warn!("Server error: {}", message);
+                info!("Server error: {}", message);
             }
         }
         Ok(())

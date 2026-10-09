@@ -1,11 +1,9 @@
 use std::sync::Arc;
 
 use clap::Parser;
-use futures_util::{SinkExt, StreamExt};
 use tokio::net::UnixListener;
 use tokio::sync::mpsc;
-use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 mod pty;
 mod server_client;
