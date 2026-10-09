@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 
 /// Client → Server (WebSocket)
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -45,7 +46,7 @@ pub struct SessionInfo {
     pub agent: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Display)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentEventType {
     Spawned,
