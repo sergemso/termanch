@@ -32,6 +32,7 @@ This guide walks through setting up the cloud infrastructure (Cloudflare + GitHu
 2. Use **Custom token** template:
    - **Permissions**:
      - Account → Cloudflare Pages → Edit
+     - Account → R2 → Edit
      - Zone → DNS → Edit
      - Zone → Zone → Read
    - **Account Resources**: Include your account
@@ -44,6 +45,8 @@ This guide walks through setting up the cloud infrastructure (Cloudflare + GitHu
 3. **Account Resources**: Include your account
 4. Save **Access Key ID** as `R2_ACCESS_KEY_ID`
 5. Save **Secret Access Key** as `R2_SECRET_ACCESS_KEY`
+
+> **Note**: The main `CLOUDFLARE_API_TOKEN` (step 1.2) also needs **Account → R2 → Edit** permission to create the R2 bucket via Terraform. The R2 API token (step 1.2.1) is only used by Terraform's S3 backend for state storage.
 
 ### 1.3 Create GitHub Personal Access Tokens
 
