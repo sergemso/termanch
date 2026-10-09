@@ -43,7 +43,7 @@ data "cloudflare_zone" "main" {
 resource "cloudflare_pages_project" "client" {
   account_id = var.cloudflare_account_id
   name       = "termanch"
-  production_branch = "main"
+  production_branch = "master"
   build_config = {
     build_command = "pnpm --filter termanch-client build"
     destination_dir = "packages/client/dist"

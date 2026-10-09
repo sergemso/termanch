@@ -2,7 +2,7 @@ name: Deploy to Cloudflare Pages
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   workflow_dispatch:
 
 permissions:
@@ -40,5 +40,5 @@ jobs:
           accountId: ${{ secrets.CF_PAGES_ACCOUNT_ID }}
           projectName: termanch
           directory: packages/client/dist
-          branch: main
+          branch: master
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
