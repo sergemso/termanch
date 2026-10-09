@@ -236,6 +236,12 @@ impl SessionManager {
                                 self.send_input(session_id.clone(), data.to_vec()).await;
                             }
                         }
+                        Some(Ok(Message::Ping(_))) => {
+                            // Respond with Pong automatically handled by axum
+                        }
+                        Some(Ok(Message::Pong(_))) => {
+                            // Ignore Pong
+                        }
                         Some(Ok(Message::Close(_))) => {
                             info!("WebSocket closed");
                             break;

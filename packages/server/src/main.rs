@@ -126,5 +126,5 @@ async fn ws_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Response {
-    ws.on_upgrade(|socket| handle_websocket(socket, state, headers))
+    ws.on_upgrade(|socket| handle_websocket(socket, State(state), headers))
 }
