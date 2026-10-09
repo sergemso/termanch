@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::Result;
 use tokio::process::Command;
 use tokio::sync::{mpsc, RwLock};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 pub struct PtyManager {
     ptys: Arc<RwLock<HashMap<String, PtySession>>>,
@@ -59,7 +58,7 @@ impl PtyManager {
         let ptys = self.ptys.clone();
         let mut stdout = child.stdout.take().unwrap();
         let mut stderr = child.stderr.take().unwrap();
-        let mut stdin = child.stdin.take().unwrap();
+        let stdin = child.stdin.take().unwrap();
 
         let ptys_clone = ptys.clone();
         let id_clone2 = id.clone();

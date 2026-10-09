@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
@@ -92,7 +93,7 @@ impl ServerClient {
                 }
                 data = pty_rx.recv() => {
                     if let Some(output) = data {
-                        let encoded = base64::encode(&output);
+                        let encoded = BASE64.encode(&output);
                         let msg = ClientMessage::Input { data: encoded };
                         if ws_tx.send(Message::Text(serde_json::to_string(&msg)?)).await.is_err() {
                             break;
