@@ -59,7 +59,9 @@ impl ServerClient {
             token: String::new(),
             server_token: self.server_token.clone(),
         };
-        ws_tx.send(Message::Text(serde_json::to_string(&auth_msg)?)).await?;
+        ws_tx
+            .send(Message::Text(serde_json::to_string(&auth_msg)?))
+            .await?;
 
         let (pty_tx, mut pty_rx) = mpsc::unbounded_channel::<Vec<u8>>();
         let mut current_session: Option<String> = None;
@@ -106,14 +108,21 @@ impl ServerClient {
         &self,
         msg: ServerMessage,
         current_session: &mut Option<String>,
-        ws_tx: &mut futures_util::stream::SplitSink<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, Message>,
+        ws_tx: &mut futures_util::stream::SplitSink<
+            tokio_tungstenite::WebSocketStream<
+                tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+            >,
+            Message,
+        >,
         pty_tx: &mpsc::UnboundedSender<Vec<u8>>,
     ) -> Result<()> {
         match msg {
             ServerMessage::AuthOk { user, server_name } => {
                 info!("Authenticated as {} on {}", user, server_name);
                 let msg = ClientMessage::ListSessions;
-                ws_tx.send(Message::Text(serde_json::to_string(&msg)?)).await?;
+                ws_tx
+                    .send(Message::Text(serde_json::to_string(&msg)?))
+                    .await?;
             }
             ServerMessage::Sessions { sessions } => {
                 info!("Received {} sessions", sessions.len());
@@ -131,7 +140,11 @@ impl ServerClient {
             ServerMessage::Output { data } => {
                 // Output from server to terminal - not used in agent
             }
-            ServerMessage::AgentEvent { event, agent, session_id } => {
+            ServerMessage::AgentEvent {
+                event,
+                agent,
+                session_id,
+            } => {
                 info!("Agent event: {} - {} - {}", event, agent, session_id);
             }
             ServerMessage::Error { message } => {

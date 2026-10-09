@@ -100,9 +100,7 @@ impl AuthState {
             exp: (SystemTime::now() + Duration::from_secs(7 * 24 * 60 * 60))
                 .duration_since(UNIX_EPOCH)?
                 .as_secs() as usize,
-            iat: SystemTime::now()
-                .duration_since(UNIX_EPOCH)?
-                .as_secs() as usize,
+            iat: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as usize,
         };
 
         let token = encode(
@@ -166,5 +164,7 @@ pub async fn verify_auth(
         .strip_prefix("Bearer ")
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    state.verify_token(token).map_err(|_| StatusCode::UNAUTHORIZED)
+    state
+        .verify_token(token)
+        .map_err(|_| StatusCode::UNAUTHORIZED)
 }

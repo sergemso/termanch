@@ -5,8 +5,8 @@ use std::time::Duration;
 use anyhow::Result;
 use nix::pty::{forkpty, Winsize};
 use nix::unistd::{close, write, ForkResult};
-use tokio::sync::{mpsc, RwLock};
 use tokio::process::Command;
+use tokio::sync::{mpsc, RwLock};
 use tracing::{debug, error, info, warn};
 
 pub struct PtyManager {
@@ -27,7 +27,12 @@ impl PtyManager {
         }
     }
 
-    pub async fn create(&self, id: String, cols: u16, rows: u16) -> Result<mpsc::UnboundedReceiver<Vec<u8>>> {
+    pub async fn create(
+        &self,
+        id: String,
+        cols: u16,
+        rows: u16,
+    ) -> Result<mpsc::UnboundedReceiver<Vec<u8>>> {
         let (tx, rx) = mpsc::unbounded_channel();
 
         let ws = Winsize {
@@ -64,7 +69,9 @@ impl PtyManager {
                                 use std::io::Read;
                                 f.read(&mut buf)
                             }
-                        }).await {
+                        })
+                        .await
+                        {
                             Ok(Ok(n)) if n > 0 => {
                                 let _ = tx.send(buf[..n].to_vec());
                             }

@@ -15,12 +15,27 @@ pub enum ClientMessage {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(tag = "type")]
 pub enum ServerMessage {
-    AuthOk { user: String, server_name: String },
-    Sessions { sessions: Vec<SessionInfo> },
-    SessionAttached { session_id: String },
-    Output { data: String },
-    AgentEvent { event: AgentEventType, agent: String, session_id: String },
-    Error { message: String },
+    AuthOk {
+        user: String,
+        server_name: String,
+    },
+    Sessions {
+        sessions: Vec<SessionInfo>,
+    },
+    SessionAttached {
+        session_id: String,
+    },
+    Output {
+        data: String,
+    },
+    AgentEvent {
+        event: AgentEventType,
+        agent: String,
+        session_id: String,
+    },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -81,7 +96,9 @@ mod tests {
 
     #[test]
     fn test_register_roundtrip() {
-        let req = RegisterRequest { token: "abc".into() };
+        let req = RegisterRequest {
+            token: "abc".into(),
+        };
         let json = serde_json::to_string(&req).unwrap();
         let parsed: RegisterRequest = serde_json::from_str(&json).unwrap();
         assert_eq!(req, parsed);

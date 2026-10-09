@@ -34,12 +34,30 @@ pub struct Session {
 
 #[derive(Debug)]
 pub enum AgentCommand {
-    ListSessions { respond_to: mpsc::UnboundedSender<Vec<SessionInfo>> },
-    CreateSession { name: String, respond_to: mpsc::UnboundedSender<Result<Session>> },
-    AttachSession { session_id: String, pty_tx: mpsc::UnboundedSender<Vec<u8>>, respond_to: mpsc::UnboundedSender<Result<()>> },
-    SendInput { session_id: String, data: Vec<u8> },
-    ResizeSession { session_id: String, cols: u16, rows: u16 },
-    CloseSession { session_id: String },
+    ListSessions {
+        respond_to: mpsc::UnboundedSender<Vec<SessionInfo>>,
+    },
+    CreateSession {
+        name: String,
+        respond_to: mpsc::UnboundedSender<Result<Session>>,
+    },
+    AttachSession {
+        session_id: String,
+        pty_tx: mpsc::UnboundedSender<Vec<u8>>,
+        respond_to: mpsc::UnboundedSender<Result<()>>,
+    },
+    SendInput {
+        session_id: String,
+        data: Vec<u8>,
+    },
+    ResizeSession {
+        session_id: String,
+        cols: u16,
+        rows: u16,
+    },
+    CloseSession {
+        session_id: String,
+    },
 }
 
 impl SessionManager {
@@ -66,7 +84,10 @@ impl SessionManager {
                     AgentCommand::CreateSession { name, respond_to } => {
                         let mut sessions = sessions_clone.write().await;
                         let id = Uuid::new_v4().to_string();
-                        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+                        let now = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
                         let session = Session {
                             id: id.clone(),
                             name: name.clone(),
@@ -78,11 +99,18 @@ impl SessionManager {
                         sessions.insert(id.clone(), session.clone());
                         let _ = respond_to.send(Ok(session));
                     }
-                    AgentCommand::AttachSession { session_id, pty_tx, respond_to } => {
+                    AgentCommand::AttachSession {
+                        session_id,
+                        pty_tx,
+                        respond_to,
+                    } => {
                         let mut sessions = sessions_clone.write().await;
                         if let Some(session) = sessions.get_mut(&session_id) {
                             session.pty_tx = Some(pty_tx);
-                            session.last_activity = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+                            session.last_activity = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs();
                             let _ = respond_to.send(Ok(()));
                         } else {
                             let _ = respond_to.send(Err(anyhow::anyhow!("Session not found")));
@@ -96,7 +124,11 @@ impl SessionManager {
                             }
                         }
                     }
-                    AgentCommand::ResizeSession { session_id, cols, rows } => {
+                    AgentCommand::ResizeSession {
+                        session_id,
+                        cols,
+                        rows,
+                    } => {
                         let sessions = sessions_clone.read().await;
                         if let Some(session) = sessions.get(&session_id) {
                             if let Some(tx) = &session.pty_tx {
@@ -118,35 +150,64 @@ impl SessionManager {
 
     pub async fn list_sessions(&self) -> Vec<SessionInfo> {
         let (tx, rx) = mpsc::unbounded_channel();
-        let _ = self.agent_tx.send(AgentCommand::ListSessions { respond_to: tx });
+        let _ = self
+            .agent_tx
+            .send(AgentCommand::ListSessions { respond_to: tx });
         rx.recv().await.unwrap_or_default()
     }
 
     pub async fn create_session(&self, name: String) -> Result<Session> {
         let (tx, rx) = mpsc::unbounded_channel();
-        let _ = self.agent_tx.send(AgentCommand::CreateSession { name, respond_to: tx });
-        rx.recv().await.unwrap_or_else(|| Err(anyhow::anyhow!("Failed to create session")))
+        let _ = self.agent_tx.send(AgentCommand::CreateSession {
+            name,
+            respond_to: tx,
+        });
+        rx.recv()
+            .await
+            .unwrap_or_else(|| Err(anyhow::anyhow!("Failed to create session")))
     }
 
-    pub async fn attach_session(&self, session_id: String, pty_tx: mpsc::UnboundedSender<Vec<u8>>) -> Result<()> {
+    pub async fn attach_session(
+        &self,
+        session_id: String,
+        pty_tx: mpsc::UnboundedSender<Vec<u8>>,
+    ) -> Result<()> {
         let (tx, rx) = mpsc::unbounded_channel();
-        let _ = self.agent_tx.send(AgentCommand::AttachSession { session_id, pty_tx, respond_to: tx });
-        rx.recv().await.unwrap_or_else(|| Err(anyhow::anyhow!("Failed to attach session")))
+        let _ = self.agent_tx.send(AgentCommand::AttachSession {
+            session_id,
+            pty_tx,
+            respond_to: tx,
+        });
+        rx.recv()
+            .await
+            .unwrap_or_else(|| Err(anyhow::anyhow!("Failed to attach session")))
     }
 
     pub async fn send_input(&self, session_id: String, data: Vec<u8>) {
-        let _ = self.agent_tx.send(AgentCommand::SendInput { session_id, data });
+        let _ = self
+            .agent_tx
+            .send(AgentCommand::SendInput { session_id, data });
     }
 
     pub async fn resize_session(&self, session_id: String, cols: u16, rows: u16) {
-        let _ = self.agent_tx.send(AgentCommand::ResizeSession { session_id, cols, rows });
+        let _ = self.agent_tx.send(AgentCommand::ResizeSession {
+            session_id,
+            cols,
+            rows,
+        });
     }
 
     pub async fn close_session(&self, session_id: String) {
-        let _ = self.agent_tx.send(AgentCommand::CloseSession { session_id });
+        let _ = self
+            .agent_tx
+            .send(AgentCommand::CloseSession { session_id });
     }
 
-    pub async fn handle_websocket(&self, mut socket: WebSocket, claims: crate::auth::Claims) -> Result<()> {
+    pub async fn handle_websocket(
+        &self,
+        mut socket: WebSocket,
+        claims: crate::auth::Claims,
+    ) -> Result<()> {
         let mut current_session: Option<String> = None;
         let (pty_tx, mut pty_rx) = mpsc::unbounded_channel::<Vec<u8>>();
 
@@ -214,23 +275,33 @@ impl SessionManager {
         claims: &crate::auth::Claims,
     ) -> Result<bool> {
         match msg {
-            ClientMessage::Auth { token: _, server_token: _ } => {
+            ClientMessage::Auth {
+                token: _,
+                server_token: _,
+            } => {
                 let resp = ServerMessage::AuthOk {
                     user: claims.username.clone(),
                     server_name: "termanch-server".to_string(),
                 };
-                socket.send(Message::Text(serde_json::to_string(&resp).unwrap())).await?;
+                socket
+                    .send(Message::Text(serde_json::to_string(&resp).unwrap()))
+                    .await?;
             }
             ClientMessage::ListSessions => {
                 let sessions = self.list_sessions().await;
                 let resp = ServerMessage::Sessions { sessions };
-                socket.send(Message::Text(serde_json::to_string(&resp).unwrap())).await?;
+                socket
+                    .send(Message::Text(serde_json::to_string(&resp).unwrap()))
+                    .await?;
             }
             ClientMessage::Attach { session_id } => {
-                self.attach_session(session_id.clone(), pty_tx.clone()).await?;
+                self.attach_session(session_id.clone(), pty_tx.clone())
+                    .await?;
                 *current_session = Some(session_id.clone());
                 let resp = ServerMessage::SessionAttached { session_id };
-                socket.send(Message::Text(serde_json::to_string(&resp).unwrap())).await?;
+                socket
+                    .send(Message::Text(serde_json::to_string(&resp).unwrap()))
+                    .await?;
             }
             ClientMessage::Input { data } => {
                 if let Some(session_id) = current_session {

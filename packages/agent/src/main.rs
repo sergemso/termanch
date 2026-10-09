@@ -26,7 +26,11 @@ struct Args {
     #[arg(long, env = "TERMANCH_SERVER_TOKEN")]
     server_token: String,
 
-    #[arg(long, env = "TERMANCH_SOCKET_PATH", default_value = "/tmp/termanch-agent.sock")]
+    #[arg(
+        long,
+        env = "TERMANCH_SOCKET_PATH",
+        default_value = "/tmp/termanch-agent.sock"
+    )]
     socket_path: String,
 
     #[arg(long, default_value = "false")]
@@ -136,12 +140,10 @@ async fn handle_local_command(
     }
 
     match parts[0] {
-        "list-sessions" => {
-            match tmux_manager.list_sessions().await {
-                Ok(sessions) => serde_json::to_string(&sessions).unwrap() + "\n",
-                Err(e) => format!("ERROR: {}\n", e),
-            }
-        }
+        "list-sessions" => match tmux_manager.list_sessions().await {
+            Ok(sessions) => serde_json::to_string(&sessions).unwrap() + "\n",
+            Err(e) => format!("ERROR: {}\n", e),
+        },
         "create-session" => {
             if parts.len() < 2 {
                 return "ERROR: Missing session name\n".into();

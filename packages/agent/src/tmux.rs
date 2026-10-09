@@ -29,7 +29,11 @@ impl TmuxManager {
 
     pub async fn list_sessions(&self) -> Result<Vec<TmuxSession>> {
         let output = Command::new("tmux")
-            .args(["list-sessions", "-F", "#{session_id}|#{session_name}|#{session_attached}"])
+            .args([
+                "list-sessions",
+                "-F",
+                "#{session_id}|#{session_name}|#{session_attached}",
+            ])
             .output()
             .await?;
 
@@ -63,8 +67,11 @@ impl TmuxManager {
     }
 
     pub async fn create_session(&self, name: &str) -> Result<TmuxSession> {
-        let id = format!("termanch-{}", uuid::Uuid::new_v4().to_string()[..8].to_string());
-        
+        let id = format!(
+            "termanch-{}",
+            uuid::Uuid::new_v4().to_string()[..8].to_string()
+        );
+
         let output = Command::new("tmux")
             .args(["new-session", "-d", "-s", &id, "-n", name])
             .output()
@@ -82,7 +89,10 @@ impl TmuxManager {
             attached: false,
         };
 
-        self.sessions.write().await.insert(id.clone(), session.clone());
+        self.sessions
+            .write()
+            .await
+            .insert(id.clone(), session.clone());
         Ok(session)
     }
 
