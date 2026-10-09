@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "skills": {
+    "attribute": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/attribute/SKILL.md",
+      "computedHash": "58130cefd1bdd992e434188deb8450ed16c07c7d56e4bcf2af4db27274a39595"
+    },
+    "bootstrap": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/bootstrap/SKILL.md",
+      "computedHash": "f79a7b293d0d094af49977ea40a657306ab1766ff40065ba4cd37f76ccaa743a"
+    },
+    "brainstorm": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/brainstorm/SKILL.md",
+      "computedHash": "f5ba92c9eed89b67c78f1ae0b40d6c905560ee42bae2a0aaf84e15f5164f4838"
+    },
+    "capture": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/capture/SKILL.md",
+      "computedHash": "76fbc1e99cf6a52ba0929dd1ca685348934b0b1b1b1724dba2c46ef499162a4c"
+    },
+    "changelog": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/changelog/SKILL.md",
+      "computedHash": "aa2c58f2778835a8c8cec8ebd82e3e1f8e9f3347c2a6fa9e4bda51cc44093065"
+    },
+    "clarify": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/clarify/SKILL.md",
+      "computedHash": "38a227064a2f5d7b4cb0e6bcfed32e356fda0539f3e143550f52e3de859726c2"
+    },
+    "conform": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/conform/SKILL.md",
+      "computedHash": "8a7ec8309ef9c87259aad4ade0bc47ed46014044f0a65247c64120e56e014b73"
+    },
+    "go-getter-init": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/go-getter-init/SKILL.md",
+      "computedHash": "92de686bf9041436aa81a081e7d4899c31622f8f10af2da4e3b2f8a0a514f3ff"
+    },
+    "lint": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/lint/SKILL.md",
+      "computedHash": "ebedfbfc4ffffa8a64f3fbf653be35a02d0a6f4a5f86ae422a48f1bcb4eb5f18"
+    },
+    "onboard": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/onboard/SKILL.md",
+      "computedHash": "d211ae7a8e8cf74ac3a999550b51b7e061fbca2ae822f4fec536b1c8a876e213"
+    },
+    "query": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/query/SKILL.md",
+      "computedHash": "e721fa2a082452a21a6342417172806fe86b3ea1107a84b997eddd7f8ee9532a"
+    },
+    "quickstart": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/quickstart/SKILL.md",
+      "computedHash": "f63e7632a6f4b4dba9b5307028fc0247077c84c2b5e1c9dce9e5f2cb191bc8f9"
+    },
+    "refactor-plan": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/refactor-plan/SKILL.md",
+      "computedHash": "758303c7e0edba3701df258eee33d93464f3077a40ceb7bf2edf5a19a98aec55"
+    },
+    "roadmap": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/roadmap/SKILL.md",
+      "computedHash": "51211ae6b810d0c4a53bbcac85d04f813988088bc25131736adcc69f376e8e19"
+    },
+    "uninstall": {
+      "source": "vivantel/go-getter",
+      "sourceType": "github",
+      "skillPath": "skills/uninstall/SKILL.md",
+      "computedHash": "9c8a0d63093acafb0b8cf824f220f9a0d61c6b7bf46c6f36b4c1c039d7e5c5f2"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+interface:
+  display_name: "Uninstall"
+  short_description: "Find and remove/detach everything go-getter's knowledge base added"
+policy:
+  allow_implicit_invocation: false
