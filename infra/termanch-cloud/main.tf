@@ -1,6 +1,7 @@
 # Termanch Cloud Infrastructure
-# Manages ONLY our hosted services: Cloudflare Pages (client), DNS, OAuth config
+# Manages ONLY our hosted services: Cloudflare Pages (client), DNS, GitHub Actions secrets
 # Does NOT manage user VPSes — users self-host server via Docker
+# GitHub OAuth App is created MANUALLY (no admin:oauth_app scope exists for PATs)
 
 terraform {
   required_version = ">= 1.6"
@@ -32,7 +33,7 @@ provider "cloudflare" {
 }
 
 provider "github" {
-  token = var.github_token
+  token = var.github_actions_token
 }
 
 data "cloudflare_zone" "main" {
@@ -79,14 +80,6 @@ resource "cloudflare_dns_record" "api" {
   ttl     = 1
 }
 
-# GitHub OAuth App (managed via Terraform for consistency)
-resource "github_oauth_application" "termanch" {
-  name        = "Termanch"
-  homepage_url = "https://app.${var.cloudflare_zone_name}"
-  callback_url = "https://app.${var.cloudflare_zone_name}/callback"
-  description = "Termanch - Terminal for remote AI coding agents"
-}
-
 # GitHub repository secret for CI (Cloudflare Pages deploy token)
 resource "github_actions_secret" "cf_pages_token" {
   repository = var.github_repository
@@ -100,11 +93,11 @@ resource "github_actions_secret" "cf_pages_account_id" {
   plaintext_value = var.cloudflare_account_id
 }
 
-# GitHub repository variables for client build
+# GitHub repository variable for client build (OAuth Client ID from manual setup)
 resource "github_actions_variable" "github_client_id" {
   repository = var.github_repository
   variable_name = "GITHUB_CLIENT_ID"
-  value = github_oauth_application.termanch.client_id
+  value = var.github_oauth_client_id
 }
 
 output "client_url" {
@@ -112,10 +105,10 @@ output "client_url" {
 }
 
 output "oauth_client_id" {
-  value = github_oauth_application.termanch.client_id
+  value = var.github_oauth_client_id
 }
 
 output "oauth_client_secret" {
-  value     = github_oauth_application.termanch.client_secret
+  value     = var.github_oauth_client_secret
   sensitive = true
 }

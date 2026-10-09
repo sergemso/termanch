@@ -47,7 +47,7 @@ jobs:
       - name: Configure credentials
         run: |
           echo "CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}" >> $GITHUB_ENV
-          echo "GITHUB_TOKEN=${{ secrets.GITHUB_ADMIN_TOKEN }}" >> $GITHUB_ENV
+          echo "GITHUB_ACTIONS_TOKEN=${{ secrets.GITHUB_ACTIONS_TOKEN }}" >> $GITHUB_ENV
 
       - name: Initialize Terraform
         run: terraform init -input=false
@@ -62,11 +62,12 @@ jobs:
             -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
             -var="cloudflare_zone_name=${{ secrets.CLOUDFLARE_ZONE_NAME }}" \
             -var="cloudflare_pages_deploy_token=${{ secrets.CLOUDFLARE_PAGES_DEPLOY_TOKEN }}" \
-            -var="github_token=${{ secrets.GITHUB_ADMIN_TOKEN }}" \
+            -var="github_actions_token=${{ secrets.GITHUB_ACTIONS_TOKEN }}" \
+            -var="github_oauth_client_id=${{ secrets.GITHUB_OAUTH_CLIENT_ID }}" \
+            -var="github_oauth_client_secret=${{ secrets.GITHUB_OAUTH_CLIENT_SECRET }}" \
             -var="github_repository=${{ github.repository }}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_ADMIN_TOKEN }}
 
       - name: Terraform Apply
         if: github.event.inputs.action == 'apply'
@@ -79,12 +80,13 @@ jobs:
               -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
               -var="cloudflare_zone_name=${{ secrets.CLOUDFLARE_ZONE_NAME }}" \
               -var="cloudflare_pages_deploy_token=${{ secrets.CLOUDFLARE_PAGES_DEPLOY_TOKEN }}" \
-              -var="github_token=${{ secrets.GITHUB_ADMIN_TOKEN }}" \
+              -var="github_actions_token=${{ secrets.GITHUB_ACTIONS_TOKEN }}" \
+              -var="github_oauth_client_id=${{ secrets.GITHUB_OAUTH_CLIENT_ID }}" \
+              -var="github_oauth_client_secret=${{ secrets.GITHUB_OAUTH_CLIENT_SECRET }}" \
               -var="github_repository=${{ github.repository }}"
           fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_ADMIN_TOKEN }}
 
       - name: Terraform Destroy
         if: github.event.inputs.action == 'destroy'
@@ -94,14 +96,16 @@ jobs:
             -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
             -var="cloudflare_zone_name=${{ secrets.CLOUDFLARE_ZONE_NAME }}" \
             -var="cloudflare_pages_deploy_token=${{ secrets.CLOUDFLARE_PAGES_DEPLOY_TOKEN }}" \
-            -var="github_token=${{ secrets.GITHUB_ADMIN_TOKEN }}" \
+            -var="github_actions_token=${{ secrets.GITHUB_ACTIONS_TOKEN }}" \
+            -var="github_oauth_client_id=${{ secrets.GITHUB_OAUTH_CLIENT_ID }}" \
+            -var="github_oauth_client_secret=${{ secrets.GITHUB_OAUTH_CLIENT_SECRET }}" \
             -var="github_repository=${{ github.repository }}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_ADMIN_TOKEN }}
 
       - name: Output Client URL
         if: github.event.inputs.action == 'apply'
         run: |
           echo "Client URL: $(terraform output -raw client_url)"
           echo "OAuth Client ID: $(terraform output -raw oauth_client_id)"
+          echo "OAuth Client Secret: $(terraform output -raw oauth_client_secret)"

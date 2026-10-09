@@ -20,8 +20,19 @@ variable "cloudflare_pages_deploy_token" {
   sensitive   = true
 }
 
-variable "github_token" {
-  description = "GitHub token with repo/admin:oauth_app permissions"
+variable "github_actions_token" {
+  description = "GitHub fine-grained PAT with Actions/Variables/Admin permissions"
+  type        = string
+  sensitive   = true
+}
+
+variable "github_oauth_client_id" {
+  description = "GitHub OAuth App Client ID (created manually)"
+  type        = string
+}
+
+variable "github_oauth_client_secret" {
+  description = "GitHub OAuth App Client Secret (created manually)"
   type        = string
   sensitive   = true
 }

@@ -30,17 +30,23 @@ See **[BOOTSTRAP.md](docs/BOOTSTRAP.md)** for complete setup instructions.
 ### Automated Cloud Setup (Terraform)
 
 ```bash
-# 1. Prerequisites: Cloudflare API token, GitHub admin token, domain on Cloudflare
+# 1. Prerequisites: Cloudflare API token, GitHub Actions token, domain on Cloudflare
+# 2. Create GitHub OAuth App manually (one-time):
+#    GitHub Settings → Developer settings → OAuth Apps → New OAuth App
+#    Callback: https://app.yourdomain.com/callback
+#    Save Client ID and Client Secret
 
-# 2. Run Terraform (automates: Cloudflare Pages, DNS, GitHub OAuth, GitHub Actions secrets)
+# 2. Run Terraform (automates: Cloudflare Pages, DNS, GitHub Actions secrets)
 cd infra/termanch-cloud
 cat > terraform.tfvars <<EOF
-cloudflare_api_token        = "your-cf-api-token"
-cloudflare_account_id       = "your-cf-account-id"
-cloudflare_zone_name        = "yourdomain.com"
+cloudflare_api_token         = "your-cf-api-token"
+cloudflare_account_id        = "your-cf-account-id"
+cloudflare_zone_name         = "yourdomain.com"
 cloudflare_pages_deploy_token = "your-pages-deploy-token"
-github_token                = "your-github-admin-token"
-github_repository           = "sergemso/termanch"
+github_actions_token         = "your-fine-grained-pat"
+github_oauth_client_id       = "your-github-oauth-client-id"
+github_oauth_client_secret   = "your-github-oauth-client-secret"
+github_repository            = "sergemso/termanch"
 EOF
 
 terraform init && terraform apply

@@ -5,8 +5,9 @@ This guide walks through setting up the cloud infrastructure (Cloudflare + GitHu
 **TL;DR** — Most cloud infra is automated via Terraform. You only need to:
 1. Add your domain to Cloudflare
 2. Create API tokens (Cloudflare + GitHub)
-3. Generate secrets
-4. Run `terraform apply`
+3. **Create GitHub OAuth App manually** (one-time)
+4. Generate secrets
+5. Run `terraform apply`
 5. Deploy server to your VPS
 
 ---
@@ -37,16 +38,11 @@ This guide walks through setting up the cloud infrastructure (Cloudflare + GitHu
    - **Zone Resources**: Include your zone (`yourdomain.com`)
 3. Save as `CLOUDFLARE_API_TOKEN`
 
-### 1.3 Create GitHub Personal Access Token
+### 1.3 Create GitHub Personal Access Tokens
 
-You need **two tokens** because GitHub OAuth App creation requires a classic PAT with `admin:oauth_app` scope (not available in fine-grained tokens):
+You need **two tokens** for different purposes:
 
-**A. Classic PAT (for OAuth App management):**
-1. Go to **GitHub Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)**
-2. **Scopes**: `admin:oauth_app` (only this scope needed)
-3. Save as `GITHUB_ADMIN_TOKEN`
-
-**B. Fine-grained PAT (for Actions/Variables):**
+**A. Fine-grained PAT (for GitHub Actions secrets/variables):**
 1. Go to **GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**
 2. **Repository access**: `sergemso/termanch` (or your fork)
 3. **Permissions**:
@@ -55,7 +51,24 @@ You need **two tokens** because GitHub OAuth App creation requires a classic PAT
    - Repository → Variables → Read/Write
 3. Save as `GITHUB_ACTIONS_TOKEN`
 
-### 1.4 Cloudflare Pages Deploy Token
+**B. Classic PAT (for GitHub CLI / manual API calls):**
+1. Go to **GitHub Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)**
+2. **Scopes**: `repo`, `admin:org` (for org-level operations if needed)
+3. Save as `GITHUB_CLASSIC_TOKEN`
+
+> **Note**: There is NO `admin:oauth_app` scope in GitHub tokens. GitHub OAuth Apps must be created manually (see step 1.5).
+
+### 1.4 Create GitHub OAuth App (Manual — One-time)
+1. Go to **GitHub Settings → Developer settings → OAuth Apps → New OAuth App**
+2. Fill in:
+   - **Application name**: `Termanch` (or your preferred name)
+   - **Homepage URL**: `https://app.yourdomain.com`
+   - **Authorization callback URL**: `https://app.yourdomain.com/callback`
+3. Click **Register application**
+4. **Generate a new client secret**
+5. Save both **Client ID** and **Client Secret** — you'll need them for Terraform
+
+### 1.5 Cloudflare Pages Deploy Token
 1. Go to **Cloudflare Dashboard → Workers & Pages → Create token** (or use existing)
 2. **Permissions**: Account → Cloudflare Pages → Edit
 3. **Account Resources**: Include your account
@@ -74,7 +87,6 @@ cloudflare_api_token        = "your-cf-api-token"
 cloudflare_account_id       = "your-cf-account-id"
 cloudflare_zone_name        = "yourdomain.com"
 cloudflare_pages_deploy_token = "your-pages-deploy-token"
-github_admin_token          = "your-classic-pat-with-admin-oauth-app"
 github_actions_token        = "your-fine-grained-pat"
 github_repository           = "sergemso/termanch"
 EOF
@@ -89,9 +101,12 @@ terraform apply
 - ✅ Cloudflare Pages project (`termanch`) with `master` branch
 - ✅ Custom domain `app.yourdomain.com` (CNAME to Pages)
 - ✅ DNS records: `app.yourdomain.com` → Pages, `api.yourdomain.com` → Pages
-- ✅ GitHub OAuth App (`https://app.yourdomain.com/callback`)
 - ✅ GitHub Actions secrets: `CF_PAGES_API_TOKEN`, `CF_PAGES_ACCOUNT_ID`
-- ✅ GitHub Actions variable: `GITHUB_CLIENT_ID` (from created OAuth app)
+- ✅ GitHub Actions variable: `GITHUB_CLIENT_ID` (from Terraform input)
+
+**You provide manually (from step 1.5):**
+- `oauth_client_id` (GitHub OAuth App Client ID)
+- `oauth_client_secret` (GitHub OAuth App Client Secret)
 
 ---
 
@@ -113,8 +128,6 @@ echo "REGISTRATION_SECRET=$REGISTRATION_SECRET"
 Save these for the server `.env` file.
 
 **Terraform outputs:**
-- `oauth_client_id` — add to `TERMANCH_GITHUB_CLIENT_ID`
-- `oauth_client_secret` — add to `TERMANCH_GITHUB_CLIENT_SECRET`
 - `client_url` — your `https://app.yourdomain.com`
 
 ---
@@ -161,7 +174,7 @@ docker compose ps
 docker compose logs -f termanch-server
 ```
 
-### 4.3 Get Registration QR Code
+### 4.4 Get Registration QR Code
 
 ```bash
 docker compose exec termanch-server termanch-server --register
@@ -230,4 +243,4 @@ Will automate: Docker install, secret generation, docker-compose, QR code.
 - Registration tokens single-use, 10-min expiry
 - TLS terminated at Cloudflare edge
 - No secrets in logs or Docker images
-- GitHub OAuth App created by Terraform (source of truth)
+- GitHub OAuth App created manually (source of truth)
