@@ -12,9 +12,9 @@ pub struct PtyManager {
 }
 
 struct PtySession {
-    id: String,
-    master_fd: i32,
-    pid: u32,
+    _id: String,
+    _master_fd: i32,
+    _pid: u32,
     tx: mpsc::UnboundedSender<Vec<u8>>,
 }
 
@@ -25,7 +25,7 @@ impl PtyManager {
         }
     }
 
-    pub async fn create(
+    async fn _create(
         &self,
         id: String,
         cols: u16,
@@ -48,9 +48,9 @@ impl PtyManager {
         info!("Created PTY {} with pid {}", id, pid);
 
         let session = PtySession {
-            id: id.clone(),
-            master_fd,
-            pid,
+            _id: id.clone(),
+            _master_fd: master_fd,
+            _pid: pid,
             tx: tx.clone(),
         };
 
@@ -119,7 +119,7 @@ impl PtyManager {
         }
     }
 
-    pub async fn write(&self, id: &str, data: &[u8]) -> Result<()> {
+    async fn _write(&self, id: &str, data: &[u8]) -> Result<()> {
         let ptys = self.ptys.read().await;
         if let Some(_session) = ptys.get(id) {
             // For MVP, just log the write
@@ -130,14 +130,14 @@ impl PtyManager {
         }
     }
 
-    pub async fn resize(&self, id: &str, _cols: u16, _rows: u16) -> Result<()> {
+    async fn _resize(&self, id: &str, _cols: u16, _rows: u16) -> Result<()> {
         let _ptys = self.ptys.read().await;
         // For MVP, just log the resize
         debug!("PTY resize {}: {}x{}", id, _cols, _rows);
         Ok(())
     }
 
-    pub async fn close(&self, id: &str) -> Result<()> {
+    async fn _close(&self, id: &str) -> Result<()> {
         let mut ptys = self.ptys.write().await;
         if ptys.remove(id).is_some() {
             info!("Closed PTY {}", id);

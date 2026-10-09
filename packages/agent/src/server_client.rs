@@ -115,7 +115,7 @@ impl ServerClient {
             >,
             Message,
         >,
-        pty_tx: &mpsc::UnboundedSender<Vec<u8>>,
+        _pty_tx: &mpsc::UnboundedSender<Vec<u8>>,
     ) -> Result<()> {
         match msg {
             ServerMessage::AuthOk { user, server_name } => {
@@ -141,7 +141,7 @@ impl ServerClient {
                 ) = mpsc::unbounded_channel();
                 let _ = self.pty_manager.attach(&session_id).await;
             }
-            ServerMessage::Output { data } => {
+            ServerMessage::Output { data: _ } => {
                 // Output from server to terminal - not used in agent
             }
             ServerMessage::AgentEvent {
