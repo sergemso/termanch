@@ -49,7 +49,7 @@ You need **two tokens** for different purposes:
    - Repository → Actions → Read/Write (for secrets/variables)
    - Repository → Administration → Read/Write (for repo settings)
    - Repository → Variables → Read/Write
-3. Save as `GITHUB_ACTIONS_TOKEN` — used as `github_actions_token` in Terraform
+3. Save as `TERMANCH_GITHUB_ACTIONS_TOKEN` — used as `github_actions_token` in Terraform (set as secret `TERMANCH_GITHUB_ACTIONS_TOKEN` in GitHub repo)
 
 **B. Classic PAT (for GitHub CLI / manual API calls only):**
 1. Go to **GitHub Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)**
