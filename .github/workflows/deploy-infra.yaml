@@ -55,13 +55,7 @@ jobs:
           # Check if R2 bucket exists, if not create it with local backend
           if ! terraform init -input=false -backend=false 2>/dev/null; then
             # First init with local backend to create R2 bucket
-            cat > backend_override.tf <<'EOF'
-terraform {
-  backend "local" {
-    path = "terraform.tfstate"
-  }
-}
-EOF
+            printf 'terraform {\n  backend "local" {\n    path = "terraform.tfstate"\n  }\n}\n' > backend_override.tf
             terraform init -input=false
             terraform apply -input=false -auto-approve \
               -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
