@@ -41,7 +41,7 @@ Create a GitHub OAuth App for authentication:
 2. Select your GitHub repo (`sergemso/termanch`)
 3. Configure build:
    - **Project name**: `termanch`
-   - **Production branch**: `main`
+   - **Production branch**: `master`
    - **Build command**: `pnpm --filter termanch-client build`
    - **Build output directory**: `packages/client/dist`
    - **Root directory**: `/`

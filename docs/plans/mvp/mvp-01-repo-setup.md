@@ -23,12 +23,12 @@ Minimal monorepo structure for Cargo + pnpm workspaces, CI, Docker, Cloudflare P
 
 4. **`.github/workflows/ci.yaml`**: cargo check, cargo test, pnpm install, pnpm build
 
-5. **`.github/workflows/deploy-pages.yaml`**: Deploy client to Cloudflare Pages on push to main
+5. **`.github/workflows/deploy-pages.yaml`**: Deploy client to Cloudflare Pages on push to master
    ```yaml
    name: Deploy to Cloudflare Pages
    on:
      push:
-       branches: [main]
+       branches: [master]
    jobs:
      deploy:
        runs-on: ubuntu-latest
@@ -47,7 +47,7 @@ Minimal monorepo structure for Cargo + pnpm workspaces, CI, Docker, Cloudflare P
              accountId: ${{ secrets.CF_PAGES_ACCOUNT_ID }}
              projectName: termanch
              directory: packages/client/dist
-             branch: main
+             branch: master
    ```
 
 6. **`docker/Dockerfile`**: Multi-stage (builder + runner, server-only)
