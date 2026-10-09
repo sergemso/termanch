@@ -20,7 +20,6 @@ terraform {
     bucket         = "termanch-terraform-state"
     key            = "cloud/terraform.tfstate"
     region         = "auto"
-    endpoint       = "https://${var.cloudflare_account_id}.r2.cloudflarestorage.com"
     skip_credentials_validation = true
     skip_metadata_api_check     = true
     skip_region_validation      = true

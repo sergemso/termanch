@@ -50,7 +50,9 @@ jobs:
           echo "GITHUB_ACTIONS_TOKEN=${{ secrets.TERMANCH_GITHUB_ACTIONS_TOKEN }}" >> $GITHUB_ENV
 
       - name: Initialize Terraform
-        run: terraform init -input=false
+        run: |
+          terraform init -input=false \
+            -backend-config="endpoint=https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
