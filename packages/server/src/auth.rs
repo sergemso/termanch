@@ -147,9 +147,3 @@ pub fn verify_token(
     auth.verify_token(token)
         .map_err(|_| StatusCode::UNAUTHORIZED)
 }
-
-#[derive(Deserialize)]
-pub struct OAuthCallbackQuery {
-    pub code: String,
-    pub state: Option<String>,
-}

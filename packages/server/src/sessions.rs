@@ -149,7 +149,7 @@ impl SessionManager {
     }
 
     pub async fn list_sessions(&self) -> Vec<SessionInfo> {
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::unbounded_channel();
         let _ = self
             .agent_tx
             .send(AgentCommand::ListSessions { respond_to: tx });
@@ -157,7 +157,7 @@ impl SessionManager {
     }
 
     pub async fn create_session(&self, name: String) -> Result<Session> {
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::unbounded_channel();
         let _ = self.agent_tx.send(AgentCommand::CreateSession {
             name,
             respond_to: tx,
@@ -172,7 +172,7 @@ impl SessionManager {
         session_id: String,
         pty_tx: mpsc::UnboundedSender<Vec<u8>>,
     ) -> Result<()> {
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, mut rx) = mpsc::unbounded_channel();
         let _ = self.agent_tx.send(AgentCommand::AttachSession {
             session_id,
             pty_tx,
