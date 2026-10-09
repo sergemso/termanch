@@ -52,30 +52,46 @@ jobs:
 
       - name: Initialize Terraform (local backend first)
         run: |
-          # Always use local backend first to create R2 bucket if needed
-          printf 'terraform {\n  backend "local" {\n    path = "terraform.tfstate"\n  }\n}\n' > backend_override.tf
-          terraform init -input=false
-          
-          # Apply only the R2 bucket resource
-          terraform apply -input=false -auto-approve \
-            -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-            -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
-            -target=cloudflare_r2_bucket.terraform_state \
-            -var="cloudflare_zone_name=${{ secrets.CLOUDFLARE_ZONE_NAME }}" \
-            -var="cloudflare_pages_deploy_token=${{ secrets.CLOUDFLARE_PAGES_DEPLOY_TOKEN }}" \
-            -var="github_actions_token=${{ secrets.TERMANCH_GITHUB_ACTIONS_TOKEN }}" \
-            -var="github_oauth_client_id=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_ID }}" \
-            -var="github_oauth_client_secret=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_SECRET }}" \
-            -var="github_repository=${{ github.repository }}" \
-            -var="r2_access_key_id=${{ secrets.R2_ACCESS_KEY_ID }}" \
-            -var="r2_secret_access_key=${{ secrets.R2_SECRET_ACCESS_KEY }}"
-          rm backend_override.tf
-          
-          # Now init with R2 backend and migrate state (force copy to avoid interactive prompt)
-          terraform init -input=false -migrate-state -force-copy \
+          # Check if R2 bucket exists using wrangler or try to init with R2 backend
+          # If it fails, create bucket with local backend first
+          set +e
+          terraform init -input=false \
             -backend-config="endpoint=https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com" \
             -backend-config="access_key=${{ secrets.R2_ACCESS_KEY_ID }}" \
-            -backend-config="secret_key=${{ secrets.R2_SECRET_ACCESS_KEY }}"
+            -backend-config="secret_key=${{ secrets.R2_SECRET_ACCESS_KEY }}" 2>&1 | grep -q "NoSuchBucket"
+          BUCKET_MISSING=$?
+          set -e
+          
+          if [ $BUCKET_MISSING -eq 0 ]; then
+            echo "R2 bucket does not exist, creating with local backend..."
+            printf 'terraform {\n  backend "local" {\n    path = "terraform.tfstate"\n  }\n}\n' > backend_override.tf
+            terraform init -input=false
+            terraform apply -input=false -auto-approve \
+              -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+              -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
+              -target=cloudflare_r2_bucket.terraform_state \
+              -var="cloudflare_zone_name=${{ secrets.CLOUDFLARE_ZONE_NAME }}" \
+              -var="cloudflare_pages_deploy_token=${{ secrets.CLOUDFLARE_PAGES_DEPLOY_TOKEN }}" \
+              -var="github_actions_token=${{ secrets.TERMANCH_GITHUB_ACTIONS_TOKEN }}" \
+              -var="github_oauth_client_id=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_ID }}" \
+              -var="github_oauth_client_secret=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_SECRET }}" \
+              -var="github_repository=${{ github.repository }}" \
+              -var="r2_access_key_id=${{ secrets.R2_ACCESS_KEY_ID }}" \
+              -var="r2_secret_access_key=${{ secrets.R2_SECRET_ACCESS_KEY }}"
+            rm backend_override.tf
+            
+            # Now init with R2 backend and migrate state
+            terraform init -input=false -migrate-state -force-copy \
+              -backend-config="endpoint=https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com" \
+              -backend-config="access_key=${{ secrets.R2_ACCESS_KEY_ID }}" \
+              -backend-config="secret_key=${{ secrets.R2_SECRET_ACCESS_KEY }}"
+          else
+            echo "R2 bucket exists, initializing with R2 backend..."
+            terraform init -input=false \
+              -backend-config="endpoint=https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com" \
+              -backend-config="access_key=${{ secrets.R2_ACCESS_KEY_ID }}" \
+              -backend-config="secret_key=${{ secrets.R2_SECRET_ACCESS_KEY }}"
+          fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           AWS_EC2_METADATA_DISABLED: "true"
