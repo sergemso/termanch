@@ -57,7 +57,6 @@ impl PtyManager {
         self.ptys.write().await.insert(id.clone(), session);
 
         let ptys = self.ptys.clone();
-        let id_clone = id.clone();
         let mut stdout = child.stdout.take().unwrap();
         let mut stderr = child.stderr.take().unwrap();
         let mut stdin = child.stdin.take().unwrap();

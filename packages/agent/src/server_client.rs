@@ -135,9 +135,9 @@ impl ServerClient {
                 info!("Attached to session: {}", session_id);
                 *current_session = Some(session_id.clone());
 
-                let (_rx, _tx): (
-                    mpsc::UnboundedReceiver<Vec<u8>>,
+                let (_tx, _rx): (
                     mpsc::UnboundedSender<Vec<u8>>,
+                    mpsc::UnboundedReceiver<Vec<u8>>,
                 ) = mpsc::unbounded_channel();
                 let _ = self.pty_manager.attach(&session_id).await;
             }
