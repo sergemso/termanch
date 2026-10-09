@@ -25,41 +25,39 @@ A web-based terminal for managing remote AI coding agents (Codex, Claude Code, H
 
 ## Quick Start
 
-### 1. Deploy Server to Your VPS
+See **[BOOTSTRAP.md](docs/BOOTSTRAP.md)** for complete setup instructions including:
+- GitHub OAuth App creation
+- Cloudflare Pages + custom domain setup
+- Cloudflare Tunnel configuration
+- Secret generation
+- Server deployment on VPS
+- Server registration via QR code
+- Terraform infrastructure-as-code (optional)
+
+### Minimal Quick Start
 
 ```bash
-# Clone and configure
+# 1. Create GitHub OAuth App (callback: https://app.yourdomain.com/callback)
+# 2. Create Cloudflare Pages project + custom domain app.yourdomain.com
+# 3. Generate secrets: openssl rand -base64 32 (x2 for JWT_SECRET, REGISTRATION_SECRET)
+
+# On your VPS:
 git clone https://github.com/sergemso/termanch
 cd termanch/docker
-cp .env.example .env
-# Edit .env with your GitHub OAuth credentials and secrets
+cat > .env <<EOF
+TERMANCH_GITHUB_CLIENT_ID=your-client-id
+TERMANCH_GITHUB_CLIENT_SECRET=your-client-secret
+TERMANCH_JWT_SECRET=your-jwt-secret
+TERMANCH_REGISTRATION_SECRET=your-reg-secret
+TERMANCH_SERVER_NAME=my-vps
+EOF
 
-# Generate secrets:
-# openssl rand -base64 32  # for JWT_SECRET and REGISTRATION_SECRET
-
-# Start with Cloudflare Tunnel (named tunnel)
 docker compose up -d
 
-# Or for quick testing without Cloudflare account:
-# docker compose -f docker-compose.yml -f docker-compose.trycloudflare.yml up -d
-```
-
-### 2. Register Server
-
-```bash
-# Generate registration token
+# Register server:
 docker compose exec termanch-server termanch-server --register
-
-# Output shows token + QR code - scan with Termanch app
+# Scan QR at https://app.yourdomain.com
 ```
-
-### 3. Use the Client
-
-1. Open `https://app.termanch.dev`
-2. Login with GitHub
-3. Click "Add Server" → scan QR code
-4. Click server → terminal opens
-5. Run `codex` or `claude-code` in tmux → notifications appear in UI
 
 ## Development
 
