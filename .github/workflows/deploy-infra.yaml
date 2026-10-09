@@ -49,9 +49,36 @@ jobs:
           echo "CLOUDFLARE_API_TOKEN=${{ secrets.CLOUDFLARE_API_TOKEN }}" >> $GITHUB_ENV
           echo "GITHUB_ACTIONS_TOKEN=${{ secrets.TERMANCH_GITHUB_ACTIONS_TOKEN }}" >> $GITHUB_ENV
 
-      - name: Initialize Terraform
+      - name: Initialize Terraform (local backend first)
         run: |
-          terraform init -input=false \
+          # Check if R2 bucket exists, if not create it with local backend
+          if ! terraform init -input=false -backend=false 2>/dev/null; then
+            # First init with local backend to create R2 bucket
+            cat > backend_override.tf <<'EOF'
+terraform {
+  backend "local" {
+    path = "terraform.tfstate"
+  }
+}
+EOF
+            terraform init -input=false
+            terraform apply -input=false -auto-approve \
+              -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+              -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
+              -target=cloudflare_r2_bucket.terraform_state \
+              -var="cloudflare_zone_name=${{ secrets.CLOUDFLARE_ZONE_NAME }}" \
+              -var="cloudflare_pages_deploy_token=${{ secrets.CLOUDFLARE_PAGES_DEPLOY_TOKEN }}" \
+              -var="github_actions_token=${{ secrets.TERMANCH_GITHUB_ACTIONS_TOKEN }}" \
+              -var="github_oauth_client_id=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_ID }}" \
+              -var="github_oauth_client_secret=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_SECRET }}" \
+              -var="github_repository=${{ github.repository }}" \
+              -var="r2_access_key_id=${{ secrets.R2_ACCESS_KEY_ID }}" \
+              -var="r2_secret_access_key=${{ secrets.R2_SECRET_ACCESS_KEY }}"
+            rm backend_override.tf
+          fi
+          
+          # Now init with R2 backend
+          terraform init -input=false -migrate-state \
             -backend-config="endpoint=https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com" \
             -backend-config="access_key=${{ secrets.R2_ACCESS_KEY_ID }}" \
             -backend-config="secret_key=${{ secrets.R2_SECRET_ACCESS_KEY }}"

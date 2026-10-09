@@ -39,6 +39,13 @@ data "cloudflare_zone" "main" {
   name = var.cloudflare_zone_name
 }
 
+# R2 bucket for Terraform state (must exist before backend init)
+resource "cloudflare_r2_bucket" "terraform_state" {
+  account_id = var.cloudflare_account_id
+  name       = "termanch-terraform-state"
+  location   = "auto"
+}
+
 # Cloudflare Pages project for client hosting
 resource "cloudflare_pages_project" "client" {
   account_id = var.cloudflare_account_id
