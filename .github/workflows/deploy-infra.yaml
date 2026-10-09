@@ -71,8 +71,8 @@ jobs:
             -var="r2_secret_access_key=${{ secrets.R2_SECRET_ACCESS_KEY }}"
           rm backend_override.tf
           
-          # Now init with R2 backend and migrate state
-          terraform init -input=false -migrate-state \
+          # Now init with R2 backend and migrate state (force copy to avoid interactive prompt)
+          terraform init -input=false -migrate-state -force-copy \
             -backend-config="endpoint=https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com" \
             -backend-config="access_key=${{ secrets.R2_ACCESS_KEY_ID }}" \
             -backend-config="secret_key=${{ secrets.R2_SECRET_ACCESS_KEY }}"
