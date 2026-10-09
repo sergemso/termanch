@@ -43,8 +43,8 @@ Create a GitHub OAuth App for authentication:
    - **Project name**: `termanch`
    - **Production branch**: `master`
    - **Build command**: `pnpm --filter termanch-client build`
-   - **Build output directory**: `packages/client/dist`
    - **Root directory**: `/`
+   - *Note: Cloudflare auto-detects output directory for Vite projects; `packages/client/dist` is inferred*
 4. Add environment variable:
    - `VITE_GITHUB_CLIENT_ID` = your GitHub OAuth Client ID
 5. Deploy — Cloudflare will give you `termanch.pages.dev` URL
