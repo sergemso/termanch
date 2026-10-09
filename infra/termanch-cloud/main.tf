@@ -94,9 +94,9 @@ resource "github_actions_secret" "cf_pages_account_id" {
 }
 
 # GitHub repository variable for client build (OAuth Client ID from manual setup)
-resource "github_actions_variable" "github_client_id" {
+resource "github_actions_variable" "oauth_client_id" {
   repository = var.github_repository
-  variable_name = "GITHUB_CLIENT_ID"
+  variable_name = "TERMANCH_GITHUB_CLIENT_ID"
   value = var.github_oauth_client_id
 }
 

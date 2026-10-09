@@ -31,7 +31,7 @@ jobs:
       - name: Build client
         run: pnpm --filter termanch-client run build
         env:
-          VITE_GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
+          VITE_GITHUB_CLIENT_ID: ${{ vars.TERMANCH_GITHUB_CLIENT_ID }}
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/pages-action@v1

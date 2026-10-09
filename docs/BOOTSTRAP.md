@@ -102,7 +102,7 @@ terraform apply
 - ✅ Custom domain `app.yourdomain.com` (CNAME to Pages)
 - ✅ DNS records: `app.yourdomain.com` → Pages, `api.yourdomain.com` → Pages
 - ✅ GitHub Actions secrets: `CF_PAGES_API_TOKEN`, `CF_PAGES_ACCOUNT_ID`
-- ✅ GitHub Actions variable: `GITHUB_CLIENT_ID` (from Terraform input)
+- ✅ GitHub Actions variable: `TERMANCH_GITHUB_CLIENT_ID` (from Terraform input)
 
 **You provide manually (from step 1.5):**
 - `oauth_client_id` (GitHub OAuth App Client ID)

@@ -69,9 +69,9 @@ Single Docker Compose deployment for user's VPS: server + agent + cloudflared tu
          dockerfile: docker/Dockerfile
        volumes:
          - ./config:/config
-       environment:
-         - GITHUB_CLIENT_ID
-         - GITHUB_CLIENT_SECRET
+environment:
+          - TERMANCH_GITHUB_CLIENT_ID
+          - TERMANCH_GITHUB_CLIENT_SECRET
          - ALLOWED_ORIGIN=https://app.termanch.dev
        depends_on:
          - cloudflared
@@ -101,10 +101,10 @@ Single Docker Compose deployment for user's VPS: server + agent + cloudflared tu
    ```
 
 4. **`docker/.env.example`** — User configuration:
-   ```bash
-   # Required: GitHub OAuth app credentials (from github.com/settings/developers)
-   GITHUB_CLIENT_ID=your_client_id
-   GITHUB_CLIENT_SECRET=your_client_secret
+    ```bash
+    # Required: GitHub OAuth app credentials (from github.com/settings/developers)
+    TERMANCH_GITHUB_CLIENT_ID=your_client_id
+    TERMANCH_GITHUB_CLIENT_SECRET=your_client_secret
    
    # Optional: Cloudflare Tunnel token (for named tunnel)
    # CLOUDFLARE_TUNNEL_TOKEN=your_tunnel_token
