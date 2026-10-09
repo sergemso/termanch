@@ -38,15 +38,22 @@ This guide walks through setting up the cloud infrastructure (Cloudflare + GitHu
 3. Save as `CLOUDFLARE_API_TOKEN`
 
 ### 1.3 Create GitHub Personal Access Token
-1. Go to **GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens**
-2. Create token with:
-   - **Repository access**: `sergemso/termanch` (or your fork)
-   - **Permissions**:
-     - Repository → Actions → Read/Write (for secrets/variables)
-     - Repository → Administration → Read/Write (for OAuth app)
-     - Repository → Variables → Read/Write
-   - **Organization permissions**: `admin:oauth_app` (for GitHub OAuth App)
+
+You need **two tokens** because GitHub OAuth App creation requires a classic PAT with `admin:oauth_app` scope (not available in fine-grained tokens):
+
+**A. Classic PAT (for OAuth App management):**
+1. Go to **GitHub Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)**
+2. **Scopes**: `admin:oauth_app` (only this scope needed)
 3. Save as `GITHUB_ADMIN_TOKEN`
+
+**B. Fine-grained PAT (for Actions/Variables):**
+1. Go to **GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**
+2. **Repository access**: `sergemso/termanch` (or your fork)
+3. **Permissions**:
+   - Repository → Actions → Read/Write (for secrets/variables)
+   - Repository → Administration → Read/Write (for repo settings)
+   - Repository → Variables → Read/Write
+3. Save as `GITHUB_ACTIONS_TOKEN`
 
 ### 1.4 Cloudflare Pages Deploy Token
 1. Go to **Cloudflare Dashboard → Workers & Pages → Create token** (or use existing)
@@ -67,7 +74,8 @@ cloudflare_api_token        = "your-cf-api-token"
 cloudflare_account_id       = "your-cf-account-id"
 cloudflare_zone_name        = "yourdomain.com"
 cloudflare_pages_deploy_token = "your-pages-deploy-token"
-github_token                = "your-github-admin-token"
+github_admin_token          = "your-classic-pat-with-admin-oauth-app"
+github_actions_token        = "your-fine-grained-pat"
 github_repository           = "sergemso/termanch"
 EOF
 
