@@ -43,7 +43,7 @@ data "cloudflare_zone" "main" {
 resource "cloudflare_r2_bucket" "terraform_state" {
   account_id = var.cloudflare_account_id
   name       = "termanch-terraform-state"
-  location   = "auto"
+  location   = "WNAM"
 }
 
 # Cloudflare Pages project for client hosting
@@ -51,12 +51,15 @@ resource "cloudflare_pages_project" "client" {
   account_id = var.cloudflare_account_id
   name       = "termanch"
   production_branch = "master"
-  build_config = {
+
+  build_config {
     build_command = "pnpm --filter termanch-client build"
     destination_dir = "packages/client/dist"
     root_dir = "/"
   }
-  deployment_configs = []
+
+  deployment_configs {
+  }
 }
 
 # Custom domain for Pages
@@ -67,21 +70,21 @@ resource "cloudflare_pages_domain" "app" {
 }
 
 # DNS record for app subdomain (CNAME to Pages)
-resource "cloudflare_dns_record" "app" {
+resource "cloudflare_record" "app" {
   zone_id = data.cloudflare_zone.main.id
   name    = "app"
   type    = "CNAME"
-  value   = "${cloudflare_pages_project.client.subdomain}.pages.dev"
+  content = "${cloudflare_pages_project.client.subdomain}.pages.dev"
   proxied = true
   ttl     = 1
 }
 
 # DNS record for API subdomain (if needed for OAuth callback proxy)
-resource "cloudflare_dns_record" "api" {
+resource "cloudflare_record" "api" {
   zone_id = data.cloudflare_zone.main.id
   name    = "api"
   type    = "CNAME"
-  value   = "${cloudflare_pages_project.client.subdomain}.pages.dev"
+  content = "${cloudflare_pages_project.client.subdomain}.pages.dev"
   proxied = true
   ttl     = 1
 }
@@ -89,13 +92,13 @@ resource "cloudflare_dns_record" "api" {
 # GitHub repository secret for CI (Cloudflare Pages deploy token)
 resource "github_actions_secret" "cf_pages_token" {
   repository = var.github_repository
-  secret_name = "CF_PAGES_API_TOKEN"
+  secret_name = "CLOUDFLARE_API_TOKEN"
   plaintext_value = var.cloudflare_pages_deploy_token
 }
 
 resource "github_actions_secret" "cf_pages_account_id" {
   repository = var.github_repository
-  secret_name = "CF_PAGES_ACCOUNT_ID"
+  secret_name = "CLOUDFLARE_ACCOUNT_ID"
   plaintext_value = var.cloudflare_account_id
 }
 
