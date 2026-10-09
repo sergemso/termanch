@@ -46,12 +46,22 @@ pub struct SessionInfo {
     pub agent: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Display)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentEventType {
     Spawned,
     Completed,
     Error,
+}
+
+impl Display for AgentEventType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AgentEventType::Spawned => write!(f, "spawned"),
+            AgentEventType::Completed => write!(f, "completed"),
+            AgentEventType::Error => write!(f, "error"),
+        }
+    }
 }
 
 /// Registration (HTTP POST /register)
