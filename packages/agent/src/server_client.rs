@@ -16,7 +16,7 @@ pub struct ServerClient {
     server_url: String,
     server_token: String,
     pty_manager: Arc<PtyManager>,
-    tmux_manager: Arc<TmuxManager>,
+    _tmux_manager: Arc<TmuxManager>,
     reconnect_delay: Duration,
 }
 
@@ -31,7 +31,7 @@ impl ServerClient {
             server_url,
             server_token,
             pty_manager,
-            tmux_manager,
+            _tmux_manager: tmux_manager,
             reconnect_delay: Duration::from_secs(5),
         }
     }

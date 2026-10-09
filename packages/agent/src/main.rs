@@ -130,7 +130,7 @@ async fn handle_local_command(
     pty_manager: &PtyManager,
     tmux_manager: &TmuxManager,
 ) -> String {
-    let parts: Vec<&str> = msg.trim().split_whitespace().collect();
+    let parts: Vec<&str> = msg.split_whitespace().collect();
     if parts.is_empty() {
         return "ERROR: Empty command\n".into();
     }

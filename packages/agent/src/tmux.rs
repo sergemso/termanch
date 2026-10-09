@@ -67,10 +67,7 @@ impl TmuxManager {
     }
 
     pub async fn create_session(&self, name: &str) -> Result<TmuxSession> {
-        let id = format!(
-            "termanch-{}",
-            uuid::Uuid::new_v4().to_string()[..8].to_string()
-        );
+        let id = format!("termanch-{}", &uuid::Uuid::new_v4().to_string()[..8]);
 
         let output = Command::new("tmux")
             .args(["new-session", "-d", "-s", &id, "-n", name])
@@ -96,7 +93,7 @@ impl TmuxManager {
         Ok(session)
     }
 
-    pub async fn attach_session(&self, session_id: &str) -> Result<()> {
+    async fn _attach_session(&self, session_id: &str) -> Result<()> {
         let output = Command::new("tmux")
             .args(["attach-session", "-t", session_id])
             .output()
@@ -110,7 +107,7 @@ impl TmuxManager {
         Ok(())
     }
 
-    pub async fn send_keys(&self, session_id: &str, keys: &str) -> Result<()> {
+    async fn _send_keys(&self, session_id: &str, keys: &str) -> Result<()> {
         let output = Command::new("tmux")
             .args(["send-keys", "-t", session_id, keys])
             .output()
@@ -124,7 +121,7 @@ impl TmuxManager {
         Ok(())
     }
 
-    pub async fn kill_session(&self, session_id: &str) -> Result<()> {
+    async fn _kill_session(&self, session_id: &str) -> Result<()> {
         let output = Command::new("tmux")
             .args(["kill-session", "-t", session_id])
             .output()
