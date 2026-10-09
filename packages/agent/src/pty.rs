@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::env;
+use std::os::fd::FromRawFd;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
 use nix::pty::{forkpty, Winsize};
+use nix::sys::ioctl;
 use nix::unistd::{close, write, ForkResult};
 use tokio::process::Command;
 use tokio::sync::{mpsc, RwLock};
@@ -43,7 +45,8 @@ impl PtyManager {
             ws_ypixel: 0,
         };
 
-        match unsafe { forkpty(Some(&ws), None) }? {
+        let forkpty_result = unsafe { forkpty(Some(&ws), None) }?;
+        match forkpty_result.fork_result {
             ForkResult::Parent { child, master_fd } => {
                 let pid = child;
                 info!("Created PTY {} with pid {}", id, pid);
@@ -65,7 +68,6 @@ impl PtyManager {
                         match tokio::task::spawn_blocking({
                             let fd = master_fd;
                             move || {
-                                use std::os::fd::AsRawFd;
                                 let mut f = unsafe { std::fs::File::from_raw_fd(fd) };
                                 use std::io::Read;
                                 f.read(&mut buf)
@@ -132,8 +134,8 @@ impl PtyManager {
                 ws_ypixel: 0,
             };
             unsafe {
-                nix::sys::ioctl::ioctl_write_ptr!(TIOCSWINSZ, Winsize);
-                let _ = nix::sys::ioctl::ioctl(session.master_fd, nix::libc::TIOCSWINSZ, &ws);
+                ioctl::ioctl_write_ptr!(TIOCSWINSZ, Winsize);
+                let _ = ioctl::ioctl(session.master_fd, nix::libc::TIOCSWINSZ, &ws);
             }
             Ok(())
         } else {
