@@ -37,6 +37,7 @@
 | client | mvp-05-client.md | Client Dev | shared-types |
 | docker | mvp-06-docker-deploy.md | Architect | server, agent, client |
 | integration | mvp-07-integration.md | Integration Dev | all above |
+| bootstrap | mvp-08-bootstrap-script.md | Architect | docker |
 
 ---
 
@@ -53,7 +54,9 @@ Week 2:
   ├─ docker (Day 1-2)
   └─ integration + e2e test (Day 2-5)
 
-Week 3: Buffer / polish / deploy to test VPS
+Week 3:
+  ├─ bootstrap script (Day 1-2)
+  └─ polish / deploy to test VPS
 ```
 
 ---
@@ -67,6 +70,7 @@ Week 3: Buffer / polish / deploy to test VPS
 | 5 | Client OAuth + QR flow works | Client, Server | Playwright test |
 | 7 | Docker + cloudflared runs | Architect, All | `docker compose up` test |
 | 10 | Full e2e: OAuth → Register → Terminal | All | Video demo |
+| 12 | Bootstrap script works on fresh VPS | Architect | `curl | bash` test |
 
 ---
 

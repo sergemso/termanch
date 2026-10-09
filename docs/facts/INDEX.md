@@ -16,5 +16,6 @@
 | 0012 | Repository Structure | repo, monorepo, cargo, pnpm | active |
 | 0013 | Project License | license, legal, mit | active |
 | 0014 | Terminal Emulation Library | terminal, vte, wasm, emulation | active |
+| 0015 | User-Managed Cloudflare Tunnel | deployment, networking, cloudflare | active |
 
 <!-- bootstrap-generated: true -->

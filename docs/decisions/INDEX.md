@@ -14,5 +14,6 @@
 | 0010 | Monorepo with Cargo Workspace and pnpm Workspace | process | active | architect | - |
 | 0011 | MIT License for All Components | product | active | architect | - |
 | 0012 | vte Crate for Terminal Emulation in WASM | process | active | architect | - |
+| 0013 | User Self-Hosted Server with Hosted Client | product | active | architect | - |
 
 <!-- bootstrap-generated: true -->

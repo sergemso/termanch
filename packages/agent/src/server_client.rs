@@ -1,0 +1,143 @@
+use std::sync::Arc;
+use std::time::Duration;
+
+use anyhow::Result;
+use futures_util::{SinkExt, StreamExt};
+use tokio::sync::mpsc;
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use tracing::{debug, error, info, warn};
+use url::Url;
+
+use crate::pty::PtyManager;
+use crate::tmux::TmuxManager;
+use termanch_core::protocol::{ClientMessage, ServerMessage};
+
+pub struct ServerClient {
+    server_url: String,
+    server_token: String,
+    pty_manager: Arc<PtyManager>,
+    tmux_manager: Arc<TmuxManager>,
+    reconnect_delay: Duration,
+}
+
+impl ServerClient {
+    pub fn new(
+        server_url: String,
+        server_token: String,
+        pty_manager: Arc<PtyManager>,
+        tmux_manager: Arc<TmuxManager>,
+    ) -> Self {
+        Self {
+            server_url,
+            server_token,
+            pty_manager,
+            tmux_manager,
+            reconnect_delay: Duration::from_secs(5),
+        }
+    }
+
+    pub async fn run(&mut self) -> Result<()> {
+        loop {
+            info!("Connecting to server: {}", self.server_url);
+            match self.connect().await {
+                Ok(_) => info!("Disconnected from server"),
+                Err(e) => error!("Connection error: {}", e),
+            }
+
+            info!("Reconnecting in {:?}...", self.reconnect_delay);
+            tokio::time::sleep(self.reconnect_delay).await;
+            self.reconnect_delay = std::cmp::min(self.reconnect_delay * 2, Duration::from_secs(60));
+        }
+    }
+
+    async fn connect(&self) -> Result<()> {
+        let url = Url::parse(&self.server_url)?;
+        let (ws_stream, _) = connect_async(url).await?;
+        let (mut ws_tx, mut ws_rx) = ws_stream.split();
+
+        let auth_msg = ClientMessage::Auth {
+            token: String::new(),
+            server_token: self.server_token.clone(),
+        };
+        ws_tx.send(Message::Text(serde_json::to_string(&auth_msg)?)).await?;
+
+        let (pty_tx, mut pty_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+        let mut current_session: Option<String> = None;
+
+        loop {
+            tokio::select! {
+                msg = ws_rx.next() => {
+                    match msg {
+                        Some(Ok(Message::Text(text))) => {
+                            debug!("Received from server: {}", text);
+                            if let Ok(server_msg) = serde_json::from_str::<ServerMessage>(&text) {
+                                if let Err(e) = self.handle_server_message(server_msg, &mut current_session, &mut ws_tx, &pty_tx).await {
+                                    error!("Error handling server message: {}", e);
+                                }
+                            }
+                        }
+                        Some(Ok(Message::Close(_))) => {
+                            info!("Server closed connection");
+                            break;
+                        }
+                        Some(Err(e)) => {
+                            error!("WebSocket error: {}", e);
+                            break;
+                        }
+                        None => break,
+                    }
+                }
+                data = pty_rx.recv() => {
+                    if let Some(output) = data {
+                        let encoded = base64::encode(&output);
+                        let msg = ClientMessage::Input { data: encoded };
+                        if ws_tx.send(Message::Text(serde_json::to_string(&msg)?)).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn handle_server_message(
+        &self,
+        msg: ServerMessage,
+        current_session: &mut Option<String>,
+        ws_tx: &mut futures_util::stream::SplitSink<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, Message>,
+        pty_tx: &mpsc::UnboundedSender<Vec<u8>>,
+    ) -> Result<()> {
+        match msg {
+            ServerMessage::AuthOk { user, server_name } => {
+                info!("Authenticated as {} on {}", user, server_name);
+                let msg = ClientMessage::ListSessions;
+                ws_tx.send(Message::Text(serde_json::to_string(&msg)?)).await?;
+            }
+            ServerMessage::Sessions { sessions } => {
+                info!("Received {} sessions", sessions.len());
+                for session in sessions {
+                    debug!("Session: {} ({})", session.name, session.id);
+                }
+            }
+            ServerMessage::SessionAttached { session_id } => {
+                info!("Attached to session: {}", session_id);
+                *current_session = Some(session_id.clone());
+
+                let (rx, _tx) = mpsc::unbounded_channel();
+                let _ = self.pty_manager.attach(&session_id).await;
+            }
+            ServerMessage::Output { data } => {
+                // Output from server to terminal - not used in agent
+            }
+            ServerMessage::AgentEvent { event, agent, session_id } => {
+                info!("Agent event: {} - {} - {}", event, agent, session_id);
+            }
+            ServerMessage::Error { message } => {
+                warn!("Server error: {}", message);
+            }
+        }
+        Ok(())
+    }
+}

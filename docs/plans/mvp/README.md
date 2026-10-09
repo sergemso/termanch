@@ -40,6 +40,7 @@ Minimal end-to-end implementation plans for subagents (Hybrid Architecture).
 | 5 | [mvp-05-client.md](mvp-05-client.md) | Client Dev | 3 | 2 |
 | 6 | [mvp-06-docker-deploy.md](mvp-06-docker-deploy.md) | Architect | 1 | 3,4,5 |
 | 7 | [mvp-07-integration.md](mvp-07-integration.md) | Integration Dev | 2 | 3,4,5,6 |
+| 8 | [mvp-08-bootstrap-script.md](mvp-08-bootstrap-script.md) | Architect | 1 | 6 |
 
 ## Parallelization
 
@@ -53,7 +54,9 @@ Week 2:
   Day 1-2: mvp-06
   Day 2-5: mvp-07
 
-Week 3: Buffer
+Week 3:
+  Day 1-2: mvp-08 (bootstrap script)
+  Day 2-3: Buffer / polish
 ```
 
 ## Key MVP Decisions (vs v1)

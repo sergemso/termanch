@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  termanch-server:
+    image: ghcr.io/sergemso/termanch:latest
+    container_name: termanch-server
+    restart: unless-stopped
+    environment:
+      - TERMANCH_HOST=0.0.0.0
+      - TERMANCH_PORT=8080
+      - TERMANCH_GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - TERMANCH_GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - TERMANCH_JWT_SECRET=${JWT_SECRET}
+      - TERMANCH_REGISTRATION_SECRET=${REGISTRATION_SECRET}
+      - TERMANCH_SERVER_NAME=${SERVER_NAME:-termanch-server}
+    volumes:
+      - termanch-data:/home/termanch/.config/termanch
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - termanch-network
+
+  termanch-agent:
+    image: ghcr.io/sergemso/termanch:latest
+    container_name: termanch-agent
+    restart: unless-stopped
+    command: termanch-agent
+    environment:
+      - TERMANCH_SERVER_URL=ws://termanch-server:8080/ws
+      - TERMANCH_SERVER_TOKEN=${REGISTRATION_SECRET}
+      - TERMANCH_SOCKET_PATH=/tmp/termanch-agent.sock
+    volumes:
+      - /tmp/termanch-agent.sock:/tmp/termanch-agent.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - termanch-server
+    networks:
+      - termanch-network
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: termanch-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - termanch-server
+    networks:
+      - termanch-network
+
+volumes:
+  termanch-data:
+
+networks:
+  termanch-network:
+    driver: bridge

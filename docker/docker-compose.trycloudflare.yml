@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  termanch-server:
+    environment:
+      - TERMANCH_HOST=0.0.0.0
+      - TERMANCH_PORT=8080
+    ports:
+      - "8080:8080"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: termanch-tunnel-try
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://termanch-server:8080
+    depends_on:
+      - termanch-server
+    networks:
+      - termanch-network

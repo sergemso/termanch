@@ -10,5 +10,7 @@
 | internal-network-binding | Internal Network Binding (127.0.0.1 Only) | 0001 | 0001 | active |
 | audit-logging-no-secrets | Audit Logging Without Secrets | 0006,0009 | 0008,0011 | active |
 | paranoid-mode | Paranoid Mode (Outbound Block) | 0001 | 0001 | active |
+| bootstrap-simplicity | 1-2 Click Bootstrap for Users | 0013 | 0001,0011 | active |
+| ci-only-builds | All Builds Run in CI Only | 0010,0011 | 0010,0011 | active |
 
 <!-- bootstrap-generated: true -->
