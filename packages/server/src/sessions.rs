@@ -63,7 +63,7 @@ pub enum AgentCommand {
 impl SessionManager {
     pub fn new() -> Self {
         let (agent_tx, mut agent_rx) = mpsc::unbounded_channel();
-        let sessions = Arc::new(RwLock::new(HashMap::new()));
+        let sessions = Arc::new(RwLock::new(HashMap::<String, Session>::new()));
 
         let sessions_clone = sessions.clone();
         tokio::spawn(async move {

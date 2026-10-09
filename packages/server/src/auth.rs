@@ -131,6 +131,23 @@ pub async fn verify_auth(
         .map_err(|_| StatusCode::UNAUTHORIZED)
 }
 
+pub fn verify_token(
+    auth: &Arc<AuthState>,
+    headers: &axum::http::HeaderMap,
+) -> Result<Claims, StatusCode> {
+    let auth_header = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let token = auth_header
+        .strip_prefix("Bearer ")
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    auth.verify_token(token)
+        .map_err(|_| StatusCode::UNAUTHORIZED)
+}
+
 #[derive(Deserialize)]
 pub struct OAuthCallbackQuery {
     pub code: String,
