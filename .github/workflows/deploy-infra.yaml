@@ -70,7 +70,9 @@ jobs:
             -var="github_actions_token=${{ secrets.TERMANCH_GITHUB_ACTIONS_TOKEN }}" \
             -var="github_oauth_client_id=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_ID }}" \
             -var="github_oauth_client_secret=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_SECRET }}" \
-            -var="github_repository=${{ github.repository }}"
+            -var="github_repository=${{ github.repository }}" \
+            -var="r2_access_key_id=${{ secrets.R2_ACCESS_KEY_ID }}" \
+            -var="r2_secret_access_key=${{ secrets.R2_SECRET_ACCESS_KEY }}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
@@ -88,7 +90,9 @@ jobs:
               -var="github_actions_token=${{ secrets.TERMANCH_GITHUB_ACTIONS_TOKEN }}" \
               -var="github_oauth_client_id=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_ID }}" \
               -var="github_oauth_client_secret=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_SECRET }}" \
-              -var="github_repository=${{ github.repository }}"
+              -var="github_repository=${{ github.repository }}" \
+              -var="r2_access_key_id=${{ secrets.R2_ACCESS_KEY_ID }}" \
+              -var="r2_secret_access_key=${{ secrets.R2_SECRET_ACCESS_KEY }}"
           fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -104,7 +108,9 @@ jobs:
             -var="github_actions_token=${{ secrets.TERMANCH_GITHUB_ACTIONS_TOKEN }}" \
             -var="github_oauth_client_id=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_ID }}" \
             -var="github_oauth_client_secret=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_SECRET }}" \
-            -var="github_repository=${{ github.repository }}"
+            -var="github_repository=${{ github.repository }}" \
+            -var="r2_access_key_id=${{ secrets.R2_ACCESS_KEY_ID }}" \
+            -var="r2_secret_access_key=${{ secrets.R2_SECRET_ACCESS_KEY }}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 

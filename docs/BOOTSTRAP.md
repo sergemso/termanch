@@ -38,6 +38,13 @@ This guide walks through setting up the cloud infrastructure (Cloudflare + GitHu
    - **Zone Resources**: Include your zone (`yourdomain.com`)
 3. Save as `CLOUDFLARE_API_TOKEN`
 
+### 1.2.1 Create R2 API Token (for Terraform state backend)
+1. Go to **R2 → Manage R2 API tokens → Create API token**
+2. **Permissions**: Object Read & Write (or Edit)
+3. **Account Resources**: Include your account
+4. Save **Access Key ID** as `R2_ACCESS_KEY_ID`
+5. Save **Secret Access Key** as `R2_SECRET_ACCESS_KEY`
+
 ### 1.3 Create GitHub Personal Access Tokens
 
 You need **two tokens** for different purposes:
@@ -91,6 +98,9 @@ github_actions_token         = "your-fine-grained-pat"
 github_oauth_client_id       = "your-github-oauth-client-id"
 github_oauth_client_secret   = "your-github-oauth-client-secret"
 github_repository            = "sergemso/termanch"
+# R2 backend credentials (for Terraform state)
+r2_access_key_id     = "your-r2-access-key-id"
+r2_secret_access_key = "your-r2-secret-access-key"
 EOF
 
 # Initialize and apply (creates everything below)
