@@ -70,7 +70,7 @@ jobs:
               -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
               -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
               -target=cloudflare_r2_bucket.terraform_state \
-              -var="cloudflare_zone_name=${{ secrets.CLOUDFLARE_ZONE_NAME }}" \
+              -var="cloudflare_zone_name=${{ vars.CLOUDFLARE_ZONE_NAME }}" \
               -var="cloudflare_pages_deploy_token=${{ secrets.CLOUDFLARE_PAGES_DEPLOY_TOKEN }}" \
               -var="github_actions_token=${{ secrets.TERMANCH_GITHUB_ACTIONS_TOKEN }}" \
               -var="github_oauth_client_id=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_ID }}" \
@@ -102,7 +102,7 @@ jobs:
           terraform plan -input=false -out=tfplan \
             -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
             -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
-            -var="cloudflare_zone_name=${{ secrets.CLOUDFLARE_ZONE_NAME }}" \
+            -var="cloudflare_zone_name=${{ vars.CLOUDFLARE_ZONE_NAME }}" \
             -var="cloudflare_pages_deploy_token=${{ secrets.CLOUDFLARE_PAGES_DEPLOY_TOKEN }}" \
             -var="github_actions_token=${{ secrets.TERMANCH_GITHUB_ACTIONS_TOKEN }}" \
             -var="github_oauth_client_id=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_ID }}" \
@@ -122,7 +122,7 @@ jobs:
             terraform apply -input=false -auto-approve \
               -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
               -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
-              -var="cloudflare_zone_name=${{ secrets.CLOUDFLARE_ZONE_NAME }}" \
+              -var="cloudflare_zone_name=${{ vars.CLOUDFLARE_ZONE_NAME }}" \
               -var="cloudflare_pages_deploy_token=${{ secrets.CLOUDFLARE_PAGES_DEPLOY_TOKEN }}" \
               -var="github_actions_token=${{ secrets.TERMANCH_GITHUB_ACTIONS_TOKEN }}" \
               -var="github_oauth_client_id=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_ID }}" \
@@ -140,7 +140,7 @@ jobs:
           terraform destroy -input=false -auto-approve \
             -var="cloudflare_api_token=${{ secrets.CLOUDFLARE_API_TOKEN }}" \
             -var="cloudflare_account_id=${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" \
-            -var="cloudflare_zone_name=${{ secrets.CLOUDFLARE_ZONE_NAME }}" \
+            -var="cloudflare_zone_name=${{ vars.CLOUDFLARE_ZONE_NAME }}" \
             -var="cloudflare_pages_deploy_token=${{ secrets.CLOUDFLARE_PAGES_DEPLOY_TOKEN }}" \
             -var="github_actions_token=${{ secrets.TERMANCH_GITHUB_ACTIONS_TOKEN }}" \
             -var="github_oauth_client_id=${{ secrets.TERMANCH_GITHUB_OAUTH_CLIENT_ID }}" \
