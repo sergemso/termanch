@@ -64,6 +64,7 @@ impl PtyManager {
 
         let ptys_clone = ptys.clone();
         let id_clone2 = id.clone();
+        let tx_stdout = tx.clone();
         tokio::spawn(async move {
             let mut buf = [0u8; 4096];
             loop {
@@ -71,7 +72,7 @@ impl PtyManager {
                 match stdout.read(&mut buf).await {
                     Ok(0) => break,
                     Ok(n) => {
-                        let _ = tx.send(buf[..n].to_vec());
+                        let _ = tx_stdout.send(buf[..n].to_vec());
                     }
                     Err(e) => {
                         error!("PTY read error: {}", e);
@@ -83,7 +84,7 @@ impl PtyManager {
         });
 
         // Also read stderr
-        let tx2 = tx.clone();
+        let tx_stderr = tx.clone();
         tokio::spawn(async move {
             use tokio::io::AsyncReadExt;
             let mut buf = [0u8; 4096];
@@ -91,7 +92,7 @@ impl PtyManager {
                 match stderr.read(&mut buf).await {
                     Ok(0) => break,
                     Ok(n) => {
-                        let _ = tx2.send(buf[..n].to_vec());
+                        let _ = tx_stderr.send(buf[..n].to_vec());
                     }
                     Err(_) => break,
                 }
@@ -99,10 +100,10 @@ impl PtyManager {
         });
 
         // Write to stdin
-        let tx3 = tx.clone();
+        let _tx_stdin = tx.clone();
         tokio::spawn(async move {
             // This would be used for writing to the PTY
-            let _ = tx3;
+            let _ = stdin;
         });
 
         Ok(rx)

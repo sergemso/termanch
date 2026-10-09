@@ -87,6 +87,7 @@ impl ServerClient {
                             break;
                         }
                         None => break,
+                        _ => {}
                     }
                 }
                 data = pty_rx.recv() => {
