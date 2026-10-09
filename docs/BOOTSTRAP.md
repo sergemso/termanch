@@ -2,61 +2,31 @@
 
 This guide walks through setting up the cloud infrastructure (Cloudflare + GitHub OAuth) required to run Termanch.
 
+**TL;DR** — Most cloud infra is automated via Terraform. You only need to:
+1. Add your domain to Cloudflare
+2. Create API tokens (Cloudflare + GitHub)
+3. Generate secrets
+4. Run `terraform apply`
+5. Deploy server to your VPS
+
+---
+
 ## Prerequisites
 
 - GitHub account
 - Cloudflare account (free tier works)
 - A domain managed by Cloudflare (e.g., `yourdomain.com`)
-- Local machine with `git`, `docker`, `docker compose`
+- Local machine with `git`, `docker`, `docker compose`, `terraform`
 
 ---
 
-## 1. GitHub OAuth App
+## 1. Prerequisites (One-time Setup)
 
-Create a GitHub OAuth App for authentication:
-
-1. Go to **GitHub Settings → Developer settings → OAuth Apps → New OAuth App**
-2. Fill in:
-   - **Application name**: `Termanch` (or your preferred name)
-   - **Homepage URL**: `https://app.yourdomain.com`
-   - **Authorization callback URL**: `https://app.yourdomain.com/callback`
-3. Click **Register application**
-4. **Generate a new client secret**
-4. Save both **Client ID** and **Client Secret** — you'll need them for the server config
-
-> **Note**: For personal use, you can use GitHub's "Internal" mode (up to 100 users) without verification.
-
----
-
-## 2. Cloudflare Setup
-
-### 2.1 Add Domain to Cloudflare
-
+### 1.1 Add Domain to Cloudflare
 1. Add your domain to Cloudflare (if not already)
 2. Ensure DNS is proxied (orange cloud) for `app.yourdomain.com`
 
-### 2.2 Create Cloudflare Pages Project
-
-1. Go to **Cloudflare Dashboard → Workers & Pages → Create application → Pages → Connect to Git**
-2. Select your GitHub repo (`sergemso/termanch`)
-3. Configure build:
-   - **Project name**: `termanch`
-   - **Production branch**: `master`
-   - **Build command**: `pnpm --filter termanch-client build`
-   - **Root directory**: `/`
-   - *Note: Cloudflare auto-detects output directory for Vite projects; `packages/client/dist` is inferred*
-4. Add environment variable:
-   - `VITE_GITHUB_CLIENT_ID` = your GitHub OAuth Client ID
-5. Deploy — Cloudflare will give you `termanch.pages.dev` URL
-
-### 2.3 Add Custom Domain
-
-1. In Pages project → **Custom domains → Add custom domain**
-2. Enter `app.yourdomain.com`
-3. Cloudflare will auto-create DNS records (CNAME to `termanch.pages.dev`)
-
-### 2.4 Create Cloudflare API Token
-
+### 1.2 Create Cloudflare API Token
 1. Go to **My Profile → API Tokens → Create Token**
 2. Use **Custom token** template:
    - **Permissions**:
@@ -65,13 +35,61 @@ Create a GitHub OAuth App for authentication:
      - Zone → Zone → Read
    - **Account Resources**: Include your account
    - **Zone Resources**: Include your zone (`yourdomain.com`)
-3. Save the token — you'll need it for Terraform/bootstrap
+3. Save as `CLOUDFLARE_API_TOKEN`
+
+### 1.3 Create GitHub Personal Access Token
+1. Go to **GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens**
+2. Create token with:
+   - **Repository access**: `sergemso/termanch` (or your fork)
+   - **Permissions**:
+     - Repository → Actions → Read/Write (for secrets/variables)
+     - Repository → Administration → Read/Write (for OAuth app)
+     - Repository → Variables → Read/Write
+   - **Organization permissions**: `admin:oauth_app` (for GitHub OAuth App)
+3. Save as `GITHUB_ADMIN_TOKEN`
+
+### 1.4 Cloudflare Pages Deploy Token
+1. Go to **Cloudflare Dashboard → Workers & Pages → Create token** (or use existing)
+2. **Permissions**: Account → Cloudflare Pages → Edit
+3. **Account Resources**: Include your account
+3. Save as `CLOUDFLARE_PAGES_DEPLOY_TOKEN`
 
 ---
 
-## 3. Generate Secrets
+## 2. Run Terraform (Automates Everything Else)
 
-Run these locally to generate secure secrets:
+```bash
+cd infra/termanch-cloud
+
+# Create terraform.tfvars
+cat > terraform.tfvars <<EOF
+cloudflare_api_token        = "your-cf-api-token"
+cloudflare_account_id       = "your-cf-account-id"
+cloudflare_zone_name        = "yourdomain.com"
+cloudflare_pages_deploy_token = "your-pages-deploy-token"
+github_token                = "your-github-admin-token"
+github_repository           = "sergemso/termanch"
+EOF
+
+# Initialize and apply (creates everything below)
+terraform init
+terraform plan
+terraform apply
+```
+
+**Terraform creates automatically:**
+- ✅ Cloudflare Pages project (`termanch`) with `master` branch
+- ✅ Custom domain `app.yourdomain.com` (CNAME to Pages)
+- ✅ DNS records: `app.yourdomain.com` → Pages, `api.yourdomain.com` → Pages
+- ✅ GitHub OAuth App (`https://app.yourdomain.com/callback`)
+- ✅ GitHub Actions secrets: `CF_PAGES_API_TOKEN`, `CF_PAGES_ACCOUNT_ID`
+- ✅ GitHub Actions variable: `GITHUB_CLIENT_ID` (from created OAuth app)
+
+---
+
+## 3. Generate Server Secrets
+
+Run locally:
 
 ```bash
 # JWT signing secret (32+ chars)
@@ -84,7 +102,12 @@ echo "JWT_SECRET=$JWT_SECRET"
 echo "REGISTRATION_SECRET=$REGISTRATION_SECRET"
 ```
 
-Save these — you'll need them for the server `.env` file.
+Save these for the server `.env` file.
+
+**Terraform outputs:**
+- `oauth_client_id` — add to `TERMANCH_GITHUB_CLIENT_ID`
+- `oauth_client_secret` — add to `TERMANCH_GITHUB_CLIENT_SECRET`
+- `client_url` — your `https://app.yourdomain.com`
 
 ---
 
@@ -102,43 +125,33 @@ curl -fsSL https://get.docker.com | sh
 # Clone the repo
 git clone https://github.com/sergemso/termanch.git
 cd termanch/docker
+```
 
-# Create .env file
+### 4.2 Create `.env` File
+
+```bash
 cat > .env <<EOF
-TERMANCH_GITHUB_CLIENT_ID=your-github-client-id
-TERMANCH_GITHUB_CLIENT_SECRET=your-github-client-secret
-TERMANCH_JWT_SECRET=your-jwt-secret
-TERMANCH_REGISTRATION_SECRET=your-registration-secret
+TERMANCH_GITHUB_CLIENT_ID=<terraform output oauth_client_id>
+TERMANCH_GITHUB_CLIENT_SECRET=<terraform output oauth_client_secret>
+TERMANCH_JWT_SECRET=<your-jwt-secret>
+TERMANCH_REGISTRATION_SECRET=<your-reg-secret>
 TERMANCH_SERVER_NAME=my-vps
 # For quick testing (ephemeral URL):
 # CLOUDFLARE_TUNNEL_TOKEN=
 # For production (named tunnel):
 # CLOUDFLARE_TUNNEL_TOKEN=your-cloudflare-tunnel-token
 EOF
+```
 
-# Start services
+### 4.3 Start Services
+
+```bash
 docker compose up -d
 
 # Verify
 docker compose ps
 docker compose logs -f termanch-server
 ```
-
-### 4.2 Register Server with Termanch
-
-**Option A: Quick tunnel (trycloudflare) — no Cloudflare account needed**
-```bash
-# Already configured in docker-compose.yml (default)
-docker compose up -d
-```
-
-**Option B: Named tunnel (persistent, custom domain) — requires Cloudflare account**
-1. In Cloudflare Dashboard → **Zero Trust → Networks → Tunnels → Create tunnel**
-2. Name it (e.g., `termanch`)
-3. Configure ingress: `yourdomain.com` → `http://localhost:8080`
-4. Copy the tunnel token
-4. Add to `.env`: `CLOUDFLARE_TUNNEL_TOKEN=your-token`
-5. `docker compose up -d`
 
 ### 4.3 Get Registration QR Code
 
@@ -157,7 +170,7 @@ Scan the QR code with the Termanch app at `https://app.yourdomain.com`
 
 ## 5. Verify End-to-End
 
-1. Open `https://app.yourdomain.com`
+1. Open `https://app.yourdomain.com` (Terraform output `client_url`)
 2. Click **"Login with GitHub"** → authorize
 3. Click **"Add Server"** → scan QR code from step 4.3
 4. Server appears in list → click to connect
@@ -165,51 +178,28 @@ Scan the QR code with the Termanch app at `https://app.yourdomain.com`
 
 ---
 
-## 6. Terraform (Optional: Infrastructure as Code)
+## 6. CI/CD (Automated)
 
-If you want to manage cloud infra via Terraform:
+**On push to `master`:**
+- CI runs: `cargo fmt`, `clippy`, `build`, `test` + `pnpm build/test`
+- Docker image built + pushed to GHCR (multi-arch)
+- Client deployed to Cloudflare Pages via `cloudflare/pages-action`
 
+**Manual Terraform:**
 ```bash
-cd infra/termanch-cloud
-
-# Create terraform.tfvars
-cat > terraform.tfvars <<EOF
-cloudflare_api_token = "your-cf-api-token"
-cloudflare_account_id = "your-account-id"
-cloudflare_zone_name = "yourdomain.com"
-cloudflare_pages_deploy_token = "your-pages-deploy-token"
-github_token = "your-github-token"
-github_repository = "sergemso/termanch"
-EOF
-
-# Initialize and apply
-terraform init
-terraform plan
-terraform apply
+gh workflow run deploy-infra.yaml -f action=plan -f environment=cloud
+gh workflow run deploy-infra.yaml -f action=apply -f environment=cloud
 ```
-
-This creates:
-- Cloudflare Pages project
-- Custom domain `app.yourdomain.com`
-- GitHub OAuth App
-- GitHub Actions secrets/variables
 
 ---
 
 ## 7. Bootstrap Script (Future)
 
-A one-command bootstrap is planned:
-
 ```bash
 curl -fsSL https://get.termanch.dev | bash
 ```
 
-This will:
-1. Install Docker + cloudflared
-2. Generate secrets
-3. Write docker-compose.yml + .env
-4. Start services
-5. Print QR code for registration
+Will automate: Docker install, secret generation, docker-compose, QR code.
 
 ---
 
@@ -217,17 +207,19 @@ This will:
 
 | Issue | Solution |
 |-------|----------|
-| `403 Forbidden` on Cloudflare Pages | Check `VITE_GITHUB_CLIENT_ID` env var is set correctly |
+| `403 Forbidden` on Cloudflare Pages | Check `VITE_GITHUB_CLIENT_ID` GitHub Actions variable |
 | WebSocket connection fails | Verify CORS headers on server; check cloudflared logs |
 | QR code not scanning | Ensure HMAC token matches; check server time sync |
 | `docker compose up` fails | Check `.env` has all required vars; `docker compose config` to validate |
+| Terraform apply fails | Check API token permissions; verify domain is on Cloudflare |
 
 ---
 
 ## Security Notes
 
-- All secrets stored in `.env` (chmod 600)
+- All secrets in `.env` (chmod 600) / GitHub Actions secrets
 - JWT tokens expire in 7 days
 - Registration tokens single-use, 10-min expiry
 - TLS terminated at Cloudflare edge
 - No secrets in logs or Docker images
+- GitHub OAuth App created by Terraform (source of truth)

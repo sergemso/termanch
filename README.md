@@ -25,30 +25,43 @@ A web-based terminal for managing remote AI coding agents (Codex, Claude Code, H
 
 ## Quick Start
 
-See **[BOOTSTRAP.md](docs/BOOTSTRAP.md)** for complete setup instructions including:
-- GitHub OAuth App creation
-- Cloudflare Pages + custom domain setup
-- Cloudflare Tunnel configuration
-- Secret generation
-- Server deployment on VPS
-- Server registration via QR code
-- Terraform infrastructure-as-code (optional)
+See **[BOOTSTRAP.md](docs/BOOTSTRAP.md)** for complete setup instructions.
 
-### Minimal Quick Start
+### Automated Cloud Setup (Terraform)
 
 ```bash
-# 1. Create GitHub OAuth App (callback: https://app.yourdomain.com/callback)
-# 2. Create Cloudflare Pages project + custom domain app.yourdomain.com
-# 3. Generate secrets: openssl rand -base64 32 (x2 for JWT_SECRET, REGISTRATION_SECRET)
+# 1. Prerequisites: Cloudflare API token, GitHub admin token, domain on Cloudflare
 
+# 2. Run Terraform (automates: Cloudflare Pages, DNS, GitHub OAuth, GitHub Actions secrets)
+cd infra/termanch-cloud
+cat > terraform.tfvars <<EOF
+cloudflare_api_token        = "your-cf-api-token"
+cloudflare_account_id       = "your-cf-account-id"
+cloudflare_zone_name        = "yourdomain.com"
+cloudflare_pages_deploy_token = "your-pages-deploy-token"
+github_token                = "your-github-admin-token"
+github_repository           = "sergemso/termanch"
+EOF
+
+terraform init && terraform apply
+
+# 3. Get outputs
+terraform output oauth_client_id
+terraform output oauth_client_secret
+terraform output client_url
+```
+
+### Server Deployment (Your VPS)
+
+```bash
 # On your VPS:
 git clone https://github.com/sergemso/termanch
 cd termanch/docker
 cat > .env <<EOF
-TERMANCH_GITHUB_CLIENT_ID=your-client-id
-TERMANCH_GITHUB_CLIENT_SECRET=your-client-secret
-TERMANCH_JWT_SECRET=your-jwt-secret
-TERMANCH_REGISTRATION_SECRET=your-reg-secret
+TERMANCH_GITHUB_CLIENT_ID=<terraform output oauth_client_id>
+TERMANCH_GITHUB_CLIENT_SECRET=<terraform output oauth_client_secret>
+TERMANCH_JWT_SECRET=<openssl rand -base64 32>
+TERMANCH_REGISTRATION_SECRET=<openssl rand -base64 32>
 TERMANCH_SERVER_NAME=my-vps
 EOF
 
