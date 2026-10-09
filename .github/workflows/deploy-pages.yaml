@@ -34,11 +34,8 @@ jobs:
           VITE_GITHUB_CLIENT_ID: ${{ vars.TERMANCH_GITHUB_CLIENT_ID }}
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
+        uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CF_PAGES_API_TOKEN }}
-          accountId: ${{ secrets.CF_PAGES_ACCOUNT_ID }}
-          projectName: termanch
-          directory: packages/client/dist
-          branch: master
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: pages deploy packages/client/dist --project-name=termanch --branch=master
