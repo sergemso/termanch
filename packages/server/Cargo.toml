@@ -24,3 +24,5 @@ serde_json = { workspace = true }
 axum-extra = { version = "0.9", features = ["cookie-private"] }
 time = "0.3"
 jsonwebtoken = "9.2"
+oauth2 = { workspace = true }
+reqwest = { workspace = true }
