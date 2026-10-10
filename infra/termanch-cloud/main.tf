@@ -38,17 +38,18 @@ provider "github" {
 locals {
   pages_project_name = coalesce(var.pages_project_name, "termanch")
   dns_prefix         = var.pages_project_name != null ? "${var.pages_project_name}." : ""
+  dns_name_prefix    = var.pages_project_name != null ? "${var.pages_project_name}." : ""
+  pages_subdomain    = "${local.pages_project_name}.pages.dev"
 }
 
 data "cloudflare_zone" "main" {
   name = var.cloudflare_zone_name
 }
 
-# R2 bucket for Terraform state (must exist before backend init)
-resource "cloudflare_r2_bucket" "terraform_state" {
+# R2 bucket for Terraform state (created by workflow init step)
+data "cloudflare_r2_bucket" "terraform_state" {
   account_id = var.cloudflare_account_id
   name       = "termanch-terraform-state"
-  location   = "WNAM"
 }
 
 # Cloudflare Pages project for client hosting
@@ -77,9 +78,9 @@ resource "cloudflare_pages_domain" "app" {
 # DNS record for app subdomain (CNAME to Pages)
 resource "cloudflare_record" "app" {
   zone_id = data.cloudflare_zone.main.id
-  name    = "app.${local.dns_prefix}"
+  name    = "app${local.dns_name_prefix}"
   type    = "CNAME"
-  content = "${cloudflare_pages_project.client.subdomain}.pages.dev"
+  content = local.pages_subdomain
   proxied = true
   ttl     = 1
 }
@@ -87,9 +88,9 @@ resource "cloudflare_record" "app" {
 # DNS record for API subdomain (if needed for OAuth callback proxy)
 resource "cloudflare_record" "api" {
   zone_id = data.cloudflare_zone.main.id
-  name    = "api.${local.dns_prefix}"
+  name    = "api${local.dns_name_prefix}"
   type    = "CNAME"
-  content = "${cloudflare_pages_project.client.subdomain}.pages.dev"
+  content = local.pages_subdomain
   proxied = true
   ttl     = 1
 }

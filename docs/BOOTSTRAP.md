@@ -102,7 +102,7 @@ cloudflare_pages_deploy_token = "your-pages-deploy-token"
 github_actions_token         = "your-fine-grained-pat"
 github_oauth_client_id       = "your-github-oauth-client-id"
 github_oauth_client_secret   = "your-github-oauth-client-secret"
-github_repository            = "sergemso/termanch"
+github_repository            = "termanch"
 # Optional: Pages project name (enables app.{project}.{zone} / api.{project}.{zone})
 # pages_project_name = "myapp"
 # R2 backend credentials (for Terraform state)

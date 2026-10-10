@@ -38,9 +38,9 @@ variable "github_oauth_client_secret" {
 }
 
 variable "github_repository" {
-  description = "GitHub repository (owner/name)"
+  description = "GitHub repository name (just the repo name, not owner/repo)"
   type        = string
-  default     = "sergemso/termanch"
+  default     = "termanch"
 }
 
 variable "r2_access_key_id" {
