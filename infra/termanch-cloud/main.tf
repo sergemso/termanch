@@ -38,7 +38,7 @@ provider "github" {
 locals {
   pages_project_name = coalesce(var.pages_project_name, "termanch")
   dns_prefix         = var.pages_project_name != null ? "${var.pages_project_name}." : ""
-  dns_name_prefix    = var.pages_project_name != null ? "${var.pages_project_name}." : ""
+  dns_name_prefix    = var.pages_project_name != null ? ".${var.pages_project_name}" : ""
   pages_subdomain    = "${local.pages_project_name}.pages.dev"
 }
 
