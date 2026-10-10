@@ -46,12 +46,6 @@ data "cloudflare_zone" "main" {
   name = var.cloudflare_zone_name
 }
 
-# R2 bucket for Terraform state (created by workflow init step)
-data "cloudflare_r2_bucket" "terraform_state" {
-  account_id = var.cloudflare_account_id
-  name       = "termanch-terraform-state"
-}
-
 # Cloudflare Pages project for client hosting
 resource "cloudflare_pages_project" "client" {
   account_id = var.cloudflare_account_id
