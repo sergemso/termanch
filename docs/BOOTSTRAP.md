@@ -25,7 +25,7 @@ This guide walks through setting up the cloud infrastructure (Cloudflare + GitHu
 
 ### 1.1 Add Domain to Cloudflare
 1. Add your domain to Cloudflare (if not already)
-2. Ensure DNS is proxied (orange cloud) for `app.yourdomain.com`
+2. **No manual DNS needed** — Terraform creates `app.{zone}` / `api.{zone}` (or `app.{project}.{zone}` / `api.{project}.{zone}` if `pages_project_name` is set) automatically
 
 ### 1.2 Create Cloudflare API Token
 1. Go to **My Profile → API Tokens → Create Token**
@@ -72,11 +72,13 @@ You need **two tokens** for different purposes:
 1. Go to **GitHub Settings → Developer settings → OAuth Apps → New OAuth App**
 2. Fill in:
    - **Application name**: `Termanch` (or your preferred name)
-   - **Homepage URL**: `https://app.yourdomain.com`
-   - **Authorization callback URL**: `https://app.yourdomain.com/callback`
+   - **Homepage URL**: `https://app.${your_zone_name}` (or `https://app.${project}.${your_zone_name}` if using `pages_project_name`)
+   - **Authorization callback URL**: `https://app.${your_zone_name}/callback` (or `https://app.${project}.${your_zone_name}/callback`)
 3. Click **Register application**
 4. **Generate a new client secret**
 5. Save both **Client ID** and **Client Secret** — you'll need them for Terraform
+
+> **Note**: Use the actual domain from Terraform output `client_url` after running `terraform apply`. You can update the OAuth App later if needed.
 
 ### 1.5 Cloudflare Pages Deploy Token
 1. Go to **Cloudflare Dashboard → Workers & Pages → Create token** (or use existing)
@@ -101,6 +103,8 @@ github_actions_token         = "your-fine-grained-pat"
 github_oauth_client_id       = "your-github-oauth-client-id"
 github_oauth_client_secret   = "your-github-oauth-client-secret"
 github_repository            = "sergemso/termanch"
+# Optional: Pages project name (enables app.{project}.{zone} / api.{project}.{zone})
+# pages_project_name = "myapp"
 # R2 backend credentials (for Terraform state)
 r2_access_key_id     = "your-r2-access-key-id"
 r2_secret_access_key = "your-r2-secret-access-key"
@@ -113,10 +117,10 @@ terraform apply
 ```
 
 **Terraform creates automatically:**
-- ✅ Cloudflare Pages project (`termanch`) with `master` branch
-- ✅ Custom domain `app.yourdomain.com` (CNAME to Pages)
-- ✅ DNS records: `app.yourdomain.com` → Pages, `api.yourdomain.com` → Pages
-- ✅ GitHub Actions secrets: `CF_PAGES_API_TOKEN`, `CF_PAGES_ACCOUNT_ID`
+- ✅ Cloudflare Pages project (`termanch` by default, or `pages_project_name` if set)
+- ✅ Custom domain: `app.{zone}` (default) or `app.{project}.{zone}` (if `pages_project_name` set)
+- ✅ DNS records: `app.{zone}` / `api.{zone}` (default) or `app.{project}.{zone}` / `api.{project}.{zone}`
+- ✅ GitHub Actions secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
 - ✅ GitHub Actions variable: `TERMANCH_GITHUB_CLIENT_ID` (from Terraform input)
 
 **You provide manually (from step 1.5):**
@@ -143,7 +147,7 @@ echo "REGISTRATION_SECRET=$REGISTRATION_SECRET"
 Save these for the server `.env` file.
 
 **Terraform outputs:**
-- `client_url` — your `https://app.yourdomain.com`
+- `client_url` — your client URL (e.g., `https://app.yourdomain.com` or `https://app.myapp.yourdomain.com`)
 
 ---
 
@@ -200,13 +204,13 @@ Output shows:
 - HMAC Token (for QR)
 - Server Name
 
-Scan the QR code with the Termanch app at `https://app.yourdomain.com`
+Scan the QR code with the Termanch app at the Terraform output `client_url`
 
 ---
 
 ## 5. Verify End-to-End
 
-1. Open `https://app.yourdomain.com` (Terraform output `client_url`)
+1. Open the Terraform output `client_url` (e.g., `https://app.yourdomain.com` or `https://app.myapp.yourdomain.com`)
 2. Click **"Login with GitHub"** → authorize
 3. Click **"Add Server"** → scan QR code from step 4.3
 4. Server appears in list → click to connect

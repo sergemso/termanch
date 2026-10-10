@@ -17,7 +17,7 @@ A web-based terminal for managing remote AI coding agents (Codex, Claude Code, H
                                          └─────────────────┘
 ```
 
-- **Client**: Hosted at `https://app.termanch.dev` (Cloudflare Pages, our account)
+- **Client**: Hosted on your Cloudflare Pages at `app.{yourdomain}` (or `app.{project}.{yourdomain}` with optional `pages_project_name`)
 - **Server**: Self-hosted on your VPS via Docker + Cloudflare Tunnel
 - **Auth**: GitHub OAuth (our OAuth app)
 - **Transport**: WebSocket (MVP), WebTransport (planned)
@@ -33,7 +33,7 @@ See **[BOOTSTRAP.md](docs/BOOTSTRAP.md)** for complete setup instructions.
 # 1. Prerequisites: Cloudflare API token, GitHub Actions token, domain on Cloudflare
 # 2. Create GitHub OAuth App manually (one-time):
 #    GitHub Settings → Developer settings → OAuth Apps → New OAuth App
-#    Callback: https://app.yourdomain.com/callback
+#    Callback: https://app.{yourdomain}/callback (or https://app.{project}.{yourdomain}/callback)
 #    Save Client ID and Client Secret
 
 # 2. Run Terraform (automates: Cloudflare Pages, DNS, GitHub Actions secrets)
@@ -47,6 +47,8 @@ github_actions_token         = "your-fine-grained-pat"
 github_oauth_client_id       = "your-github-oauth-client-id"
 github_oauth_client_secret   = "your-github-oauth-client-secret"
 github_repository            = "sergemso/termanch"
+# Optional: Pages project name (enables app.{project}.{zone} / api.{project}.{zone})
+# pages_project_name = "myapp"
 EOF
 
 terraform init && terraform apply
@@ -75,7 +77,7 @@ docker compose up -d
 
 # Register server:
 docker compose exec termanch-server termanch-server --register
-# Scan QR at https://app.yourdomain.com
+# Scan QR at the Terraform output `client_url`
 ```
 
 ## Development

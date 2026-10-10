@@ -35,6 +35,11 @@ provider "github" {
   token = var.github_actions_token
 }
 
+locals {
+  pages_project_name = coalesce(var.pages_project_name, "termanch")
+  dns_prefix         = var.pages_project_name != null ? "${var.pages_project_name}." : ""
+}
+
 data "cloudflare_zone" "main" {
   name = var.cloudflare_zone_name
 }
@@ -49,7 +54,7 @@ resource "cloudflare_r2_bucket" "terraform_state" {
 # Cloudflare Pages project for client hosting
 resource "cloudflare_pages_project" "client" {
   account_id = var.cloudflare_account_id
-  name       = "termanch"
+  name       = local.pages_project_name
   production_branch = "master"
 
   build_config {
@@ -66,13 +71,13 @@ resource "cloudflare_pages_project" "client" {
 resource "cloudflare_pages_domain" "app" {
   account_id = var.cloudflare_account_id
   project_name = cloudflare_pages_project.client.name
-  domain = "app.${var.cloudflare_zone_name}"
+  domain = "app.${local.dns_prefix}${var.cloudflare_zone_name}"
 }
 
 # DNS record for app subdomain (CNAME to Pages)
 resource "cloudflare_record" "app" {
   zone_id = data.cloudflare_zone.main.id
-  name    = "app"
+  name    = "app.${local.dns_prefix}"
   type    = "CNAME"
   content = "${cloudflare_pages_project.client.subdomain}.pages.dev"
   proxied = true
@@ -82,7 +87,7 @@ resource "cloudflare_record" "app" {
 # DNS record for API subdomain (if needed for OAuth callback proxy)
 resource "cloudflare_record" "api" {
   zone_id = data.cloudflare_zone.main.id
-  name    = "api"
+  name    = "api.${local.dns_prefix}"
   type    = "CNAME"
   content = "${cloudflare_pages_project.client.subdomain}.pages.dev"
   proxied = true
@@ -110,7 +115,7 @@ resource "github_actions_variable" "oauth_client_id" {
 }
 
 output "client_url" {
-  value = "https://app.${var.cloudflare_zone_name}"
+  value = "https://app.${local.dns_prefix}${var.cloudflare_zone_name}"
 }
 
 output "oauth_client_id" {
