@@ -15,4 +15,4 @@ Termanch evolves the shipped MVP: GitHub OAuth, WebSocket, xterm.js WebGL, tmux-
 
 ## Why
 
-The MVP is built and works; the v1 designs rest on unverified browser capabilities (browsers cannot reach an SSH agent; Web Crypto has no ChaCha20-Poly1305; iOS has no Background Fetch).
+The MVP code exists, but a code review on 2026-10-11 found its auth is a stub (see plan step 2.1), so "works" means the structure, not a verified flow. The v1 designs rest on unverified browser capabilities (browsers cannot reach an SSH agent; Web Crypto has no ChaCha20-Poly1305; iOS has no Background Fetch).
