@@ -5,6 +5,8 @@ services:
     image: ghcr.io/sergemso/termanch:latest
     container_name: termanch-server
     restart: unless-stopped
+    ports:
+      - "4443:4443/udp"
     environment:
       - TERMANCH_HOST=0.0.0.0
       - TERMANCH_PORT=8080

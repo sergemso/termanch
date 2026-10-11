@@ -150,6 +150,9 @@ Direction and steps: [docs/plans/termanch-v1.md](docs/plans/termanch-v1.md) (tra
 | `TERMANCH_PUBLIC_URL` | Recommended | Tunnel URL, written into the registration link |
 | `TERMANCH_CLIENT_URL` | No | Client that opens the link (default: https://app.termanch.dev) |
 | `TERMANCH_BACKEND` | No | `tmux` (default) or `command` (see Session backends) |
+| `TERMANCH_UDP_PORT` | No | UDP port of the WebRTC-direct transport (default 4443; open it in the firewall) |
+| `TERMANCH_PUBLIC_IP` | No | Address clients connect to; detected when unset (set it if detection fails) |
+| `TERMANCH_WEBRTC` | No | `off` for WebSocket only |
 | `TERMANCH_CONFIG_DIR` | No | Where the owner and claim token are stored (a volume) |
 | `TERMANCH_SERVER_NAME` | No | Display name (default: termanch-server) |
 | `TERMANCH_HOST` | No | Bind address (default: 0.0.0.0) |

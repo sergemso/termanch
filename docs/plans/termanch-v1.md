@@ -160,6 +160,7 @@ Issue: #25
 Class: implement · Needs: 8.1, 2.1 · Check: `pnpm --filter termanch-client test`
 Context: Pages Functions + D1 under `packages/client/functions/api/directory/`; deployable by self-hosters with their client. The signed record carries `ip`, `udp_port`, `dtls_fingerprint` and an optional `ws_url` (tunnel fallback), per DECISION-0057.
 Do:
+0. Server side: after startup and on every address change, sign and POST the record (`RtcInfo` plus `seq`) with the persisted server key.
 1. `POST /api/directory/announce {server_id (ed25519 pubkey), ip, udp_port, dtls_fingerprint, ws_url?, seq, proof_hash, sig}`: verify signature, reject stale `seq`, rate-limit per id, store.
 2. `GET /api/directory/lookup?id=` returns the signed record; `GET /api/directory/pending?h=<hash of claim secret>` returns a first announcement made with that secret.
 3. Validate `ip` (public unicast only; reject private, loopback, link-local, multicast) and `udp_port`. Keep requests cheap: `pending` supports backoff (2s, 4s, 8s, then 10s) and a total timeout; steady state needs no polling (FACT-0018 budget). Records expire (e.g. 30 days idle); caps on URL length and format (https only, trycloudflare or allow-listed pattern).
@@ -240,9 +241,9 @@ Context: Makes the session path transport-agnostic and adds the primary transpor
 Do:
 1. Extract a `Transport` seam under `sessions.rs` (messages in/out, close); WebSocket becomes one implementation.
 2. Data-channel transport per 8.7; auth and owner binding in the first message; unauthenticated peers limited and timed out.
-3. Announce `ip`, `udp_port`, `dtls_fingerprint` to the directory (8.2), signed.
+3. Announcing `ip`, `udp_port`, `dtls_fingerprint` to the directory is done in 8.2/8.3 (the server exposes them as `RtcInfo`; `/rtc-info` is a dev-only unsigned route).
 4. e2e test: a Rust WebRTC client (or headless browser in CI) through the whole auth + tmux + reconnect path.
-Done-when: the e2e suite passes over WebRTC and WebSocket from one set of tests.
+Done-when: the e2e suite passes over WebRTC and WebSocket from one set of tests. (Done on branch feat/webrtc-direct-server.)
 
 ---
 

@@ -16,9 +16,13 @@ use tracing::info;
 
 mod auth;
 mod backend;
+mod connection;
 #[cfg(test)]
 mod e2e;
+mod link;
+mod netutil;
 mod pty;
+mod rtc;
 mod sessions;
 mod websocket;
 
@@ -79,6 +83,22 @@ struct Args {
     #[arg(long, env = "TERMANCH_BACKEND_ATTACH")]
     backend_attach: Option<String>,
 
+    /// UDP port of the WebRTC-direct transport (open it in the firewall).
+    #[arg(long, env = "TERMANCH_UDP_PORT", default_value = "4443")]
+    udp_port: u16,
+
+    /// Address clients connect to over WebRTC; detected when not set.
+    #[arg(long, env = "TERMANCH_PUBLIC_IP")]
+    public_ip: Option<std::net::IpAddr>,
+
+    /// Turn the WebRTC-direct transport off (WebSocket only).
+    #[arg(long, env = "TERMANCH_WEBRTC", default_value = "on")]
+    webrtc: String,
+
+    /// Serve /rtc-info with the unsigned connection details. For development and tests only.
+    #[arg(long, env = "TERMANCH_DEV_INFO", default_value = "off")]
+    dev_info: String,
+
     /// Print the registration link for this (unclaimed) server and exit.
     #[arg(long, default_value = "false")]
     register: bool,
@@ -89,6 +109,7 @@ pub struct AppState {
     pub auth: Arc<AuthState>,
     pub sessions: Arc<SessionManager>,
     pub server_name: String,
+    pub rtc_info: Option<rtc::RtcInfo>,
 }
 
 fn build_backend(args: &Args) -> anyhow::Result<Arc<dyn SessionBackend>> {
@@ -158,13 +179,34 @@ async fn main() -> anyhow::Result<()> {
 
     let backend = build_backend(&args)?;
     info!("Session backend: {}", backend.name());
-    let state = AppState {
+    let mut state = AppState {
         auth,
         sessions: Arc::new(SessionManager::new(backend)),
         server_name: args.server_name.clone(),
+        rtc_info: None,
     };
 
-    let app = router(state);
+    if args.webrtc != "off" {
+        let http = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()?;
+        let public_ip = match args.public_ip {
+            Some(ip) => ip,
+            None => netutil::discover_public_ip(&http).await.ok_or_else(|| {
+                anyhow::anyhow!("cannot find this host's public IP; set TERMANCH_PUBLIC_IP")
+            })?,
+        };
+        let cert = rtc::load_or_create_cert(&args.config_dir)?;
+        let bind = SocketAddr::new(std::net::Ipv4Addr::UNSPECIFIED.into(), args.udp_port);
+        let info = rtc::start(bind, public_ip, cert, rtc::Limits::default(), state.clone()).await?;
+        info!(
+            "WebRTC-direct on udp {}:{} ({})",
+            info.ip, info.port, info.fingerprint
+        );
+        state.rtc_info = Some(info);
+    }
+
+    let app = router(state, args.dev_info == "on");
 
     let addr: SocketAddr = format!("{}:{}", args.host, args.port).parse()?;
     info!("Starting server on {}", addr);
@@ -176,13 +218,25 @@ async fn main() -> anyhow::Result<()> {
 }
 
 /// No credentials cross origins here: the WebSocket authenticates in its first message.
-fn router(state: AppState) -> Router {
-    Router::new()
+fn router(state: AppState, dev_info: bool) -> Router {
+    let mut app = Router::new()
         .route("/health", get(|| async { "OK" }))
-        .route("/ws", get(ws_handler))
-        .layer(CorsLayer::permissive())
+        .route("/ws", get(ws_handler));
+    if dev_info {
+        app = app.route("/rtc-info", get(rtc_info));
+    }
+    app.layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+async fn rtc_info(
+    State(state): State<AppState>,
+) -> axum::response::Result<axum::Json<rtc::RtcInfo>> {
+    state
+        .rtc_info
+        .map(axum::Json)
+        .ok_or_else(|| axum::http::StatusCode::NOT_FOUND.into())
 }
 
 async fn ws_handler(

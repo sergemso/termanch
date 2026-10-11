@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use axum::extract::ws::{Message, WebSocket};
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use tracing::{debug, info};
 
@@ -10,9 +9,11 @@ use termanch_core::protocol::{ClientMessage, ServerMessage};
 use std::sync::Arc;
 
 use crate::backend::SessionBackend;
+use crate::link::{Link, LinkTx};
 use crate::pty::Attachment;
 
-const PING_EVERY: Duration = Duration::from_secs(20);
+/// Clients ping every 15 s, so a minute of silence means the peer is gone.
+const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Serves one authenticated WebSocket: lists/creates tmux sessions and bridges one attached session.
 /// Persistence lives in the session backend (tmux by default); a dropped connection only detaches (see pty.rs).
@@ -26,57 +27,45 @@ impl SessionManager {
         Self { backend }
     }
 
-    pub async fn handle_websocket(
-        &self,
-        mut socket: WebSocket,
-        identity: crate::auth::Identity,
-    ) -> Result<()> {
+    /// Serves one authenticated connection until it ends or goes silent.
+    pub async fn serve(&self, mut link: Link, identity: crate::auth::Identity) -> Result<()> {
         let mut attachment: Option<Attachment> = None;
         let (mut cols, mut rows) = (80u16, 24u16);
-        let mut ping = tokio::time::interval(PING_EVERY);
+        let idle = tokio::time::sleep(IDLE_TIMEOUT);
+        tokio::pin!(idle);
 
         loop {
             tokio::select! {
-                msg = socket.recv() => {
-                    let Some(Ok(msg)) = msg else { break };
-                    match msg {
-                        Message::Text(text) => {
-                            let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) else { continue };
-                            match self.handle(client_msg, &mut attachment, &mut cols, &mut rows, &mut socket).await {
-                                Ok(()) => {}
-                                Err(e) => {
-                                    send(&mut socket, &ServerMessage::Error { message: e.to_string() }).await?;
-                                }
-                            }
-                        }
-                        Message::Binary(data) => {
-                            if let Some(att) = attachment.as_mut() {
-                                att.write(&data)?;
-                            }
-                        }
-                        Message::Close(_) => break,
-                        _ => {}
+                msg = link.rx.recv() => {
+                    let Some(text) = msg else { break };
+                    idle.as_mut().reset(tokio::time::Instant::now() + IDLE_TIMEOUT);
+                    let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) else { continue };
+                    if let Err(e) = self.handle(client_msg, &mut attachment, &mut cols, &mut rows, &link.tx).await {
+                        if !send(&link.tx, &ServerMessage::Error { message: e.to_string() }).await { break; }
                     }
                 }
                 out = next_output(&mut attachment) => {
                     match out {
-                        Some(bytes) => send(&mut socket, &ServerMessage::Output { data: B64.encode(bytes) }).await?,
+                        Some(bytes) => {
+                            if !send(&link.tx, &ServerMessage::Output { data: B64.encode(bytes) }).await { break; }
+                        }
                         None => {
-                            // The tmux client exited: session killed or detached from inside.
+                            // The attach client exited: session killed, or detached from inside.
                             attachment = None;
-                            send(&mut socket, &ServerMessage::Error { message: "Session ended".into() }).await?;
+                            if !send(&link.tx, &ServerMessage::Error { message: "Session ended".into() }).await { break; }
                             let sessions = self.backend.list().await.unwrap_or_default();
-                            send(&mut socket, &ServerMessage::Sessions { sessions }).await?;
+                            if !send(&link.tx, &ServerMessage::Sessions { sessions }).await { break; }
                         }
                     }
                 }
-                _ = ping.tick() => {
-                    if socket.send(Message::Ping(Vec::new())).await.is_err() { break; }
+                _ = &mut idle => {
+                    info!("Closing idle connection of {}", identity.login);
+                    break;
                 }
             }
         }
 
-        info!("WebSocket closed for {}", identity.login);
+        info!("Connection closed for {}", identity.login);
         Ok(())
     }
 
@@ -86,24 +75,24 @@ impl SessionManager {
         attachment: &mut Option<Attachment>,
         cols: &mut u16,
         rows: &mut u16,
-        socket: &mut WebSocket,
+        tx: &LinkTx,
     ) -> Result<()> {
         match msg {
             ClientMessage::Auth { .. } => {} // handled once, before this loop (websocket.rs)
-            ClientMessage::Ping => send(socket, &ServerMessage::Pong).await?,
+            ClientMessage::Ping => send_r(tx, &ServerMessage::Pong).await?,
             ClientMessage::ListSessions => {
                 let sessions = self.backend.list().await?;
-                send(socket, &ServerMessage::Sessions { sessions }).await?;
+                send_r(tx, &ServerMessage::Sessions { sessions }).await?;
             }
             ClientMessage::NewSession { name } => {
                 self.backend.create(&name).await?;
                 let sessions = self.backend.list().await?;
-                send(socket, &ServerMessage::Sessions { sessions }).await?;
+                send_r(tx, &ServerMessage::Sessions { sessions }).await?;
             }
             ClientMessage::Attach { session_id } => {
                 *attachment = None; // detach the previous one first
                 *attachment = Some(self.backend.attach(&session_id, *cols, *rows)?);
-                send(socket, &ServerMessage::SessionAttached { session_id }).await?;
+                send_r(tx, &ServerMessage::SessionAttached { session_id }).await?;
             }
             ClientMessage::Input { data } => {
                 if let Some(att) = attachment.as_mut() {
@@ -126,11 +115,16 @@ impl SessionManager {
     }
 }
 
-async fn send(socket: &mut WebSocket, msg: &ServerMessage) -> Result<()> {
-    socket
-        .send(Message::Text(serde_json::to_string(msg)?))
-        .await?;
-    Ok(())
+async fn send(tx: &LinkTx, msg: &ServerMessage) -> bool {
+    tx.send(serde_json::to_string(msg).unwrap()).await
+}
+
+async fn send_r(tx: &LinkTx, msg: &ServerMessage) -> Result<()> {
+    if send(tx, msg).await {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("connection closed"))
+    }
 }
 
 /// Next chunk of terminal output; pends forever while nothing is attached.

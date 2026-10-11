@@ -7,78 +7,53 @@ use axum::{
     },
     http::HeaderMap,
 };
-use tracing::{error, info};
 
-use termanch_core::protocol::{ClientMessage, ServerMessage};
+use crate::link;
 
-const AUTH_TIMEOUT: Duration = Duration::from_secs(10);
+const PING_EVERY: Duration = Duration::from_secs(20);
 
-async fn send(socket: &mut WebSocket, msg: &ServerMessage) -> bool {
-    socket
-        .send(Message::Text(serde_json::to_string(msg).unwrap()))
-        .await
-        .is_ok()
-}
-
-/// Tell the client why, then close properly. Dropping the socket right after the error would reset
-/// the connection and the browser could lose the message.
-async fn reject(socket: &mut WebSocket, message: &str) {
-    let _ = send(
-        socket,
-        &ServerMessage::Error {
-            message: message.into(),
-        },
-    )
-    .await;
-    let _ = socket.send(Message::Close(None)).await;
-    let _ = tokio::time::timeout(Duration::from_secs(1), socket.recv()).await;
-}
-
-/// Browsers cannot set headers on a WebSocket, so the first message must be `auth`.
-/// Nothing else is read until GitHub has vouched for the token and the user owns this server.
+/// WebSocket adapter: pumps the socket into a `Link`. Used behind a tunnel and in tests.
 pub async fn handle_websocket(
     mut socket: WebSocket,
     State(state): State<crate::AppState>,
     headers: HeaderMap,
 ) {
-    let first = tokio::time::timeout(AUTH_TIMEOUT, socket.recv()).await;
-    let (token, claim) = match first {
-        Ok(Some(Ok(Message::Text(text)))) => match serde_json::from_str::<ClientMessage>(&text) {
-            Ok(ClientMessage::Auth {
-                token,
-                server_token,
-            }) => (token, Some(server_token).filter(|t| !t.is_empty())),
-            _ => {
-                reject(&mut socket, "Authenticate first").await;
-                return;
-            }
-        },
-        _ => return,
-    };
-
     // Behind the Cloudflare tunnel the peer address is the tunnel; the real client is in this header.
     let ip = headers
         .get("cf-connecting-ip")
-        .and_then(|v| v.to_str().ok());
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+    let (l, mut end) = link::pair(ip, None);
+    let session = tokio::spawn(crate::connection::run(l, state));
+    let mut ping = tokio::time::interval(PING_EVERY);
 
-    let identity = match state.auth.check(&token, claim.as_deref(), ip).await {
-        Ok(i) => i,
-        Err(e) => {
-            reject(&mut socket, e.message()).await;
-            return;
+    loop {
+        tokio::select! {
+            msg = socket.recv() => match msg {
+                Some(Ok(Message::Text(text))) => {
+                    if end.to_session.send(text).await.is_err() { break; }
+                }
+                Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
+                _ => {}
+            },
+            out = end.from_session.recv() => match out {
+                Some(text) => {
+                    if socket.send(Message::Text(text)).await.is_err() { break; }
+                }
+                None => {
+                    // The session ended (for example an auth error was just sent): close properly.
+                    // Dropping the socket right away would reset the connection and the browser
+                    // could lose the last message.
+                    let _ = socket.send(Message::Close(None)).await;
+                    let _ = tokio::time::timeout(Duration::from_secs(1), socket.recv()).await;
+                    break;
+                }
+            },
+            _ = ping.tick() => {
+                if socket.send(Message::Ping(Vec::new())).await.is_err() { break; }
+            }
         }
-    };
-
-    info!("WebSocket authenticated for {}", identity.login);
-    let ok = ServerMessage::AuthOk {
-        user: identity.login.clone(),
-        server_name: state.server_name.clone(),
-    };
-    if !send(&mut socket, &ok).await {
-        return;
     }
-
-    if let Err(e) = state.sessions.handle_websocket(socket, identity).await {
-        error!("WebSocket error: {}", e);
-    }
+    drop(end);
+    let _ = session.await;
 }
