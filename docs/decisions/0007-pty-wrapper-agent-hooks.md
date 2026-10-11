@@ -1,7 +1,7 @@
 ---
 id: 0007
 title: PTY Wrapper with Shell Hooks for Agent Integration
-status: active
+status: deferred
 track: product
 tags: [agents, integration, pty, hooks]
 date: 2026-10-09

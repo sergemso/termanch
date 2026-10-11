@@ -1,7 +1,7 @@
 ---
 id: 0008
 title: SSH Authentication Method
-status: active
+status: deferred
 tags: [auth, ssh, security]
 date: 2026-10-09
 ---

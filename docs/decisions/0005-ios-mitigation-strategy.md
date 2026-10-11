@@ -1,7 +1,7 @@
 ---
 id: 0005
 title: iOS Safari Mitigation via Background Fetch, Push, and Service Worker
-status: active
+status: deferred
 track: product
 tags: [ios, safari, pwa, background, persistence]
 date: 2026-10-09

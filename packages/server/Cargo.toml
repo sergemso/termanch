@@ -14,15 +14,19 @@ tower-http = { workspace = true, features = ["cors", "trace"] }
 async-trait = { workspace = true }
 uuid = { workspace = true, features = ["serde", "v4"] }
 base64 = { workspace = true }
-hmac = { workspace = true }
-sha2 = { workspace = true }
 rand = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 anyhow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-axum-extra = { version = "0.9", features = ["cookie-private"] }
-time = "0.3"
-jsonwebtoken = "9.2"
-oauth2 = { workspace = true }
 reqwest = { workspace = true }
+portable-pty = { workspace = true }
+str0m = "0.24.1"
+sha2 = { workspace = true }
+hmac = { workspace = true }
+qrcode = { version = "0.14", default-features = false }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+
+[dev-dependencies]
+tokio-tungstenite = "0.21"
+futures-util = "0.3"

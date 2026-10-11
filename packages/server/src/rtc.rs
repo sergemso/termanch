@@ -1,0 +1,529 @@
+//! WebRTC-direct transport (DECISION-0057): one UDP port, ICE-lite, no signaling, no STUN/TURN.
+//!
+//! The browser builds the remote session description itself from the server's IP, port and DTLS
+//! fingerprint (from the signed directory record) and rewrites its own ICE ufrag/pwd to one random
+//! string. A peer is created when an unknown source sends a STUN binding request whose username is
+//! `termanch:<client ufrag>`. The client's certificate is not verified (identity comes from the
+//! GitHub login inside the channel); the client verifies ours against the pinned fingerprint.
+use std::collections::{HashMap, VecDeque};
+use std::net::{IpAddr, SocketAddr};
+use std::path::Path;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use anyhow::{anyhow, Result};
+use serde::Serialize;
+use sha2::{Digest, Sha256};
+use str0m::channel::{ChannelConfig, ChannelId};
+use str0m::config::{DtlsCert, Fingerprint};
+use str0m::ice::IceCreds;
+use str0m::net::{Protocol, Receive};
+use str0m::{Candidate, Event, IceConnectionState, Input, Output, Rtc};
+use tokio::net::UdpSocket;
+use tokio::sync::Notify;
+use tracing::{debug, warn};
+
+use crate::link::{self, LinkEnd};
+use crate::AppState;
+
+/// Fixed by the protocol: the client puts these into the description it builds locally.
+pub const SERVER_UFRAG: &str = "termanch";
+pub const SERVER_PWD: &str = "termanch-direct-v1-0123456789";
+/// Negotiated data channel id, the same on both sides (no in-band negotiation).
+pub const CHANNEL_ID: u16 = 0;
+/// A single message above this closes the connection; clients send small JSON.
+const MAX_MESSAGE: usize = 64 * 1024;
+
+#[derive(Clone, Debug)]
+pub struct Limits {
+    pub max_peers: usize,
+    /// Peers that have not opened the data channel yet (about 25 KB each).
+    pub max_half_open: usize,
+    pub max_per_ip: usize,
+    pub half_open_ttl: Duration,
+    /// No datagram at all for this long means the peer is gone.
+    pub silence_ttl: Duration,
+    pub new_peers_per_sec: u32,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            max_peers: 256,
+            max_half_open: 64,
+            max_per_ip: 8,
+            half_open_ttl: Duration::from_secs(10),
+            silence_ttl: Duration::from_secs(30),
+            new_peers_per_sec: 50,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct RtcInfo {
+    pub ip: IpAddr,
+    pub port: u16,
+    pub fingerprint: String,
+}
+
+/// Loads the DTLS certificate from `dir`, creating it on first start. The fingerprint must stay the
+/// same across restarts because clients pin it.
+pub fn load_or_create_cert(dir: &Path) -> Result<DtlsCert> {
+    let (cert_path, key_path) = (dir.join("dtls_cert.der"), dir.join("dtls_key.der"));
+    if let (Ok(certificate), Ok(private_key)) =
+        (std::fs::read(&cert_path), std::fs::read(&key_path))
+    {
+        return Ok(DtlsCert {
+            certificate,
+            private_key,
+        });
+    }
+    let cert = str0m::crypto::from_feature_flags()
+        .dtls_provider
+        .generate_certificate()
+        .ok_or_else(|| anyhow!("cannot generate a DTLS certificate"))?;
+    write_private(&cert_path, &cert.certificate)?;
+    write_private(&key_path, &cert.private_key)?;
+    Ok(cert)
+}
+
+fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
+    use std::io::Write;
+    #[cfg(unix)]
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    opts.mode(0o600);
+    opts.open(path)?.write_all(bytes)?;
+    Ok(())
+}
+
+pub fn fingerprint(cert: &DtlsCert) -> String {
+    let digest = Sha256::digest(&cert.certificate);
+    let hex: Vec<String> = digest.iter().map(|b| format!("{b:02X}")).collect();
+    format!("sha-256 {}", hex.join(":"))
+}
+
+/// Starts the transport. `public_ip` is what clients are told to connect to.
+pub async fn start(
+    bind: SocketAddr,
+    public_ip: IpAddr,
+    cert: DtlsCert,
+    limits: Limits,
+    state: AppState,
+) -> Result<RtcInfo> {
+    let socket = UdpSocket::bind(bind).await?;
+    let port = socket.local_addr()?.port();
+    let info = RtcInfo {
+        ip: public_ip,
+        port,
+        fingerprint: fingerprint(&cert),
+    };
+    let server = Server {
+        socket,
+        public_addr: SocketAddr::new(public_ip, port),
+        cert,
+        limits,
+        state,
+        wake: Arc::new(Notify::new()),
+    };
+    tokio::spawn(server.run());
+    Ok(info)
+}
+
+struct Server {
+    socket: UdpSocket,
+    public_addr: SocketAddr,
+    cert: DtlsCert,
+    limits: Limits,
+    state: AppState,
+    wake: Arc<Notify>,
+}
+
+struct Peer {
+    rtc: Rtc,
+    /// Present once the data channel is open (the session task starts then).
+    end: Option<LinkEnd>,
+    cid: Option<ChannelId>,
+    created: Instant,
+    last_rx: Instant,
+    queue: VecDeque<String>,
+    closing: bool,
+    dirty: bool,
+    timeout: Instant,
+}
+
+/// Fixed-rate token bucket for creating peers (a flood of STUN requests must not cost memory).
+struct Bucket {
+    tokens: f64,
+    rate: f64,
+    last: Instant,
+}
+
+impl Bucket {
+    fn new(rate: u32) -> Self {
+        Self {
+            tokens: rate as f64,
+            rate: rate as f64,
+            last: Instant::now(),
+        }
+    }
+
+    fn take(&mut self, now: Instant) -> bool {
+        self.tokens =
+            (self.tokens + now.duration_since(self.last).as_secs_f64() * self.rate).min(self.rate);
+        self.last = now;
+        if self.tokens >= 1.0 {
+            self.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+/// USERNAME attribute of a STUN binding request, if `buf` is one.
+fn stun_username(buf: &[u8]) -> Option<&str> {
+    if buf.len() < 20 || buf[0] != 0 || buf[1] != 1 || buf[4..8] != [0x21, 0x12, 0xA4, 0x42] {
+        return None;
+    }
+    let mut i = 20;
+    while i + 4 <= buf.len() {
+        let t = u16::from_be_bytes([buf[i], buf[i + 1]]);
+        let l = u16::from_be_bytes([buf[i + 2], buf[i + 3]]) as usize;
+        if i + 4 + l > buf.len() {
+            return None;
+        }
+        if t == 0x0006 {
+            return std::str::from_utf8(&buf[i + 4..i + 4 + l]).ok();
+        }
+        i += 4 + l + ((4 - l % 4) % 4);
+    }
+    None
+}
+
+fn valid_client_ufrag(u: &str) -> bool {
+    (16..=64).contains(&u.len()) && u.bytes().all(|b| b.is_ascii_alphanumeric())
+}
+
+impl Server {
+    async fn run(self) {
+        let mut peers: HashMap<SocketAddr, Peer> = HashMap::new();
+        let mut bucket = Bucket::new(self.limits.new_peers_per_sec);
+        let mut buf = vec![0u8; 2000];
+        loop {
+            let now = Instant::now();
+            let mut next = now + Duration::from_secs(1);
+            peers.retain(|addr, p| {
+                if p.dirty || now >= p.timeout {
+                    p.dirty = false;
+                    if !p.step(&self.socket, now, &self.limits, &self.state, &self.wake) {
+                        debug!("peer {addr} gone");
+                        return false;
+                    }
+                }
+                next = next.min(p.timeout);
+                true
+            });
+
+            tokio::select! {
+                r = self.socket.recv_from(&mut buf) => {
+                    let Ok((n, src)) = r else { continue };
+                    let now = Instant::now();
+                    let data = &buf[..n];
+                    if !peers.contains_key(&src) {
+                        if let Some(p) = self.admit(&peers, &mut bucket, src, data, now) {
+                            peers.insert(src, p);
+                        }
+                    }
+                    if let Some(p) = peers.get_mut(&src) {
+                        p.last_rx = now;
+                        p.dirty = true;
+                        if let Ok(contents) = data.try_into() {
+                            let input = Input::Receive(now, Receive {
+                                proto: Protocol::Udp,
+                                source: src,
+                                destination: self.public_addr,
+                                contents,
+                            });
+                            if p.rtc.handle_input(input).is_err() {
+                                p.rtc.disconnect();
+                            }
+                        }
+                    }
+                }
+                _ = self.wake.notified() => {
+                    for p in peers.values_mut() { p.dirty = true; }
+                }
+                _ = tokio::time::sleep_until(tokio::time::Instant::from_std(next)) => {}
+            }
+        }
+    }
+
+    /// Creates a peer for a first STUN request, or refuses.
+    fn admit(
+        &self,
+        peers: &HashMap<SocketAddr, Peer>,
+        bucket: &mut Bucket,
+        src: SocketAddr,
+        data: &[u8],
+        now: Instant,
+    ) -> Option<Peer> {
+        let user = stun_username(data)?;
+        let (local, remote) = user.split_once(':')?;
+        if local != SERVER_UFRAG || !valid_client_ufrag(remote) {
+            return None;
+        }
+        let half_open = peers.values().filter(|p| p.end.is_none()).count();
+        let from_ip = peers.keys().filter(|a| a.ip() == src.ip()).count();
+        if peers.len() >= self.limits.max_peers
+            || half_open >= self.limits.max_half_open
+            || from_ip >= self.limits.max_per_ip
+            || !bucket.take(now)
+        {
+            debug!("refusing new peer from {src}");
+            return None;
+        }
+
+        let mut rtc = Rtc::builder()
+            .set_ice_lite(true)
+            .set_fingerprint_verification(false)
+            .set_dtls_cert(self.cert.clone())
+            .set_local_ice_credentials(IceCreds {
+                ufrag: SERVER_UFRAG.into(),
+                pass: SERVER_PWD.into(),
+            })
+            .build(now);
+        rtc.add_local_candidate(Candidate::host(self.public_addr, "udp").ok()?);
+        {
+            let mut d = rtc.direct_api();
+            d.set_remote_ice_credentials(IceCreds {
+                ufrag: remote.into(),
+                pass: remote.into(),
+            });
+            d.set_ice_controlling(false);
+            // The client certificate is unknown up front; str0m wants a value even with checks off.
+            d.set_remote_fingerprint(Fingerprint {
+                hash_func: "sha-256".into(),
+                bytes: vec![0; 32],
+            });
+            d.start_dtls(false).ok()?;
+            d.start_sctp(false);
+            d.create_data_channel(ChannelConfig {
+                label: "t".into(),
+                negotiated: Some(CHANNEL_ID),
+                ..Default::default()
+            });
+        }
+        debug!("new peer {src}");
+        Some(Peer {
+            rtc,
+            end: None,
+            cid: None,
+            created: now,
+            last_rx: now,
+            queue: VecDeque::new(),
+            closing: false,
+            dirty: true,
+            timeout: now,
+        })
+    }
+}
+
+impl Peer {
+    /// Moves data both ways and polls the connection. False when the peer is finished.
+    fn step(
+        &mut self,
+        socket: &UdpSocket,
+        now: Instant,
+        limits: &Limits,
+        state: &AppState,
+        wake: &Arc<Notify>,
+    ) -> bool {
+        if !self.rtc.is_alive() {
+            return false;
+        }
+        if self.end.is_none() && now.duration_since(self.created) > limits.half_open_ttl {
+            self.rtc.disconnect();
+            return false;
+        }
+        if now.duration_since(self.last_rx) > limits.silence_ttl {
+            self.rtc.disconnect();
+            return false;
+        }
+
+        // Session -> client, with backpressure: a full SCTP buffer leaves messages queued.
+        if let (Some(cid), Some(end)) = (self.cid, self.end.as_mut()) {
+            while self.queue.len() < 32 {
+                match end.from_session.try_recv() {
+                    Ok(text) => self.queue.push_back(text),
+                    Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
+                    Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                        self.closing = true;
+                        break;
+                    }
+                }
+            }
+            if let Some(mut ch) = self.rtc.channel(cid) {
+                while let Some(front) = self.queue.front() {
+                    match ch.write(false, front.as_bytes()) {
+                        Ok(true) => {
+                            self.queue.pop_front();
+                        }
+                        Ok(false) => break,
+                        Err(_) => {
+                            self.rtc.disconnect();
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut transmits = 0;
+        loop {
+            match self.rtc.poll_output() {
+                Ok(Output::Transmit(t)) => {
+                    transmits += 1;
+                    let _ = socket.try_send_to(&t.contents, t.destination);
+                }
+                Ok(Output::Timeout(t)) => {
+                    self.timeout = t;
+                    break;
+                }
+                Ok(Output::Event(e)) => {
+                    if !self.on_event(e, state, wake) {
+                        self.rtc.disconnect();
+                        return false;
+                    }
+                }
+                Err(e) => {
+                    warn!("peer poll failed: {e:?}");
+                    self.rtc.disconnect();
+                    return false;
+                }
+            }
+        }
+        let _ = transmits;
+
+        // The session finished (for example after an auth error): let the last messages out first.
+        if self.closing && self.queue.is_empty() {
+            let drained = match self.cid.and_then(|c| self.rtc.channel(c)) {
+                Some(mut ch) => ch.buffered_amount() == 0,
+                None => true,
+            };
+            if drained || now.duration_since(self.last_rx) > Duration::from_secs(2) {
+                self.rtc.disconnect();
+                return false;
+            }
+            self.dirty = true;
+            self.timeout = now + Duration::from_millis(20);
+        }
+        true
+    }
+
+    /// False means drop this peer.
+    fn on_event(&mut self, e: Event, state: &AppState, wake: &Arc<Notify>) -> bool {
+        match e {
+            Event::IceConnectionStateChange(IceConnectionState::Disconnected) => return false,
+            Event::ChannelOpen(cid, _) => {
+                self.cid = Some(cid);
+                if let Some(mut ch) = self.rtc.channel(cid) {
+                    ch.set_buffered_amount_low_threshold(32 * 1024);
+                }
+                let (l, end) = link::pair(None, Some(wake.clone()));
+                tokio::spawn(crate::connection::run(l, state.clone()));
+                self.end = Some(end);
+            }
+            Event::ChannelData(d) => {
+                if d.data.len() > MAX_MESSAGE || d.binary {
+                    return false;
+                }
+                let Ok(text) = String::from_utf8(d.data.to_vec()) else {
+                    return false;
+                };
+                if let Some(end) = &self.end {
+                    // A full queue means the client floods faster than the session reads.
+                    if end.to_session.try_send(text).is_err() {
+                        return false;
+                    }
+                }
+            }
+            Event::ChannelBufferedAmountLow(_) => self.dirty = true,
+            _ => {}
+        }
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn stun(user: &str) -> Vec<u8> {
+        let u = user.as_bytes();
+        let pad = (4 - u.len() % 4) % 4;
+        let mut attr = vec![0, 6, (u.len() >> 8) as u8, u.len() as u8];
+        attr.extend_from_slice(u);
+        attr.extend(std::iter::repeat(0).take(pad));
+        let mut m = vec![
+            0,
+            1,
+            (attr.len() >> 8) as u8,
+            attr.len() as u8,
+            0x21,
+            0x12,
+            0xA4,
+            0x42,
+        ];
+        m.extend([7u8; 12]);
+        m.extend(attr);
+        m
+    }
+
+    #[test]
+    fn reads_the_username_of_a_stun_binding_request() {
+        assert_eq!(
+            stun_username(&stun("termanch:abcdefghijklmnop")),
+            Some("termanch:abcdefghijklmnop")
+        );
+        assert_eq!(stun_username(&stun("x")), Some("x"));
+    }
+
+    #[test]
+    fn ignores_everything_that_is_not_a_binding_request() {
+        assert_eq!(stun_username(b"hello"), None);
+        assert_eq!(stun_username(&[0u8; 40]), None);
+        let mut truncated = stun("termanch:abcdefghijklmnop");
+        truncated.truncate(30);
+        assert_eq!(stun_username(&truncated), None);
+    }
+
+    #[test]
+    fn client_ufrags_are_alphanumeric_and_sized() {
+        assert!(valid_client_ufrag("abcdefghijklmnop"));
+        assert!(!valid_client_ufrag("short"));
+        assert!(!valid_client_ufrag("abcdefghijklmnop:"));
+        assert!(!valid_client_ufrag(&"a".repeat(65)));
+    }
+
+    #[test]
+    fn token_bucket_limits_the_creation_rate() {
+        let t0 = Instant::now();
+        let mut b = Bucket::new(5);
+        let allowed = (0..20).filter(|_| b.take(t0)).count();
+        assert_eq!(allowed, 5);
+        assert!(b.take(t0 + Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn certificate_and_fingerprint_survive_a_restart() {
+        let dir = std::env::temp_dir().join(format!("termanch-cert-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let a = load_or_create_cert(&dir).unwrap();
+        let b = load_or_create_cert(&dir).unwrap();
+        assert_eq!(fingerprint(&a), fingerprint(&b));
+        assert!(fingerprint(&a).starts_with("sha-256 "));
+    }
+}

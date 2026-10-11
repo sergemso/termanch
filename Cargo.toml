@@ -29,3 +29,4 @@ anyhow = "1.0"
 oauth2 = "5.0"
 axum-extra = "0.9"
 reqwest = { version = "0.12", features = ["json"] }
+portable-pty = "0.8"

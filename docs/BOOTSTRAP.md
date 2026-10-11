@@ -2,13 +2,14 @@
 
 This guide walks through setting up the cloud infrastructure (Cloudflare + GitHub OAuth) required to run Termanch.
 
-**TL;DR** — Most cloud infra is automated via Terraform. You only need to:
-1. Add your domain to Cloudflare
-2. Create API tokens (Cloudflare + GitHub)
-3. **Create GitHub OAuth App manually** (one-time)
-4. Generate secrets
-5. Run `terraform apply`
-5. Deploy server to your VPS
+**You only need this guide to host your own client** (your domain, your GitHub OAuth app, your signed directory). To use the hosted client at app.termanch.dev, skip it: see the README quick start (DECISION-0052).
+
+What you set up once:
+1. A domain on Cloudflare
+2. A Cloudflare API token and a GitHub token
+3. A GitHub OAuth app (manual, once)
+4. `terraform apply` (Pages project, DNS, repository secrets) and a D1 database for the directory
+5. Servers: the Add Server command in your own client installs them
 
 ---
 
@@ -32,6 +33,7 @@ This guide walks through setting up the cloud infrastructure (Cloudflare + GitHu
 2. Use **Custom token** template:
    - **Permissions**:
      - Account → Cloudflare Pages → Edit
+     - Account → D1 → Edit
      - Account → R2 → Edit
      - Zone → DNS → Edit
      - Zone → Zone → Read
@@ -129,101 +131,57 @@ terraform apply
 
 ---
 
-## 3. Generate Server Secrets
+## 3. Create the directory database and set the Pages Function secrets
 
-Run locally:
+The client's Pages project also hosts the signed server directory (DECISION-0056), which needs a D1 database.
+Your API token needs the D1 Edit permission.
 
 ```bash
-# JWT signing secret (32+ chars)
-JWT_SECRET=$(openssl rand -base64 32)
-
-# Registration HMAC secret (32+ chars)
-REGISTRATION_SECRET=$(openssl rand -base64 32)
-
-echo "JWT_SECRET=$JWT_SECRET"
-echo "REGISTRATION_SECRET=$REGISTRATION_SECRET"
+wrangler d1 create termanch-directory          # note the database_id
+# GitHub repo variable read by the deploy workflow:
+gh variable set TERMANCH_D1_DATABASE_ID --body <database_id>
 ```
 
-Save these for the server `.env` file.
+The deploy workflow applies `packages/client/migrations/` for you.
 
-**Terraform outputs:**
-- `client_url` — your client URL (e.g., `https://app.yourdomain.com` or `https://app.myapp.yourdomain.com`)
+The client's Pages Function exchanges the GitHub login code, so it needs the OAuth app credentials.
+The servers need no secrets.
+
+```bash
+wrangler pages secret put GITHUB_CLIENT_ID --project-name <pages project>
+wrangler pages secret put GITHUB_CLIENT_SECRET --project-name <pages project>
+```
 
 ---
 
-## 4. Server Deployment (Your VPS)
+## 4. Add servers
 
-### 4.1 On Your VPS
-
-```bash
-# SSH into your VPS (Ubuntu 22.04+ recommended)
-ssh root@your-vps-ip
-
-# Install Docker
-curl -fsSL https://get.docker.com | sh
-
-# Clone the repo
-git clone https://github.com/sergemso/termanch.git
-cd termanch/docker
-```
-
-### 4.2 Create `.env` File
+Open your client (the Terraform output `client_url`, for example `https://app.yourdomain.com`), log in with GitHub and choose **Add Server**. The command it shows already contains your client's address, so servers announce themselves to *your* directory:
 
 ```bash
-cat > .env <<EOF
-TERMANCH_GITHUB_CLIENT_ID=<terraform output oauth_client_id>
-TERMANCH_GITHUB_CLIENT_SECRET=<terraform output oauth_client_secret>
-TERMANCH_JWT_SECRET=<your-jwt-secret>
-TERMANCH_REGISTRATION_SECRET=<your-reg-secret>
-TERMANCH_SERVER_NAME=my-vps
-# For quick testing (ephemeral URL):
-# CLOUDFLARE_TUNNEL_TOKEN=
-# For production (named tunnel):
-# CLOUDFLARE_TUNNEL_TOKEN=your-cloudflare-tunnel-token
-EOF
+curl -fsSL https://app.yourdomain.com/install.sh | sh -s -- <secret> https://app.yourdomain.com
 ```
 
-### 4.3 Start Services
-
-```bash
-docker compose up -d
-
-# Verify
-docker compose ps
-docker compose logs -f termanch-server
-```
-
-### 4.4 Get Registration QR Code
-
-```bash
-docker compose exec termanch-server termanch-server --register
-```
-
-Output shows:
-- Registration Token
-- HMAC Token (for QR)
-- Server Name
-
-Scan the QR code with the Termanch app at the Terraform output `client_url`
+Run it on the VPS. See the README for what it does, firewall notes and updating/removing. The image comes from `ghcr.io/sergemso/termanch:latest`; to use your own build set `TERMANCH_IMAGE` before the command.
 
 ---
 
-## 5. Verify End-to-End
+## 5. Verify end to end
 
-1. Open the Terraform output `client_url` (e.g., `https://app.yourdomain.com` or `https://app.myapp.yourdomain.com`)
-2. Click **"Login with GitHub"** → authorize
-3. Click **"Add Server"** → scan QR code from step 4.3
-4. Server appears in list → click to connect
-5. Terminal opens → type `ls` → works!
+1. Log in, choose Add Server, run the command on a VPS.
+2. The server appears in the list within a minute. Tap it: a terminal opens, `ls` works.
+3. Run `docker restart termanch` on the VPS: the app reconnects by itself within about 10 seconds.
 
 ---
 
-## 6. CI/CD (Automated)
+## 6. CI/CD
 
 **On push to `master`:**
-- CI runs: `cargo fmt`, `clippy`, `build`, `test` + `pnpm build/test`
-- Docker image built + pushed to GHCR (multi-arch)
-- Client deployed to Cloudflare Pages via `cloudflare/pages-action`
+- CI: `cargo fmt`, `clippy`, build, tests (with tmux), installer syntax check, client build and tests.
+- Docker image built for amd64 and arm64 and pushed to `ghcr.io/<owner>/termanch:latest` (pull requests build it without pushing).
+- Client, Pages Functions (OAuth exchange, directory) and `install.sh` deployed to Cloudflare Pages; D1 migrations applied.
+
+Required repository settings: secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; variables `TERMANCH_GITHUB_CLIENT_ID`, `TERMANCH_PAGES_PROJECT_NAME`, `TERMANCH_D1_DATABASE_ID`. Terraform sets most of them.
 
 **Manual Terraform:**
 ```bash
@@ -233,33 +191,22 @@ gh workflow run deploy-infra.yaml -f action=apply -f environment=cloud
 
 ---
 
-## 7. Bootstrap Script (Future)
-
-```bash
-curl -fsSL https://get.termanch.dev | bash
-```
-
-Will automate: Docker install, secret generation, docker-compose, QR code.
-
----
-
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| `403 Forbidden` on Cloudflare Pages | Check `VITE_GITHUB_CLIENT_ID` GitHub Actions variable |
-| WebSocket connection fails | Verify CORS headers on server; check cloudflared logs |
-| QR code not scanning | Ensure HMAC token matches; check server time sync |
-| `docker compose up` fails | Check `.env` has all required vars; `docker compose config` to validate |
-| Terraform apply fails | Check API token permissions; verify domain is on Cloudflare |
+| "Server unreachable on UDP port N" | Open that UDP port in the provider firewall / security group; some networks block UDP (tunnel fallback is on the roadmap, issue #26) |
+| Server never appears after the command | `docker logs termanch` on the VPS; the claim secret works for 15 minutes, run Add Server again for a new command |
+| "This server belongs to another GitHub user" | Log in with the account that added it, or run a new Add Server command on the VPS: root on the host may re-claim |
+| Login fails | Check `VITE_GITHUB_CLIENT_ID` (repo variable) and the Pages secrets `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` |
+| Directory returns 500 | The D1 database binding is missing: check `TERMANCH_D1_DATABASE_ID` and the deploy log |
+| Terraform apply fails | Check API token permissions; verify the domain is on Cloudflare |
 
 ---
 
-## Security Notes
+## Security notes
 
-- All secrets in `.env` (chmod 600) / GitHub Actions secrets
-- JWT tokens expire in 7 days
-- Registration tokens single-use, 10-min expiry
-- TLS terminated at Cloudflare edge
-- No secrets in logs or Docker images
-- GitHub OAuth App created manually (source of truth)
+- Secrets live in GitHub Actions secrets / Pages secrets; the server holds no OAuth secret.
+- Terminal traffic is end to end (DTLS) between browser and server; the directory only stores signed addresses.
+- Claim secrets are single use and expire after 15 minutes; the directory never learns them (it sees a hash and an HMAC proof).
+- No secrets in logs or images.

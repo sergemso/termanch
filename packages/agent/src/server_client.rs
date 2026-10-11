@@ -155,6 +155,7 @@ impl ServerClient {
             ServerMessage::Error { message } => {
                 info!("Server error: {}", message);
             }
+            ServerMessage::Pong => {}
         }
         Ok(())
     }

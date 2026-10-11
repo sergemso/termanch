@@ -1,7 +1,7 @@
 ---
 id: 0003
 title: Full Frame Deltas with Rope/Sequence CRDT for SSP
-status: active
+status: deferred
 track: product
 tags: [ssp, protocol, crdt, rope, terminal]
 date: 2026-10-09
