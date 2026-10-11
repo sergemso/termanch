@@ -142,7 +142,7 @@ Done-when: the decision is accepted and the backend passes the shared backend co
 
 ---
 
-### 8.1 Verify tunnel and directory assumptions — [ ]
+### 8.1 Verify tunnel and directory assumptions — [x]
 Issue: #24
 Class: explore · Needs: none · Check: `test -s docs/facts/0018-connectivity-limits.md`
 Context: DECISION-0056 rests on unverified limits. Also covers the optional "Connect Cloudflare" flow.
@@ -151,7 +151,7 @@ Do:
 2. Free-tier budget for 10^5 users: D1 writes/reads, Pages Functions requests, announce frequency (one write per tunnel restart).
 3. Cloudflare OAuth: can a self-managed client's scopes create tunnels and DNS records in the user's account; is a verified client domain needed.
 4. Quick tunnel vs named tunnel behaviour on VPS reboot and cloudflared crash.
-Done-when: each item has a verdict and source in the fact; unsupported assumptions are written back into DECISION-0056.
+Done-when: each item has a verdict and source in the fact; unsupported assumptions are written back into DECISION-0056. (Done: FACT-0018.)
 
 ---
 
@@ -162,7 +162,7 @@ Context: Pages Functions + D1 under `packages/client/functions/api/directory/`; 
 Do:
 1. `POST /api/directory/announce {server_id (ed25519 pubkey), url, seq, proof_hash, sig}`: verify signature, reject stale `seq`, rate-limit per id, store.
 2. `GET /api/directory/lookup?id=` returns the signed record; `GET /api/directory/pending?h=<hash of claim secret>` returns a first announcement made with that secret.
-3. Records expire (e.g. 30 days idle); caps on URL length and format (https only, trycloudflare or allow-listed pattern).
+3. Keep requests cheap: `pending` supports backoff (2s, 4s, 8s, then 10s) and a total timeout; steady state needs no polling (FACT-0018 budget). Records expire (e.g. 30 days idle); caps on URL length and format (https only, trycloudflare or allow-listed pattern).
 4. Tests: bad signature, replayed seq, oversized input, expiry.
 Done-when: a forged or replayed announcement is rejected; a valid one is served unchanged.
 
@@ -173,6 +173,7 @@ Issue: #26
 Class: implement · Needs: 8.1, 8.2 · Check: `cargo test -p termanch-server`
 Context: The server supervises `cloudflared`, learns the URL, and announces it; nobody prints or types URLs.
 Do:
+0. Start `cloudflared` with `--metrics 127.0.0.1:PORT` and read the URL from `GET /quicktunnel` (FACT-0018); health from `/ready`.
 1. Persistent ed25519 identity in the config dir (0600).
 2. Supervisor: start `cloudflared tunnel --url`, parse the URL, restart with backoff when it exits, re-announce on every URL change (signed, increasing `seq`).
 3. First announce carries `HMAC(claim secret, url|seq)` and `hash(claim secret)`; the claim secret comes from the install command, not from stdout.
@@ -211,7 +212,7 @@ Done-when: pasting the command on a fresh VPS results in a connected server in t
 ### 8.6 Optional: Connect Cloudflare for stable tunnels — [ ]
 Issue: #29
 Class: plan · Needs: 8.1 · Check: `test -s docs/decisions/0057-connect-cloudflare.md`
-Context: For users who do have a domain or want a stable URL; only if 8.1 shows OAuth scopes allow it.
+Context: For users who do have a domain on Cloudflare (a public tunnel hostname needs a zone they own, FACT-0018) or want a stable URL. Scopes exist (Tunnel Write, DNS Write); public clients need PKCE and a verified domain TXT record.
 Do: decide go/no-go; if go, design OAuth consent, tunnel + DNS creation in the user's account, token handoff via the install command.
 Done-when: decision recorded either way.
 

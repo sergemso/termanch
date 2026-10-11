@@ -24,6 +24,14 @@ Regular users have no domain and no Cloudflare account, so connectivity is autom
 
 Supersedes the "no control plane" part of 0013: the directory is a metadata-only control plane, accepted for full automation.
 
+## Verified constraints (FACT-0018)
+
+- Quick tunnels are documented as testing/development with no uptime guarantee, so the tunnel provider stays pluggable (`TERMANCH_TUNNEL=off` plus an own URL, named tunnels) and the risk is accepted knowingly.
+- Idle WebSockets die at about 125 s; heartbeats under 100 s are mandatory (server 20 s, client 15 s).
+- The server reads its URL from `cloudflared --metrics` (`/quicktunnel`), not from logs.
+- The free request budget (100k/day) bounds the hosted directory to about 10^4 users unless polling is cheap; plan 8.2 and 8.4 poll with backoff.
+- Cloudflare OAuth has Tunnel Write and DNS Write scopes, but a public hostname needs a zone the user owns, so "Connect Cloudflare" helps only users with a domain.
+
 ## Why
 
 Third-level domains do not fit the free tier at 10^4-10^5 users (200-1,000 DNS records per zone, 50 certificates per week). User-owned tunnels cost nothing at any scale. A signed directory removes the print-a-link and type-a-URL steps without trusting the directory.
