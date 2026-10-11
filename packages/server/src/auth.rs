@@ -115,6 +115,19 @@ impl AuthState {
         Ok(())
     }
 
+    /// Root-proven re-claim (the installer ran again with a new secret): forget the owner and start a
+    /// new 15-minute claim. Audit-logged without the secret.
+    pub fn reclaim(&self, secret: &str) -> Result<()> {
+        if secret.is_empty() {
+            return Err(anyhow!("empty claim secret"));
+        }
+        if let Some(owner) = self.owner() {
+            info!(target: "audit", event = "owner_reset", previous_github_id = owner.id);
+            let _ = std::fs::remove_file(self.owner_path());
+        }
+        self.store_claim(secret)
+    }
+
     /// The claim token of an unclaimed server, made fresh when none is valid. `None` once claimed.
     pub fn claim_token(&self) -> Result<Option<String>> {
         if self.owner().is_some() {
@@ -355,6 +368,27 @@ mod tests {
             Decision::NeedsClaim,
             "expired secrets are refused"
         );
+    }
+
+    #[test]
+    fn a_root_proven_reclaim_replaces_the_owner() {
+        let a = auth();
+        let first = a.claim_token().unwrap().unwrap();
+        a.authorize(&id(1), Some(&first)).unwrap();
+        assert_eq!(a.authorize(&id(2), None).unwrap(), Decision::Denied);
+
+        a.reclaim("new-device-secret").unwrap();
+        assert!(a.owner().is_none());
+        assert_eq!(
+            a.authorize(&id(2), Some("new-device-secret")).unwrap(),
+            Decision::Allowed
+        );
+        assert_eq!(
+            a.authorize(&id(1), None).unwrap(),
+            Decision::Denied,
+            "the old owner is gone"
+        );
+        assert!(a.reclaim("").is_err());
     }
 
     #[test]

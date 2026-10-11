@@ -36,6 +36,7 @@ impl ServerKey {
         Ok(Self(SigningKey::from_bytes(&seed)))
     }
 
+    #[cfg(test)]
     pub fn from_seed(seed: [u8; 32]) -> Self {
         Self(SigningKey::from_bytes(&seed))
     }
@@ -150,27 +151,38 @@ pub async fn run(
         last_seq = now_ms().max(last_seq + 1);
         let claim = auth.active_claim();
         let record = build(&key, last_seq, &info, &ws_url, claim.as_deref());
-        match http.post(&url).json(&record).send().await {
+        let announced = match http.post(&url).json(&record).send().await {
             Ok(resp) if resp.status().is_success() => {
                 info!("Announced to the directory (seq {last_seq})");
                 backoff = Duration::from_secs(10);
-                // While a claim is pending, re-announce soon enough that its window never lapses.
-                let wait = if claim.is_some() {
-                    Duration::from_secs(300)
-                } else {
-                    REFRESH_EVERY
-                };
-                tokio::time::sleep(wait).await;
+                true
             }
             Ok(resp) => {
                 warn!("Directory refused the announcement: HTTP {}", resp.status());
-                tokio::time::sleep(backoff).await;
-                backoff = (backoff * 2).min(Duration::from_secs(600));
+                false
             }
             Err(e) => {
                 warn!("Directory unreachable: {e}");
-                tokio::time::sleep(backoff).await;
-                backoff = (backoff * 2).min(Duration::from_secs(600));
+                false
+            }
+        };
+
+        // Wait for the next announcement. A new claim (installer re-run, --claim) is published within
+        // seconds; until an owner exists we also refresh often so the claim window never lapses.
+        let wait = if !announced {
+            let w = backoff;
+            backoff = (backoff * 2).min(Duration::from_secs(600));
+            w
+        } else if auth.owner().is_none() {
+            Duration::from_secs(300)
+        } else {
+            REFRESH_EVERY
+        };
+        let started = tokio::time::Instant::now();
+        while started.elapsed() < wait {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            if announced && auth.active_claim() != claim {
+                break;
             }
         }
     }

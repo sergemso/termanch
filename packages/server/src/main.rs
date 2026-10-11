@@ -41,12 +41,8 @@ struct Args {
     #[arg(long, env = "TERMANCH_PORT", default_value = "8080")]
     port: u16,
 
-    /// Where the owner binding and claim token are kept (mount a volume here).
-    #[arg(
-        long,
-        env = "TERMANCH_CONFIG_DIR",
-        default_value = "/home/termanch/.config/termanch"
-    )]
+    /// Where the owner, keys and certificate are kept (a volume in Docker). Default: ~/.config/termanch
+    #[arg(long, env = "TERMANCH_CONFIG_DIR", default_value_os_t = default_config_dir())]
     config_dir: PathBuf,
 
     #[arg(long, env = "TERMANCH_SERVER_NAME", default_value = "termanch-server")]
@@ -104,6 +100,15 @@ struct Args {
     #[arg(long, env = "TERMANCH_DIRECTORY_URL")]
     directory_url: Option<String>,
 
+    /// One-shot, run by the installer on an existing install: start a new claim with this secret,
+    /// replacing any owner. Whoever can run this has root on the host, which already allows the same.
+    #[arg(long)]
+    claim: Option<String>,
+
+    /// With --register: draw the QR even when stdout is not a terminal (used through `docker exec`).
+    #[arg(long, default_value = "false")]
+    qr: bool,
+
     /// Print the registration link for this (unclaimed) server and exit.
     #[arg(long, default_value = "false")]
     register: bool,
@@ -115,6 +120,13 @@ pub struct AppState {
     pub sessions: Arc<SessionManager>,
     pub server_name: String,
     pub rtc_info: Option<rtc::RtcInfo>,
+}
+
+fn default_config_dir() -> PathBuf {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/var/lib"))
+        .join(".config/termanch")
 }
 
 fn build_backend(args: &Args) -> anyhow::Result<Arc<dyn SessionBackend>> {
@@ -148,7 +160,7 @@ fn print_registration(args: &Args, auth: &AuthState) -> anyhow::Result<()> {
         .claim_token()?
         .ok_or_else(|| anyhow::anyhow!("no claim token"))?;
     let link = auth::claim_link(&args.client_url, &claim);
-    if std::io::stdout().is_terminal() {
+    if args.qr || std::io::stdout().is_terminal() {
         if let Some(qr) = auth::claim_qr(&link) {
             println!("{qr}");
         }
@@ -175,6 +187,12 @@ async fn main() -> anyhow::Result<()> {
         Some(api) => AuthState::with_api(args.config_dir.clone(), api)?,
         None => AuthState::new(args.config_dir.clone())?,
     });
+
+    if let Some(secret) = &args.claim {
+        auth.reclaim(secret)?;
+        println!("Claim started; the server will announce it within seconds.");
+        return Ok(());
+    }
 
     if args.register {
         return print_registration(&args, &auth);

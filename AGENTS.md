@@ -27,8 +27,8 @@ docs/
   skills/          # Procedural knowledge (tags, roles)
   plans/           # Implementation plans
 packages/
-  server/          # termanch-server (Rust, axum, WebSocket)
-  agent/           # termanch-agent (Rust, tmux/PTY bridge)
+  server/          # termanch-server (Rust: WebRTC + WebSocket, tmux, auth)
+  agent/           # termanch-agent (parked; see issue #19)
   core/            # termanch-core (Rust, shared protocol types)
   client/          # termanch-client (Svelte 5, xterm.js WebGL)
 ```
@@ -57,12 +57,13 @@ lint
 
 ## Architecture Summary
 
-- **Baseline**: hybrid MVP (DECISION-0051, 0013); v1-only designs are deferred
-- **Transport**: WebSocket via Cloudflare Tunnel (WebTransport/SSP/E2E deferred)
-- **Auth**: GitHub OAuth; one owner per server (DECISION-0053)
+- **Baseline**: hybrid MVP (DECISION-0051); v1-only designs (SSP, SSH auth, WASM) are deferred
+- **Transport**: WebRTC data channel direct to one UDP port, no STUN/TURN/signaling (DECISION-0057); WebSocket fallback
+- **Directory**: signed records (Pages Functions + D1) map server key -> address/fingerprint (DECISION-0056)
+- **Auth**: GitHub OAuth; one owner per server, claimed with a one-time secret (DECISION-0053)
+- **Sessions**: server owns tmux/PTY via a SessionBackend trait (DECISION-0054); reconnect = re-attach
 - **Client**: Svelte 5 + xterm.js WebGL; hosted or self-hosted (DECISION-0052)
-- **Sessions**: tmux-backed; agent bridges tmux to server (persistence via reconnect/replay)
-- **Deployment**: user VPS Docker + cloudflared, 512MB RAM, 1 vCPU (FACT-0001)
+- **Deployment**: Docker image (ghcr.io), one command from the client; 512MB RAM, 1 vCPU (FACT-0001)
 - **Plan**: docs/plans/termanch-v1.md, tracked in GitHub issues
 
 ## Guardrail Highlights

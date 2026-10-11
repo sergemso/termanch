@@ -200,7 +200,7 @@ Done-when: restarting the server is invisible to a logged-in client apart from a
 
 ### 8.5 One-command installer — [ ]
 Issue: #28
-Class: implement · Needs: 8.3 · Check: `sh -n packages/client/public/install.sh`
+Class: implement · Needs: 8.3 · Check: `sh -n packages/client/public/install.sh && dash -n packages/client/public/install.sh`
 Context: Served from the client origin as `/install.sh` (hosted and self-hosted).
 Do:
 1. Non-interactive POSIX script taking the claim secret and the directory origin: installs Docker if missing, writes the compose file, starts the server (UDP port published; opens it in `ufw`/`firewalld` when present), restarts on reboot. `cloudflared` is added only when the fallback (8.3) exists.

@@ -1,35 +1,13 @@
-version: '3.8'
-
+# Sample for running the image by hand. The install command (README) is the supported way.
 services:
-  termanch-server:
+  termanch:
     image: ghcr.io/sergemso/termanch:latest
-    container_name: termanch-server
+    container_name: termanch
     restart: unless-stopped
     ports:
-      - "4443:4443/udp"
+      - "4443:4443/udp"          # the WebRTC port; any free UDP port works if you change both numbers
     environment:
-      - TERMANCH_HOST=0.0.0.0
-      - TERMANCH_PORT=8080
+      - TERMANCH_UDP_PORT=4443
       - TERMANCH_CLIENT_URL=${TERMANCH_CLIENT_URL:-https://app.termanch.dev}
-      - TERMANCH_SERVER_NAME=${SERVER_NAME:-termanch-server}
     volumes:
-      - termanch-data:/home/termanch/.config/termanch
-    networks:
-      - termanch-network
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: termanch-tunnel
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on:
-      - termanch-server
-    networks:
-      - termanch-network
-
-volumes:
-  termanch-data:
-
-networks:
-  termanch-network:
-    driver: bridge
+      - ./home:/home/node        # sessions, agents' files, owner and keys (chown 1000:1000)

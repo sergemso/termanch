@@ -1,167 +1,70 @@
 # Termanch
 
-A web-based terminal for managing remote AI coding agents (Codex, Claude Code, Herdr) from any mobile browser, with Mosh-level session persistence. No native apps. No subscriptions. Self-hosted.
+A web terminal for managing remote AI coding agents (Codex, Claude Code, Herdr) from any phone or desktop browser. Sessions live in tmux on your own server and survive dropped connections. No native apps, no subscriptions, no relay in the middle.
 
-## Architecture
+## How it works
 
 ```
-┌─────────────────┐     WebSocket      ┌─────────────────┐
-│  Cloudflare     │ ◄─────────────────► │  Your VPS       │
-│  Pages (Client) │                     │  (Docker)       │
-└─────────────────┘                     └────────┬────────┘
-                                                  │
-                                         ┌────────┴────────┐
-                                         │  termanch-server│
-                                         │  termanch-agent │
-                                         │  tmux sessions  │
-                                         └─────────────────┘
+ Browser (client)  ── WebRTC data channel, direct, end-to-end encrypted ──►  Your VPS (Docker)
+ app.termanch.dev                  one UDP port                               termanch-server + tmux
+        │                                                                          │
+        └── GitHub login ── signed directory (address + key, never traffic) ◄──────┘
 ```
 
-- **Client**: Termanch-hosted at `app.termanch.dev` (quick start), or self-hosted on your Cloudflare Pages at `app.{yourdomain}` (or `app.{project}.{yourdomain}` with optional `pages_project_name`)
-- **Server**: Self-hosted on your VPS via Docker + Cloudflare Tunnel
-- **Auth**: GitHub OAuth (our OAuth app)
-- **Transport**: WebSocket (WebTransport deferred)
-- **Terminal**: xterm.js WebGL in browser
+- **Direct connection.** The browser talks to your server over a WebRTC data channel on one UDP port. No tunnel, domain, certificate or relay is needed. The channel is encrypted (DTLS) and the browser pins the server's fingerprint.
+- **Persistence = tmux.** The server attaches a tmux client per connection. If your phone drops off the network, the session keeps running and reconnecting repaints the screen. Any session manager with a CLI can be used instead (see Session backends).
+- **Owner only.** The first GitHub user to connect becomes the server's owner; everyone else is refused.
+- **Free to run.** The client and a small signed directory run on Cloudflare's free tier. Your server needs a VPS with 512 MB of RAM and a public IP.
 
-## Quick Start
+## Quick start
 
-See **[BOOTSTRAP.md](docs/BOOTSTRAP.md)** for complete setup instructions.
+You need a Linux VPS with a public IP (512 MB RAM, 1 vCPU is enough) and root access.
 
-### Automated Cloud Setup (Terraform)
+1. Open **https://app.termanch.dev** and log in with GitHub.
+2. Choose **Add Server**. Copy the command it shows and run it on your VPS.
+3. Wait a minute. The server appears in the list. Tap it.
+
+That is the whole setup. The command installs Docker if needed, picks a free UDP port, starts the server and hands it a one-time secret. It is safe to run again; running it with a new secret re-claims the server for a new owner.
+
+**Prefer to scan?** On the VPS run `curl -fsSL https://app.termanch.dev/install.sh | sh -s -- - https://app.termanch.dev`. It shows a QR code; in Add Server choose **Scan a QR** and use the camera, or take a screenshot of the code and pick it from the gallery (delete the screenshot afterwards).
+
+### Firewalls
+
+The server needs **one inbound UDP port** (the installer picks a free one, usually 4443, and opens it in `ufw` or `firewalld` if they are active). If you use a provider firewall or security group (AWS, GCP, Oracle, Hetzner Cloud Firewall), open that port there. The app tells you which port when it cannot reach your server: *"Server unreachable on UDP port N"*. To see the port: `cat /opt/termanch/udp_port`.
+
+Some mobile and corporate networks block UDP. Those clients cannot connect until the tunnel fallback is available (see the roadmap).
+
+### Where your agents run
+
+Sessions run **inside the container**, in `/opt/termanch/home` (mounted as the container's home, so it survives restarts and upgrades). The image has tmux, git, curl and Node. Install your agents in a Termanch session, for example:
 
 ```bash
-# 1. Prerequisites: Cloudflare API token, GitHub Actions token, domain on Cloudflare
-# 2. Create GitHub OAuth App manually (one-time):
-#    GitHub Settings → Developer settings → OAuth Apps → New OAuth App
-#    Callback: https://app.{yourdomain}/callback (or https://app.{project}.{yourdomain}/callback)
-#    Save Client ID and Client Secret
-
-# 2. Run Terraform (automates: Cloudflare Pages, DNS, GitHub Actions secrets)
-cd infra/termanch-cloud
-cat > terraform.tfvars <<EOF
-cloudflare_api_token         = "your-cf-api-token"
-cloudflare_account_id        = "your-cf-account-id"
-cloudflare_zone_name         = "yourdomain.com"
-cloudflare_pages_deploy_token = "your-pages-deploy-token"
-github_actions_token         = "your-fine-grained-pat"
-github_oauth_client_id       = "your-github-oauth-client-id"
-github_oauth_client_secret   = "your-github-oauth-client-secret"
-github_repository            = "termanch"
-# Optional: Pages project name (enables app.{project}.{zone} / api.{project}.{zone})
-# pages_project_name = "myapp"
-EOF
-
-terraform init && terraform apply
-
-# 3. Get outputs
-terraform output oauth_client_id
-terraform output oauth_client_secret
-terraform output client_url
+npm install -g @anthropic-ai/claude-code @openai/codex
 ```
 
-### Server Deployment (Your VPS)
+### Updating and removing
 
 ```bash
-# On your VPS:
-git clone https://github.com/sergemso/termanch
-cd termanch/docker
-cat > .env <<EOF
-TERMANCH_SERVER_NAME=my-vps
-# TERMANCH_CLIENT_URL=https://app.<yourdomain>   # only for a self-hosted client
-EOF
-
-docker compose up -d
-
-# Register: shows a QR code and a link. Scan the QR with Termanch (or your phone's camera),
-# or open the link in the browser where you are logged in. The first GitHub user to connect
-# becomes the server's owner; the code works for 15 minutes, once.
-docker compose exec -t termanch-server termanch-server --register
+# update: run the install command again (any new secret works)
+# remove:
+docker rm -f termanch && sudo rm -rf /opt/termanch
 ```
 
-## Development
+## Security model
 
-### Prerequisites
+- Terminal traffic goes browser ↔ your server only, over DTLS. Neither the directory nor Cloudflare carries it.
+- The directory stores your server's public key, public address, port and certificate fingerprint, signed by the server. A tampered record is rejected because the client pins the key when you add the server.
+- The GitHub token is verified by asking GitHub who it belongs to; the server keeps no OAuth secret. Only the owner's GitHub account is accepted.
+- Root on the VPS can always re-claim the server (it can read the same files).
+- Details: `docs/decisions/` (0053, 0056, 0057) and `docs/facts/`.
 
-- Rust 1.79+
-- Node.js 20+ / pnpm 9+
-- Docker
+## Hosting your own client
 
-### Build
+By default everything uses the hosted client at app.termanch.dev. To run your own (your domain, your OAuth app, your directory) follow [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md). Servers then need `TERMANCH_CLIENT_URL=https://your-client` (the install command carries it).
 
-```bash
-# Build all Rust packages
-cargo build --workspace --release
+## Session backends
 
-# Build client
-pnpm install
-pnpm --filter termanch-client build
-
-# Build Docker image
-docker build -t termanch -f docker/Dockerfile .
-```
-
-### Test
-
-```bash
-cargo test --workspace
-pnpm --filter termanch-client test
-```
-
-## Project Structure
-
-```
-termanch/
-├── packages/
-│   ├── core/          # Shared protocol types (Rust)
-│   ├── server/        # WebSocket server (Rust, Axum)
-│   ├── agent/         # PTY/tmux manager (Rust)
-│   └── client/        # Svelte 5 + xterm.js WebGL
-├── docker/
-│   ├── Dockerfile     # Multi-stage build
-│   └── docker-compose.yml
-├── .github/workflows/ # CI + Cloudflare Pages deploy
-└── docs/              # Architecture decisions, plans
-```
-
-## MVP Scope (Current)
-
-- ✅ GitHub OAuth login
-- ✅ Server registration via a one-time link; the first GitHub user to connect becomes the owner (DECISION-0053)
-- ✅ WebSocket connection (cross-origin)
-- ✅ tmux session list + attach
-- ✅ Terminal with xterm.js WebGL
-- ✅ Agent notifications (spawn/complete/error)
-- ✅ Write prompts to agents via terminal
-
-## Not yet built
-
-Direction and steps: [docs/plans/termanch-v1.md](docs/plans/termanch-v1.md) (tracked in GitHub issues).
-
-- Mobile UX, installable PWA, reconnect with screen replay
-- Single-owner server binding (a server belongs to one GitHub user)
-- Deferred designs, each needing a new decision: WebTransport, WASM/SSP sync, SSH-agent auth, end-to-end encryption
-
-## Configuration
-
-### Server Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `TERMANCH_CLIENT_URL` | No | Client that opens the link (default: https://app.termanch.dev) |
-| `TERMANCH_BACKEND` | No | `tmux` (default) or `command` (see Session backends) |
-| `TERMANCH_UDP_PORT` | No | UDP port of the WebRTC-direct transport (default 4443; open it in the firewall) |
-| `TERMANCH_PUBLIC_IP` | No | Address clients connect to; detected when unset (set it if detection fails) |
-| `TERMANCH_WEBRTC` | No | `off` for WebSocket only |
-| `TERMANCH_CONFIG_DIR` | No | Where the owner and claim token are stored (a volume) |
-| `TERMANCH_SERVER_NAME` | No | Display name (default: termanch-server) |
-| `TERMANCH_HOST` | No | Bind address (default: 0.0.0.0) |
-| `TERMANCH_PORT` | No | Port (default: 8080) |
-
-### Session backends
-
-Sessions live in a session manager the server drives (DECISION-0054). The default is tmux
-(`TERMANCH_BACKEND=tmux`). To use another tool with a CLI, give three commands (no shell; `{name}` and
-`{id}` are replaced by a validated session name):
+The default is tmux. To use another tool with a CLI, give three commands (no shell; `{name}` and `{id}` are replaced by a validated session name):
 
 ```
 TERMANCH_BACKEND=command
@@ -171,21 +74,47 @@ TERMANCH_BACKEND_CREATE=zellij attach --create-background {name}
 TERMANCH_BACKEND_ATTACH=zellij attach {id}
 ```
 
-The attach command runs in a PTY. It must repaint the session when it starts and only detach when it is
-killed; that is how a dropped connection resumes. The zellij lines above are an illustration and not
-tested; herdr's CLI is being verified in plan step 7.1. Without a backend that fits, implement the
-`SessionBackend` trait (`packages/server/src/backend.rs`).
+The attach command runs in a PTY. It must repaint the session when it starts and only detach when it is killed; that is how a dropped connection resumes. The zellij lines are an illustration and untested; herdr's CLI is being verified (issue #22). Otherwise implement the `SessionBackend` trait (`packages/server/src/backend.rs`).
 
-### Client Environment Variables
+## Configuration
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `VITE_GITHUB_CLIENT_ID` | Yes | GitHub OAuth App Client ID (build time) |
+Server (environment variables of the container; the installer sets the first two):
 
-The OAuth code exchange runs in a Cloudflare Pages Function (`packages/client/functions/api/oauth/exchange.ts`).
-Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` as secrets on the Pages project
-(`wrangler pages secret put GITHUB_CLIENT_SECRET --project-name <project>`). Servers hold no OAuth secret;
-they ask GitHub who a token belongs to.
+| Variable | Description |
+|---|---|
+| `TERMANCH_UDP_PORT` | UDP port of the WebRTC transport (default 4443) |
+| `TERMANCH_CLIENT_URL` | Client and directory origin (default https://app.termanch.dev) |
+| `TERMANCH_PUBLIC_IP` | Address clients connect to; detected when unset |
+| `TERMANCH_WEBRTC` | `off` for WebSocket only |
+| `TERMANCH_SERVER_NAME` | Display name |
+| `TERMANCH_BACKEND` | `tmux` (default) or `command` |
+| `TERMANCH_CONFIG_DIR` | Owner, keys and certificate (default `~/.config/termanch`) |
+
+Client build: `VITE_GITHUB_CLIENT_ID`. The OAuth code exchange runs in a Pages Function that needs `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` as secrets on the Pages project.
+
+## Development
+
+```bash
+cargo test --workspace                 # needs tmux for the end-to-end tests
+cd packages/client && npx pnpm@9 install && ./node_modules/.bin/vitest run
+```
+
+All builds and image publishing run in CI (`.github/workflows/`). Layout:
+
+```
+packages/core     shared protocol types (Rust)
+packages/server   termanch-server: auth, sessions, WebRTC + WebSocket transports, directory announcer
+packages/client   Svelte 5 + xterm.js client, Pages Functions (OAuth exchange, signed directory)
+packages/agent    parked (agent detection moves into the server, issue #19)
+docker/           image (built by CI) and a sample compose file
+docs/             facts, decisions, guardrails, plans
+```
+
+The plan and its status live in GitHub issues; see `docs/plans/termanch-v1.md`.
+
+## Roadmap
+
+Mobile UX and installable PWA (#17, #18), agent notifications (#19), tunnel fallback for UDP-blocked networks (#26), end-to-end tests and resource gates (#21), other session backends (#22, #23).
 
 ## License
 
