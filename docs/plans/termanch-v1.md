@@ -247,7 +247,7 @@ Done-when: the e2e suite passes over WebRTC and WebSocket from one set of tests.
 
 ---
 
-### 8.9 Client: WebRTC-direct transport — [ ]
+### 8.9 Client: WebRTC-direct transport — [x]
 Issue: #32
 Class: implement · Needs: 8.7, 8.2, 2.2 · Check: `cd packages/client && ./node_modules/.bin/vitest run`
 Context: `Connection` gains a transport interface; WebRTC first, WebSocket fallback.
