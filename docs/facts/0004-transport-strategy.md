@@ -1,7 +1,7 @@
 ---
 id: 0004
 title: Transport Protocol Strategy
-status: active
+status: deferred
 tags: [transport, webtransport, websocket, protocol]
 date: 2026-10-09
 ---

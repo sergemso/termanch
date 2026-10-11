@@ -1,7 +1,7 @@
 ---
 id: 0014
 title: Terminal Emulation Library
-status: active
+status: deferred
 tags: [terminal, vte, wasm, emulation]
 date: 2026-10-09
 ---

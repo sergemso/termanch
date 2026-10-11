@@ -1,7 +1,7 @@
 ---
 id: 0007
 title: iOS Safari Mitigation Strategy
-status: active
+status: deferred
 tags: [ios, safari, pwa, background, persistence]
 date: 2026-10-09
 ---

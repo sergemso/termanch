@@ -1,7 +1,7 @@
 ---
 id: 0001
 title: WebTransport with WebSocket Fallback
-status: active
+status: deferred
 track: product
 tags: [transport, webtransport, websocket, mobile]
 date: 2026-10-09

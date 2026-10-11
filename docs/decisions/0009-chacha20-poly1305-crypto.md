@@ -1,7 +1,7 @@
 ---
 id: 0009
 title: ChaCha20-Poly1305 for Packet Encryption
-status: active
+status: deferred
 track: process
 tags: [crypto, chacha20, poly1305, encryption]
 date: 2026-10-09

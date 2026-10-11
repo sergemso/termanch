@@ -1,7 +1,7 @@
 ---
 id: 0012
 title: vte Crate for Terminal Emulation in WASM
-status: active
+status: deferred
 track: process
 tags: [terminal, vte, wasm, emulation]
 date: 2026-10-09

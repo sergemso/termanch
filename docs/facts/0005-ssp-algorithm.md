@@ -1,7 +1,7 @@
 ---
 id: 0005
 title: Screen Synchronization Algorithm
-status: active
+status: deferred
 tags: [ssp, protocol, crdt, terminal]
 date: 2026-10-09
 ---

@@ -1,7 +1,7 @@
 ---
 id: 0006
 title: SSH Agent Forwarding for Authentication
-status: active
+status: deferred
 track: product
 tags: [auth, ssh, security, keys]
 date: 2026-10-09

@@ -14,3 +14,21 @@
 | ci-only-builds | All Builds Run in CI Only | 0010,0011 | 0010,0011 | active |
 
 <!-- bootstrap-generated: true -->
+instruction-file-within-cap,"The instruction file must stay within 150 lines","practice-packs, harness, guardrail",active
+procedure-delivery-rule,"Detailed procedures live in skills loaded on demand","practice-packs, harness, guardrail",active
+noisy-work-rule,"Noisy work is delegated only when the cost model says the handoff is cheaper","practice-packs, harness, guardrail",active
+cache-hygiene-rule,"No mid-task model, effort or instruction-file change; switches are confirmed","practice-packs, harness, guardrail",active
+compaction-timing-rule,"Context is compacted at task boundaries","practice-packs, harness, guardrail",active
+watches-use-the-wrapper,"Watches start through go-getter watch, --until done for CI runs and long commands","practice-packs, harness, guardrail",active
+delegations-are-routed,"Delegations to a role are routed by expected total step cost","practice-packs, model-routing, guardrail",active
+reviewer-read-only,"The reviewer must not modify files","practice-packs, agent-roles, guardrail",active
+parallel-tasks-use-worktrees,"Parallel tasks must each use their own worktree","practice-packs, agent-roles, guardrail",active
+max-concurrent-agents-rule,"No more than 3 agents run at once","practice-packs, agent-roles, guardrail",active
+human-escalation-rule,"Agents must hand over to a human when blocked, before irreversible actions and on a guardrail denial","practice-packs, agent-roles, guardrail",active
+handoff-has-brief-result-evidence,"Handoffs must carry a brief, a result and evidence","practice-packs, agent-roles, guardrail",active
+verification-gate-blocks-done,"A step is not done while its verification checks fail","practice-packs, verification, guardrail",active
+branch-names-follow-the-pattern,"Branch names must match the project pattern","practice-packs, git-hooks, guardrail",active
+commit-subjects-are-conventional,"Commit subjects must follow Conventional Commits","practice-packs, git-hooks, guardrail",active
+changes-land-as-one-squashed-pull-request,"A change lands as one squashed pull request with green CI","practice-packs, git-hooks, guardrail",active
+no-commits-on-the-default-branch,"Work must not happen on the default branch","practice-packs, git-hooks, guardrail",active
+tracker-writes-follow-the-answer,"Writes to the plan tracker follow the project's answer","practice-packs, hooks, guardrail",active

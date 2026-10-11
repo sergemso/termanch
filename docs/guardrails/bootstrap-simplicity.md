@@ -41,3 +41,5 @@ User onboarding from zero to working terminal **MUST** complete in ≤ 2 user-in
 ## Cost Corollary
 - **User pays**: VPS only ($5–10/mo). No Termanch subscription.
 - **Termanch pays**: Cloudflare Pages free tier. GitHub OAuth free. No per-user cost.
+## Scope (0052)
+The two-click bound applies to the Termanch-hosted client mode. The self-hosted client mode (own domain, Pages, OAuth app, Terraform) is exempt but must be documented as a separate path.

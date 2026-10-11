@@ -1,7 +1,7 @@
 ---
 id: 0011
 title: Packet Encryption Cipher
-status: active
+status: deferred
 tags: [crypto, chacha20, poly1305, encryption]
 date: 2026-10-09
 ---
