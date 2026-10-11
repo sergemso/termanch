@@ -1,44 +1,10 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import QRCode from 'qrcode';
   import type { ServerListItem } from './lib/protocol';
 
-  export let user: string | null = null;
-  export let jwt: string | null = null;
+  export let servers: ServerListItem[] = [];
   export let onselect: (server: ServerListItem) => void;
   export let onadd: () => void;
-
-  let servers: ServerListItem[] = [];
-
-  async function loadServers() {
-    const stored = localStorage.getItem('termanch_servers');
-    if (stored) {
-      try {
-        servers = JSON.parse(stored);
-      } catch {}
-    }
-  }
-
-  async function saveServers() {
-    localStorage.setItem('termanch_servers', JSON.stringify(servers));
-  }
-
-  async function registerServer(serverUrl: string, serverName: string) {
-    const newServer: ServerListItem = {
-      server_url: serverUrl,
-      server_name: serverName,
-      registered_at: Date.now(),
-    };
-    servers = [...servers, newServer];
-    await saveServers();
-  }
-
-  async function removeServer(index: number) {
-    servers = servers.filter((_, i) => i !== index);
-    await saveServers();
-  }
-
-  onMount(loadServers);
+  export let onremove: (index: number) => void;
 </script>
 
 <div class="server-list" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px;">
@@ -74,7 +40,7 @@
             </div>
             <div style="display: flex; gap: 8px;">
               <button class="secondary" on:click={() => onselect(server)} style="padding: 8px 16px;">Connect</button>
-              <button class="secondary" on:click={() => removeServer(index)} style="padding: 8px; color: var(--danger);">
+              <button class="secondary" on:click={() => onremove(index)} style="padding: 8px; color: var(--danger);">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               </button>
             </div>

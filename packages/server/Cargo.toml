@@ -14,15 +14,9 @@ tower-http = { workspace = true, features = ["cors", "trace"] }
 async-trait = { workspace = true }
 uuid = { workspace = true, features = ["serde", "v4"] }
 base64 = { workspace = true }
-hmac = { workspace = true }
-sha2 = { workspace = true }
 rand = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 anyhow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-axum-extra = { version = "0.9", features = ["cookie-private"] }
-time = "0.3"
-jsonwebtoken = "9.2"
-oauth2 = { workspace = true }
 reqwest = { workspace = true }

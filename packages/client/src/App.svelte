@@ -5,57 +5,76 @@
   import AddServerModal from './AddServerModal.svelte';
   import Toast from './Toast.svelte';
   import type { ServerMessage, SessionInfo, ServerListItem } from './lib/protocol';
+  import { wsUrl, parseAddFragment } from './lib/servers';
 
   let user: string | null = null;
-  let jwt: string | null = null;
+  let githubToken: string | null = null;
+  let servers: ServerListItem[] = [];
   let selectedServer: ServerListItem | null = null;
   let sessions: SessionInfo[] = [];
   let activeSessionId: string | null = null;
   let showAddServer = false;
+  let addPrefill: Pick<ServerListItem, 'server_url' | 'server_name' | 'claim'> | null = null;
   let toast: { message: string; type: 'success' | 'error' } | null = null;
 
   const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID || '';
-  const OAUTH_REDIRECT = 'https://app.termanch.dev/callback';
 
   function showToast(message: string, type: 'success' | 'error' = 'success') {
     toast = { message, type };
     setTimeout(() => toast = null, 4000);
   }
 
-  async function checkAuth() {
-    const stored = localStorage.getItem('termanch_jwt');
-    if (stored) {
-      try {
-        const payload = JSON.parse(atob(stored.split('.')[1]));
-        if (payload.exp * 1000 > Date.now()) {
-          jwt = stored;
-          user = payload.username;
-          return true;
-        }
-      } catch {}
-    }
+  function githubLoginUrl() {
+    const state = crypto.randomUUID();
+    sessionStorage.setItem('termanch_oauth_state', state);
+    const params = new URLSearchParams({
+      client_id: GITHUB_CLIENT_ID,
+      redirect_uri: `${location.origin}/callback`,
+      scope: 'read:user',
+      state,
+    });
+    return `https://github.com/login/oauth/authorize?${params}`;
+  }
+
+  function checkAuth() {
+    try {
+      const stored = JSON.parse(localStorage.getItem('termanch_auth') || 'null');
+      if (stored?.token && stored?.login) {
+        githubToken = stored.token;
+        user = stored.login;
+        return true;
+      }
+    } catch {}
     return false;
   }
 
-  async function loadServers() {
-    const stored = localStorage.getItem('termanch_servers');
-    if (stored) {
-      try {
-        return JSON.parse(stored) as ServerListItem[];
-      } catch {}
+  function loadServers() {
+    try {
+      servers = JSON.parse(localStorage.getItem('termanch_servers') || '[]');
+    } catch {
+      servers = [];
     }
-    return [];
   }
 
-  function saveServers(servers: ServerListItem[]) {
-    localStorage.setItem('termanch_servers', JSON.stringify(servers));
+  function saveServers(next: ServerListItem[]) {
+    servers = next;
+    localStorage.setItem('termanch_servers', JSON.stringify(next));
+  }
+
+  function addServer(server: ServerListItem) {
+    saveServers([...servers.filter((s) => s.server_url !== server.server_url), server]);
   }
 
   async function handleOAuthCallback() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    if (!code) return false;
-
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const expected = sessionStorage.getItem('termanch_oauth_state');
+    sessionStorage.removeItem('termanch_oauth_state');
+    window.history.replaceState({}, '', '/');
+    if (!code || !expected || params.get('state') !== expected) {
+      showToast('Authentication failed', 'error');
+      return false;
+    }
     try {
       const res = await fetch('/api/oauth/exchange', {
         method: 'POST',
@@ -63,13 +82,11 @@
         body: JSON.stringify({ code }),
       });
       if (!res.ok) throw new Error('OAuth exchange failed');
-      const { token } = await res.json();
-      localStorage.setItem('termanch_jwt', token);
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      jwt = token;
-      user = payload.username;
-      window.history.replaceState({}, '', '/');
-      showToast(`Welcome, ${user}!`);
+      const { token, login } = await res.json();
+      localStorage.setItem('termanch_auth', JSON.stringify({ token, login }));
+      githubToken = token;
+      user = login;
+      showToast(`Welcome, ${login}!`);
       return true;
     } catch (e) {
       showToast('Authentication failed', 'error');
@@ -77,18 +94,24 @@
     }
   }
 
-  async function connectToServer(server: ServerListItem) {
+  function connectToServer(server: ServerListItem) {
     selectedServer = server;
     try {
-      const ws = new WebSocket(server.server_url);
+      const ws = new WebSocket(wsUrl(server.server_url));
       ws.binaryType = 'arraybuffer';
 
       ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'auth', token: jwt!, server_token: server.server_url }));
+        ws.send(JSON.stringify({ type: 'auth', token: githubToken!, server_token: server.claim ?? '' }));
       };
 
       ws.onmessage = (event) => {
         const msg: ServerMessage = JSON.parse(event.data);
+        if (msg.type === 'auth_ok' && server.claim) {
+          // The claim token is single-use: the server now knows its owner.
+          const { claim, ...rest } = server;
+          server = rest;
+          addServer({ ...rest, server_name: msg.server_name || rest.server_name });
+        }
         handleServerMessage(msg);
       };
 
@@ -126,11 +149,10 @@
     }
   }
 
-  async function logout() {
-    localStorage.removeItem('termanch_jwt');
-    localStorage.removeItem('termanch_servers');
+  function logout() {
+    localStorage.removeItem('termanch_auth');
     user = null;
-    jwt = null;
+    githubToken = null;
     selectedServer = null;
     sessions = [];
     activeSessionId = null;
@@ -138,16 +160,25 @@
   }
 
   onMount(async () => {
-    const authed = await checkAuth();
-    if (!authed) return;
-
-    // Check for OAuth callback
-    if (window.location.pathname === '/callback') {
-      await handleOAuthCallback();
+    // A registration link (#add=...) is remembered across the GitHub login redirect.
+    const fromLink = parseAddFragment(window.location.hash);
+    if (fromLink) {
+      sessionStorage.setItem('termanch_pending_add', JSON.stringify(fromLink));
+      window.history.replaceState({}, '', window.location.pathname);
     }
 
-    const servers = await loadServers();
-    // Servers loaded reactively via ServerList
+    let authed = false;
+    if (window.location.pathname === '/callback') authed = await handleOAuthCallback();
+    else authed = checkAuth();
+    if (!authed) return;
+
+    loadServers();
+    const pending = sessionStorage.getItem('termanch_pending_add');
+    if (pending) {
+      sessionStorage.removeItem('termanch_pending_add');
+      addPrefill = JSON.parse(pending);
+      showAddServer = true;
+    }
   });
 </script>
 
@@ -157,7 +188,7 @@
       <div class="card" style="max-width: 400px; margin: auto; margin-top: 10vh;">
         <h1 style="margin-bottom: 8px;">Termanch</h1>
         <p style="color: var(--fg-muted); margin-bottom: 24px;">Terminal for remote AI coding agents</p>
-        <a href={`https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(OAUTH_REDIRECT)}&scope=read:user user:email`}>
+        <a href={githubLoginUrl()}>
           <button style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>
             Continue with GitHub
@@ -176,7 +207,7 @@
 
     <main style="flex: 1; display: flex; flex-direction: column;">
       {#if !selectedServer}
-        <ServerList {user} {jwt} onselect={connectToServer} onadd={() => showAddServer = true} />
+        <ServerList {servers} onselect={connectToServer} onadd={() => { addPrefill = null; showAddServer = true; }} onremove={(i) => saveServers(servers.filter((_, n) => n !== i))} />
       {:else}
         <div style="display: flex; flex: 1; overflow: hidden;">
           <aside style="width: 280px; border-right: 1px solid var(--border); background: var(--bg-secondary); padding: 16px; overflow-y: auto;">
@@ -207,7 +238,7 @@
   {/if}
 
   {#if showAddServer}
-    <AddServerModal {jwt} onclose={() => showAddServer = false} onsuccess={(server) => { showAddServer = false; showToast(`Server "${server.server_name}" added`); }} />
+    <AddServerModal prefill={addPrefill} onclose={() => showAddServer = false} onadd={(server) => { addServer(server); showAddServer = false; connectToServer(server); }} />
   {/if}
 
   {#if toast}

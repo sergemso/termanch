@@ -66,18 +66,16 @@ terraform output client_url
 git clone https://github.com/sergemso/termanch
 cd termanch/docker
 cat > .env <<EOF
-TERMANCH_GITHUB_CLIENT_ID=<terraform output oauth_client_id>
-TERMANCH_GITHUB_CLIENT_SECRET=<terraform output oauth_client_secret>
-TERMANCH_JWT_SECRET=<openssl rand -base64 32>
-TERMANCH_REGISTRATION_SECRET=<openssl rand -base64 32>
 TERMANCH_SERVER_NAME=my-vps
+TERMANCH_PUBLIC_URL=https://<your tunnel hostname>
+# TERMANCH_CLIENT_URL=https://app.<yourdomain>   # only for a self-hosted client
 EOF
 
 docker compose up -d
 
-# Register server:
+# Register: print the link, open it in the browser where you are logged in.
+# The first GitHub user to connect with it becomes the server's owner.
 docker compose exec termanch-server termanch-server --register
-# Scan QR at the Terraform output `client_url`
 ```
 
 ## Development
@@ -128,7 +126,7 @@ termanch/
 ## MVP Scope (Current)
 
 - ✅ GitHub OAuth login
-- ✅ Server registration via QR + HMAC token
+- ✅ Server registration via a one-time link; the first GitHub user to connect becomes the owner (DECISION-0053)
 - ✅ WebSocket connection (cross-origin)
 - ✅ tmux session list + attach
 - ✅ Terminal with xterm.js WebGL
@@ -149,10 +147,9 @@ Direction and steps: [docs/plans/termanch-v1.md](docs/plans/termanch-v1.md) (tra
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `TERMANCH_GITHUB_CLIENT_ID` | Yes | GitHub OAuth App Client ID |
-| `TERMANCH_GITHUB_CLIENT_SECRET` | Yes | GitHub OAuth App Client Secret |
-| `TERMANCH_JWT_SECRET` | Yes | 32+ char random string for JWT signing |
-| `TERMANCH_REGISTRATION_SECRET` | Yes | 32+ char random string for HMAC |
+| `TERMANCH_PUBLIC_URL` | Recommended | Tunnel URL, written into the registration link |
+| `TERMANCH_CLIENT_URL` | No | Client that opens the link (default: https://app.termanch.dev) |
+| `TERMANCH_CONFIG_DIR` | No | Where the owner and claim token are stored (a volume) |
 | `TERMANCH_SERVER_NAME` | No | Display name (default: termanch-server) |
 | `TERMANCH_HOST` | No | Bind address (default: 0.0.0.0) |
 | `TERMANCH_PORT` | No | Port (default: 8080) |
@@ -161,7 +158,12 @@ Direction and steps: [docs/plans/termanch-v1.md](docs/plans/termanch-v1.md) (tra
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `VITE_GITHUB_CLIENT_ID` | Yes | GitHub OAuth App Client ID |
+| `VITE_GITHUB_CLIENT_ID` | Yes | GitHub OAuth App Client ID (build time) |
+
+The OAuth code exchange runs in a Cloudflare Pages Function (`packages/client/functions/api/oauth/exchange.ts`).
+Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` as secrets on the Pages project
+(`wrangler pages secret put GITHUB_CLIENT_SECRET --project-name <project>`). Servers hold no OAuth secret;
+they ask GitHub who a token belongs to.
 
 ## License
 

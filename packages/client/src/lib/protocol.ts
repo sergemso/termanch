@@ -21,17 +21,10 @@ export interface SessionInfo {
 
 export type AgentEventType = 'spawned' | 'completed' | 'error';
 
-export interface RegisterRequest {
-  token: string;
-}
-
-export interface RegisterResponse {
-  server_url: string;
-  server_name: string;
-}
-
 export interface ServerListItem {
   server_url: string;
   server_name: string;
   registered_at: number;
+  /** One-time claim token from the registration link; dropped after the first successful connect. */
+  claim?: string;
 }

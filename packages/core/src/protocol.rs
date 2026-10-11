@@ -64,18 +64,6 @@ impl Display for AgentEventType {
     }
 }
 
-/// Registration (HTTP POST /register)
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct RegisterRequest {
-    pub token: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct RegisterResponse {
-    pub server_url: String,
-    pub server_name: String,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -103,15 +91,5 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         let parsed: ServerMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, parsed);
-    }
-
-    #[test]
-    fn test_register_roundtrip() {
-        let req = RegisterRequest {
-            token: "abc".into(),
-        };
-        let json = serde_json::to_string(&req).unwrap();
-        let parsed: RegisterRequest = serde_json::from_str(&json).unwrap();
-        assert_eq!(req, parsed);
     }
 }

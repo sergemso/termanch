@@ -206,7 +206,7 @@ impl SessionManager {
     pub async fn handle_websocket(
         &self,
         mut socket: WebSocket,
-        claims: crate::auth::Claims,
+        identity: crate::auth::Identity,
     ) -> Result<()> {
         let mut current_session: Option<String> = None;
         let (pty_tx, mut pty_rx) = mpsc::unbounded_channel::<Vec<u8>>();
@@ -218,7 +218,7 @@ impl SessionManager {
                         Some(Ok(Message::Text(text))) => {
                             debug!("Received WS message: {}", text);
                             if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) {
-                                match self.handle_client_message(client_msg, &mut current_session, &pty_tx, &mut socket, &claims).await {
+                                match self.handle_client_message(client_msg, &mut current_session, &pty_tx, &mut socket, &identity).await {
                                     Ok(should_break) => {
                                         if should_break { break; }
                                     }
@@ -278,20 +278,11 @@ impl SessionManager {
         current_session: &mut Option<String>,
         pty_tx: &mpsc::UnboundedSender<Vec<u8>>,
         socket: &mut WebSocket,
-        claims: &crate::auth::Claims,
+        _identity: &crate::auth::Identity,
     ) -> Result<bool> {
         match msg {
-            ClientMessage::Auth {
-                token: _,
-                server_token: _,
-            } => {
-                let resp = ServerMessage::AuthOk {
-                    user: claims.username.clone(),
-                    server_name: "termanch-server".to_string(),
-                };
-                socket
-                    .send(Message::Text(serde_json::to_string(&resp).unwrap()))
-                    .await?;
+            ClientMessage::Auth { .. } => {
+                // Authentication happens once, before this loop (websocket.rs).
             }
             ClientMessage::ListSessions => {
                 let sessions = self.list_sessions().await;

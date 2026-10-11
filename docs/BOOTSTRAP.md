@@ -132,25 +132,15 @@ terraform apply
 
 ---
 
-## 3. Generate Server Secrets
+## 3. Set the Pages Function secrets
 
-Run locally:
+The client's Pages Function exchanges the GitHub login code, so it needs the OAuth app credentials.
+The servers need no secrets.
 
 ```bash
-# JWT signing secret (32+ chars)
-JWT_SECRET=$(openssl rand -base64 32)
-
-# Registration HMAC secret (32+ chars)
-REGISTRATION_SECRET=$(openssl rand -base64 32)
-
-echo "JWT_SECRET=$JWT_SECRET"
-echo "REGISTRATION_SECRET=$REGISTRATION_SECRET"
+wrangler pages secret put GITHUB_CLIENT_ID --project-name <pages project>
+wrangler pages secret put GITHUB_CLIENT_SECRET --project-name <pages project>
 ```
-
-Save these for the server `.env` file.
-
-**Terraform outputs:**
-- `client_url` — your client URL (e.g., `https://app.yourdomain.com` or `https://app.myapp.yourdomain.com`)
 
 ---
 
@@ -174,11 +164,9 @@ cd termanch/docker
 
 ```bash
 cat > .env <<EOF
-TERMANCH_GITHUB_CLIENT_ID=<terraform output oauth_client_id>
-TERMANCH_GITHUB_CLIENT_SECRET=<terraform output oauth_client_secret>
-TERMANCH_JWT_SECRET=<your-jwt-secret>
-TERMANCH_REGISTRATION_SECRET=<your-reg-secret>
 TERMANCH_SERVER_NAME=my-vps
+TERMANCH_PUBLIC_URL=https://<your tunnel hostname>
+# Self-hosted client only: TERMANCH_CLIENT_URL=https://app.<yourdomain>
 # For quick testing (ephemeral URL):
 # CLOUDFLARE_TUNNEL_TOKEN=
 # For production (named tunnel):
@@ -196,18 +184,14 @@ docker compose ps
 docker compose logs -f termanch-server
 ```
 
-### 4.4 Get Registration QR Code
+### 4.4 Get the registration link
 
 ```bash
 docker compose exec termanch-server termanch-server --register
 ```
 
-Output shows:
-- Registration Token
-- HMAC Token (for QR)
-- Server Name
-
-Scan the QR code with the Termanch app at the Terraform output `client_url`
+Open the printed link in the browser where you are logged in to Termanch. The first GitHub user
+to connect with it becomes the server's owner; the link then stops working and anyone else is rejected.
 
 ---
 
@@ -252,7 +236,7 @@ Will automate: Docker install, secret generation, docker-compose, QR code.
 |-------|----------|
 | `403 Forbidden` on Cloudflare Pages | Check `VITE_GITHUB_CLIENT_ID` GitHub Actions variable |
 | WebSocket connection fails | Verify CORS headers on server; check cloudflared logs |
-| QR code not scanning | Ensure HMAC token matches; check server time sync |
+| "This server belongs to another GitHub user" | Log in with the GitHub account that registered the server; to reassign, delete `owner.json` in the config volume and re-run `--register` |
 | `docker compose up` fails | Check `.env` has all required vars; `docker compose config` to validate |
 | Terraform apply fails | Check API token permissions; verify domain is on Cloudflare |
 
