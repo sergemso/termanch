@@ -38,7 +38,7 @@ export const IDLE_EXPIRY_MS = 30 * 24 * 3600_000;
 const B64URL = /^[A-Za-z0-9_-]+$/;
 const FINGERPRINT = /^sha-256 ([0-9A-F]{2}:){31}[0-9A-F]{2}$/;
 
-export function b64urlDecode(s: string): Uint8Array {
+export function b64urlDecode(s: string): Uint8Array<ArrayBuffer> {
   const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
   const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
   return Uint8Array.from(bin, (c) => c.charCodeAt(0));

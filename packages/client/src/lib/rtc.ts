@@ -1,0 +1,106 @@
+// WebRTC-direct client (DECISION-0057): connects to the server's single UDP port with no signaling.
+// The remote description is built locally from the signed directory record, and the server's DTLS
+// fingerprint from that record is the only thing the browser trusts.
+import type { DirRecord } from './directory';
+import type { Transport } from './transport';
+
+/** Fixed by the protocol; must match packages/server/src/rtc.rs. */
+export const SERVER_UFRAG = 'termanch';
+export const SERVER_PWD = 'termanch-direct-v1-0123456789';
+export const CHANNEL_ID = 0;
+
+export function randomUfrag(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) => chars[b % chars.length]).join('');
+}
+
+/** Gives the offer our own ICE credentials: one random string for both ufrag and pwd (at least 22 chars). */
+export function setIceCredentials(sdp: string, ufrag: string): string {
+  return sdp.replace(/a=ice-ufrag:.*\r\n/, `a=ice-ufrag:${ufrag}\r\n`).replace(/a=ice-pwd:.*\r\n/, `a=ice-pwd:${ufrag}\r\n`);
+}
+
+/** The answer a signaling server would have sent, built from the record instead. */
+export function buildAnswer(r: Pick<DirRecord, 'ip' | 'udp_port' | 'fingerprint'>, mid: string): string {
+  const v6 = r.ip.includes(':');
+  return [
+    'v=0',
+    `o=- 0 0 IN ${v6 ? 'IP6' : 'IP4'} ${r.ip}`,
+    's=-',
+    't=0 0',
+    'a=ice-lite',
+    `a=group:BUNDLE ${mid}`,
+    `m=application ${r.udp_port} UDP/DTLS/SCTP webrtc-datachannel`,
+    `c=IN ${v6 ? 'IP6' : 'IP4'} ${r.ip}`,
+    `a=mid:${mid}`,
+    `a=ice-ufrag:${SERVER_UFRAG}`,
+    `a=ice-pwd:${SERVER_PWD}`,
+    `a=fingerprint:${r.fingerprint}`,
+    'a=setup:passive',
+    'a=sctp-port:5000',
+    'a=max-message-size:65536',
+    `a=candidate:1 1 UDP 2113929471 ${r.ip} ${r.udp_port} typ host`,
+    'a=end-of-candidates',
+    '',
+  ].join('\r\n');
+}
+
+class RtcTransport implements Transport {
+  readonly kind = 'rtc' as const;
+  onmessage: ((text: string) => void) | null = null;
+  onclose: (() => void) | null = null;
+  private closed = false;
+
+  constructor(private pc: RTCPeerConnection, private dc: RTCDataChannel) {
+    dc.onmessage = (e) => typeof e.data === 'string' && this.onmessage?.(e.data);
+    dc.onclose = () => this.finish();
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') this.finish();
+    };
+  }
+
+  send(text: string) {
+    if (this.dc.readyState === 'open') this.dc.send(text);
+  }
+
+  close() {
+    this.closed = true;
+    this.pc.close();
+  }
+
+  private finish() {
+    if (this.closed) return;
+    this.closed = true;
+    this.pc.close();
+    this.onclose?.();
+  }
+}
+
+/** Resolves when the data channel is open; rejects on timeout or ICE/DTLS failure. */
+export async function openRtc(record: DirRecord, timeoutMs: number): Promise<Transport> {
+  const pc = new RTCPeerConnection({ iceServers: [] });
+  const dc = pc.createDataChannel('t', { negotiated: true, id: CHANNEL_ID });
+  try {
+    const offer = await pc.createOffer();
+    const sdp = setIceCredentials(offer.sdp!, randomUfrag());
+    await pc.setLocalDescription({ type: 'offer', sdp });
+    const mid = /a=mid:(\S+)/.exec(sdp)?.[1] ?? '0';
+    await pc.setRemoteDescription({ type: 'answer', sdp: buildAnswer(record, mid) });
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`no data channel after ${timeoutMs} ms`)), timeoutMs);
+      dc.onopen = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      pc.oniceconnectionstatechange = () => {
+        if (pc.iceConnectionState === 'failed') {
+          clearTimeout(timer);
+          reject(new Error('ICE failed'));
+        }
+      };
+    });
+    return new RtcTransport(pc, dc);
+  } catch (e) {
+    pc.close();
+    throw e;
+  }
+}

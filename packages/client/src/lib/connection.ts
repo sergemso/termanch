@@ -1,7 +1,9 @@
 import type { ClientMessage, ServerMessage } from './protocol';
-import { wsUrl } from './servers';
+import { openRtc } from './rtc';
+import { openTransport, Unreachable, type Openers, type Target, type Transport } from './transport';
+import { openWs } from './ws';
 
-export type ConnState = 'connecting' | 'connected' | 'reconnecting' | 'closed';
+export type ConnState = 'connecting' | 'connected' | 'reconnecting' | 'unreachable' | 'closed';
 
 const BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 30000];
 const PING_EVERY_MS = 15000;
@@ -28,19 +30,24 @@ export function textToB64(text: string): string {
 }
 
 export interface ConnectionOptions {
-  serverUrl: string;
+  /** Resolved on every attempt, so a reconnect can pick up a new address from the directory. */
+  target: () => Promise<Target>;
+  openers?: Openers;
   token: () => string;
   claim?: string;
-  onState: (state: ConnState) => void;
+  /** `detail` explains `unreachable`. */
+  onState: (state: ConnState, detail?: string) => void;
   /** Called after every successful auth, including after a reconnect. */
   onReady: (msg: Extract<ServerMessage, { type: 'auth_ok' }>, isReconnect: boolean) => void;
   /** Auth errors are final: retrying with the same token would be rejected again. */
   onFatal: (message: string) => void;
 }
 
-/** One authenticated WebSocket to a server that heals itself: backoff, heartbeat, wake-up on foreground. */
+const DEFAULT_OPENERS: Openers = { rtc: openRtc, ws: openWs };
+
+/** One authenticated connection to a server that heals itself: transport choice, backoff, heartbeat, wake-up on foreground. */
 export class Connection {
-  private ws: WebSocket | null = null;
+  private transport: Transport | null = null;
   private attempt = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
@@ -49,10 +56,16 @@ export class Connection {
   private authed = false;
   private everReady = false;
   private stopped = false;
+  private opening = false;
 
   constructor(private opts: ConnectionOptions) {
     document.addEventListener('visibilitychange', this.wake);
     window.addEventListener('online', this.wake);
+  }
+
+  /** Which transport is carrying the session, for a connection-quality indicator. */
+  get kind(): 'rtc' | 'ws' | null {
+    return this.transport?.kind ?? null;
   }
 
   subscribe(fn: (msg: ServerMessage) => void): () => void {
@@ -61,11 +74,11 @@ export class Connection {
   }
 
   start() {
-    this.open();
+    void this.open();
   }
 
   send(msg: ClientMessage) {
-    if (this.ws?.readyState === WebSocket.OPEN && this.authed) this.ws.send(JSON.stringify(msg));
+    if (this.transport && this.authed) this.transport.send(JSON.stringify(msg));
   }
 
   close() {
@@ -73,17 +86,17 @@ export class Connection {
     this.clearTimers();
     document.removeEventListener('visibilitychange', this.wake);
     window.removeEventListener('online', this.wake);
-    this.ws?.close();
-    this.ws = null;
+    this.transport?.close();
+    this.transport = null;
     this.opts.onState('closed');
   }
 
   private wake = () => {
     if (this.stopped || document.visibilityState === 'hidden') return;
-    if (this.ws?.readyState === WebSocket.OPEN) {
+    if (this.transport && this.authed) {
       this.send({ type: 'ping' }); // the heartbeat will drop it if it went stale while hidden
       this.armPongTimeout();
-    } else {
+    } else if (!this.opening) {
       this.reconnectNow();
     }
   };
@@ -92,54 +105,70 @@ export class Connection {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.attempt = 0;
-    this.open();
+    void this.open();
   }
 
-  private open() {
+  private scheduleRetry() {
     if (this.stopped) return;
+    this.timer = setTimeout(() => void this.open(), backoffDelay(this.attempt++));
+  }
+
+  private async open() {
+    if (this.stopped || this.opening) return;
+    this.opening = true;
     this.clearTimers();
-    this.opts.onState(this.everReady ? 'reconnecting' : 'connecting');
     this.authed = false;
-    let ws: WebSocket;
+    this.opts.onState(this.everReady ? 'reconnecting' : 'connecting');
+
+    let transport: Transport;
     try {
-      ws = new WebSocket(wsUrl(this.opts.serverUrl));
-    } catch {
-      this.opts.onFatal('Invalid server URL');
+      transport = await openTransport(await this.opts.target(), this.opts.openers ?? DEFAULT_OPENERS);
+    } catch (e) {
+      this.opening = false;
+      if (this.stopped) return;
+      this.opts.onState('unreachable', e instanceof Unreachable ? e.message : 'Server unreachable');
+      this.scheduleRetry();
       return;
     }
-    this.ws = ws;
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'auth', token: this.opts.token(), server_token: this.opts.claim ?? '' }));
-    };
-    ws.onmessage = (event) => {
-      if (this.ws !== ws) return;
-      const msg: ServerMessage = JSON.parse(event.data);
-      this.heard();
-      if (msg.type === 'auth_ok') {
-        const isReconnect = this.everReady;
-        this.authed = true;
-        this.everReady = true;
-        this.attempt = 0;
-        this.startHeartbeat();
-        this.opts.onState('connected');
-        this.opts.onReady(msg, isReconnect);
-      } else if (msg.type === 'error' && !this.authed) {
-        this.stopped = true;
-        ws.close();
-        this.opts.onState('closed');
-        this.opts.onFatal(msg.message);
-        return;
-      }
-      if (msg.type !== 'pong') this.listeners.forEach((fn) => fn(msg));
-    };
-    ws.onclose = () => {
-      if (this.ws !== ws || this.stopped) return;
+    this.opening = false;
+    if (this.stopped) {
+      transport.close();
+      return;
+    }
+
+    this.transport = transport;
+    transport.onmessage = (text) => this.onText(transport, text);
+    transport.onclose = () => {
+      if (this.transport !== transport || this.stopped) return;
       this.clearTimers();
       this.authed = false;
+      this.transport = null;
       this.opts.onState('reconnecting');
-      this.timer = setTimeout(() => this.open(), backoffDelay(this.attempt++));
+      this.scheduleRetry();
     };
-    ws.onerror = () => ws.close();
+    transport.send(JSON.stringify({ type: 'auth', token: this.opts.token(), server_token: this.opts.claim ?? '' }));
+  }
+
+  private onText(transport: Transport, text: string) {
+    if (this.transport !== transport) return;
+    const msg: ServerMessage = JSON.parse(text);
+    this.heard();
+    if (msg.type === 'auth_ok') {
+      const isReconnect = this.everReady;
+      this.authed = true;
+      this.everReady = true;
+      this.attempt = 0;
+      this.startHeartbeat();
+      this.opts.onState('connected');
+      this.opts.onReady(msg, isReconnect);
+    } else if (msg.type === 'error' && !this.authed) {
+      this.stopped = true;
+      transport.close();
+      this.opts.onState('closed');
+      this.opts.onFatal(msg.message);
+      return;
+    }
+    if (msg.type !== 'pong') this.listeners.forEach((fn) => fn(msg));
   }
 
   private startHeartbeat() {
@@ -151,10 +180,12 @@ export class Connection {
 
   private armPongTimeout() {
     if (this.pongTimer) return;
-    // Any message counts as proof of life (see heard()); silence means a half-open socket.
+    // Any message counts as proof of life (see heard()); silence means a half-open connection.
     this.pongTimer = setTimeout(() => {
       this.pongTimer = null;
-      this.ws?.close();
+      this.transport?.close();
+      // close() on our own transport does not notify; treat it as a drop.
+      this.transport?.onclose?.();
     }, PONG_WITHIN_MS);
   }
 

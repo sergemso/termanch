@@ -1,0 +1,59 @@
+import { describe, it, expect, vi } from 'vitest';
+import { openTransport, describeRtcFailure, Unreachable, type Openers, type Transport } from './transport';
+import type { DirRecord } from './directory';
+
+const record: DirRecord = {
+  server_id: 'A'.repeat(43), seq: 1, ip: '185.199.108.153', udp_port: 4443,
+  fingerprint: 'sha-256 ' + Array(32).fill('AB').join(':'), ws_url: '', claim_hash: '', claim_proof: '', sig: 'B'.repeat(86),
+};
+
+const fake = (kind: 'rtc' | 'ws'): Transport => ({ kind, onmessage: null, onclose: null, send() {}, close() {} });
+
+function openers(over: Partial<Openers> = {}): Openers & { rtc: ReturnType<typeof vi.fn>; ws: ReturnType<typeof vi.fn> } {
+  return { rtc: vi.fn(async () => fake('rtc')), ws: vi.fn(async () => fake('ws')), ...over } as never;
+}
+
+describe('openTransport', () => {
+  it('prefers WebRTC-direct from the directory record', async () => {
+    const o = openers();
+    expect((await openTransport({ record, wsUrl: 'https://x.example' }, o)).kind).toBe('rtc');
+    expect(o.ws).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the record\'s tunnel URL when WebRTC cannot open', async () => {
+    const o = openers({ rtc: vi.fn(async () => { throw new Error('no data channel'); }) });
+    const t = await openTransport({ record: { ...record, ws_url: 'https://t.trycloudflare.com' } }, o);
+    expect(t.kind).toBe('ws');
+    expect(o.ws).toHaveBeenCalledWith('https://t.trycloudflare.com', expect.any(Number));
+  });
+
+  it('uses a manually entered WebSocket URL when there is no record', async () => {
+    const o = openers();
+    expect((await openTransport({ wsUrl: 'https://s.example' }, o)).kind).toBe('ws');
+    expect(o.rtc).not.toHaveBeenCalled();
+  });
+
+  it('names the UDP port when WebRTC fails and there is no fallback', async () => {
+    const o = openers({ rtc: vi.fn(async () => { throw new Error('ICE failed'); }) });
+    const err = await openTransport({ record }, o).catch((e) => e);
+    expect(err).toBeInstanceOf(Unreachable);
+    expect(err.message).toBe(describeRtcFailure(record));
+    expect(err.message).toContain('UDP port 4443');
+    expect(err.attempts).toEqual(['rtc: ICE failed']);
+  });
+
+  it('keeps the UDP diagnostic when the fallback fails too', async () => {
+    const o = openers({
+      rtc: vi.fn(async () => { throw new Error('timeout'); }),
+      ws: vi.fn(async () => { throw new Error('WebSocket failed'); }),
+    });
+    const err = await openTransport({ record: { ...record, ws_url: 'https://t.example' } }, o).catch((e) => e);
+    expect(err.message).toContain('UDP port 4443');
+    expect(err.attempts).toEqual(['rtc: timeout', 'ws: WebSocket failed']);
+  });
+
+  it('fails plainly with nothing to try', async () => {
+    const err = await openTransport({}, openers()).catch((e) => e);
+    expect(err).toBeInstanceOf(Unreachable);
+  });
+});

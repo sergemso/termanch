@@ -25,7 +25,12 @@ export interface SessionInfo {
 export type AgentEventType = 'spawned' | 'completed' | 'error';
 
 export interface ServerListItem {
+  /** Tunnel (WebSocket) fallback or manually entered address; optional once a directory record exists. */
   server_url: string;
+  /** Pinned Ed25519 public key of the server (base64url); the directory is trusted only through it. */
+  server_id?: string;
+  /** Last verified directory record, tried first before asking the directory again. */
+  record?: import('./directory').DirRecord;
   server_name: string;
   registered_at: number;
   /** One-time claim token from the registration link; dropped after the first successful connect. */

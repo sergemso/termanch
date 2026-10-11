@@ -7,6 +7,7 @@
   import type { ServerMessage, SessionInfo, ServerListItem } from './lib/protocol';
   import { parseAddFragment } from './lib/servers';
   import { Connection, type ConnState } from './lib/connection';
+  import { lookup, type DirRecord } from './lib/directory';
 
   let user: string | null = null;
   let githubToken: string | null = null;
@@ -16,6 +17,7 @@
   let activeSessionId: string | null = null;
   let connection: Connection | null = null;
   let connState: ConnState = 'closed';
+  let connDetail = '';
   let showAddServer = false;
   let addPrefill: Pick<ServerListItem, 'server_url' | 'server_name' | 'claim'> | null = null;
   let toast: { message: string; type: 'success' | 'error' } | null = null;
@@ -103,11 +105,32 @@
     sessions = [];
     activeSessionId = null;
     connState = 'connecting';
+    // Use the stored record first; ask the directory only after a failure, to stay within its request budget.
+    let record = server.record;
+    let refresh = !record && !!server.server_id;
     connection = new Connection({
-      serverUrl: server.server_url,
+      target: async () => {
+        if (refresh && server.server_id) {
+          try {
+            record = (await lookup(location.origin, server.server_id)) ?? record;
+          } catch (e) {
+            console.warn('directory lookup failed', e);
+          }
+        }
+        return { record, wsUrl: server.server_url || undefined };
+      },
       token: () => githubToken!,
       claim: server.claim,
-      onState: (s) => (connState = s),
+      onState: (s, detail) => {
+        connState = s;
+        connDetail = detail ?? '';
+        if (s === 'connected') {
+          refresh = false;
+          if (record && server.server_id) addServer({ ...server, record });
+        } else {
+          refresh = true;
+        }
+      },
       onReady: (msg, isReconnect) => {
         if (server.claim) {
           // The claim token is single-use: the server now knows its owner.
@@ -221,6 +244,7 @@
           <aside style="width: 280px; border-right: 1px solid var(--border); background: var(--bg-secondary); padding: 16px; overflow-y: auto;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
               <h3 style="font-size: 0.875rem; text-transform: uppercase; color: var(--fg-muted);">Sessions · {connState}</h3>
+              {#if connDetail}<p style="font-size: 0.75rem; color: var(--danger); margin: 4px 0 8px;">{connDetail}</p>{/if}
               <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem;" on:click={() => connection?.send({ type: 'list_sessions' })}>Refresh</button>
               <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem;" on:click={newSession}>+ New</button>
             </div>
