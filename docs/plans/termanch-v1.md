@@ -187,7 +187,8 @@ Issue: #27
 Class: implement · Needs: 8.2, 2.2 · Check: `pnpm --filter termanch-client test`
 Context: Replaces the manual URL/link modal.
 Do:
-1. Add Server: generate the claim secret, show the single install command with a copy button, poll `pending` until the server announces; verify the HMAC; pin the server key; add the server.
+1. Add Server, flow A: generate the claim secret (expires in 15 minutes, single use), show the single install command with a copy button, poll `pending` until the server announces; verify the HMAC; pin the server key; add the server.
+1b. Flow B: a Scan button decodes the installer's QR from the live camera or from a picked screenshot (small JS decoder; try inverted images); same pending/verify/pin path. Tell the user to delete the screenshot.
 2. On connect failure, look up the server by id, verify the signature against the pinned key, and reconnect to the new URL (feeds the 2.2 backoff loop).
 3. Remove manual URL fields and the `#add=` link path.
 Done-when: restarting the VPS tunnel is invisible to a logged-in client apart from a short reconnect.
@@ -202,7 +203,8 @@ Do:
 1. Non-interactive POSIX script taking the claim secret and the directory origin: installs Docker if missing, writes the compose file, starts server + bundled `cloudflared`, restarts on reboot.
 2. Idempotent; refuses to run if a different owner is already bound; no prompts, no output the user must act on.
 3. Fresh-VPS test in CI where feasible (container), manual on a real 512MB VPS.
-Done-when: pasting the command on a fresh VPS results in a connected server in the client, with no further input.
+3. When stdout is a terminal, also draw the claim QR (white quiet zone, large modules); never when piped or run from cloud-init.
+Done-when: pasting the command on a fresh VPS results in a connected server in the client, with no further input; the QR scans from a phone screenshot of a dark terminal.
 
 ---
 
