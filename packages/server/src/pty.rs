@@ -4,9 +4,9 @@ use anyhow::{anyhow, Result};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use tokio::sync::mpsc;
 
-/// A `tmux attach` client running in a PTY. tmux repaints the whole screen when a client attaches,
-/// so re-attaching after a dropped connection is also the screen replay. Dropping this detaches
-/// (the tmux session keeps running).
+/// A session-attach client (e.g. `tmux attach`) running in a PTY. A multiplexer repaints the whole
+/// screen when a client attaches, so re-attaching after a dropped connection is also the screen
+/// replay. Dropping this detaches; the session itself keeps running.
 pub struct Attachment {
     master: Box<dyn MasterPty + Send>,
     writer: Box<dyn Write + Send>,
@@ -15,16 +15,16 @@ pub struct Attachment {
 }
 
 impl Attachment {
-    pub fn spawn(session: &str, cols: u16, rows: u16) -> Result<Self> {
+    /// Runs `program args` in a PTY. Backends decide the command (e.g. `tmux attach-session -t =name`).
+    pub fn spawn(program: &str, args: &[String], cols: u16, rows: u16) -> Result<Self> {
         let pair = native_pty_system().openpty(PtySize {
             rows,
             cols,
             pixel_width: 0,
             pixel_height: 0,
         })?;
-        let mut cmd = CommandBuilder::new("tmux");
-        // `=` makes the target an exact name match.
-        cmd.args(["attach-session", "-t", &format!("={session}")]);
+        let mut cmd = CommandBuilder::new(program);
+        cmd.args(args);
         cmd.env("TERM", "xterm-256color");
         let child = pair.slave.spawn_command(cmd)?;
         drop(pair.slave);
@@ -83,6 +83,7 @@ impl Drop for Attachment {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::{SessionBackend, TmuxBackend};
     use std::time::Duration;
 
     fn tmux_available() -> bool {
@@ -115,10 +116,11 @@ mod tests {
             eprintln!("tmux not installed; skipping");
             return;
         }
+        let backend = TmuxBackend;
         let name = format!("tt{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
-        crate::tmux::new_session(&name).await.unwrap();
+        backend.create(&name).await.unwrap();
 
-        let mut a = Attachment::spawn(&name, 80, 24).unwrap();
+        let mut a = backend.attach(&name, 80, 24).unwrap();
         a.write(b"echo marker$((20+22))\n").unwrap();
         assert!(
             read_until(&mut a, "marker42").await,
@@ -127,15 +129,11 @@ mod tests {
         drop(a); // connection dropped: detach only
 
         assert!(
-            crate::tmux::list()
-                .await
-                .unwrap()
-                .iter()
-                .any(|s| s.id == name),
+            backend.list().await.unwrap().iter().any(|s| s.id == name),
             "session survives detach"
         );
 
-        let mut b = Attachment::spawn(&name, 80, 24).unwrap();
+        let mut b = backend.attach(&name, 80, 24).unwrap();
         assert!(
             read_until(&mut b, "marker42").await,
             "reattach repaints earlier output"

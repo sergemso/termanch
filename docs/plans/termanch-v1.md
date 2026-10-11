@@ -34,7 +34,7 @@ Done-when: CI is green on master; no doc describes deferred designs as current.
 
 ### 2.1 Single-owner server binding — [ ]
 Issue: #15
-Class: implement · Needs: 1.2 · Check: `cargo test -p termanch-server auth registration`
+Class: implement · Needs: 1.2 · Check: `cargo test -p termanch-server`
 Context: DECISION-0053. Today any valid GitHub token passes auth (packages/server/src/auth.rs).
 Do:
 1. On `/register`, store the registering GitHub user id in `/config` (volume).
@@ -47,14 +47,13 @@ Done-when: a second GitHub account cannot attach; tests pass.
 
 ### 2.2 Reconnect and screen replay — [ ]
 Issue: #16
-Class: implement · Needs: 1.2 · Check: `cargo test -p termanch-server sessions && pnpm --filter termanch-client test`
-Context: The "Mosh-level" promise on top of tmux (DECISION-0051). Output is full-frame base64 today; resume is unspecified.
+Class: implement · Needs: 1.2 · Check: `cargo test -p termanch-server && pnpm --filter termanch-client test`
+Context: The "Mosh-level" promise on top of a session backend (DECISION-0051, 0054). Resume = re-attach: tmux and similar multiplexers repaint the screen on attach, so the server keeps no replay buffer.
 Do:
-1. Define the resume contract in `packages/core` protocol: `attach` carries `last_seq`; server replies with a `tmux capture-pane` snapshot (or missed output if within a bounded ring buffer).
-2. Server: bounded per-session output ring (memory cap per GUARDRAIL-resource-constraints); keepalive ping/pong.
-3. Client: auto-reconnect with backoff (1s,2s,4s,8s,max 30s), re-auth, resume attach, visible connection state.
-4. Tests: drop socket mid-output, reconnect, no lost or duplicated lines within the ring; beyond the ring falls back to snapshot.
-Done-when: toggling network on a phone resumes the session within 2s of connectivity without losing the screen.
+1. Server owns the terminal path: backend trait, PTY attach per connection, detach-only on drop, heartbeat ping (done, e2e-tested).
+2. Client `Connection`: backoff (1s..30s + jitter), ping/pong half-open detection, immediate retry on foreground/online, re-auth, re-attach to the active session, terminal reset before repaint (done, unit-tested).
+3. Measure on real devices: network toggle on iOS Safari and Chrome Android resumes within 2s of connectivity; record in docs/facts.
+Done-when: device test passes; the e2e test (drop socket, reconnect, same screen) stays green in CI.
 
 ---
 
@@ -84,11 +83,11 @@ Done-when: installable on iOS and Android; cold start from cache works offline-s
 
 ### 4.1 Agent detection and notifications — [ ]
 Issue: #19
-Class: implement · Needs: 2.2 · Check: `cargo test -p termanch-agent`
+Class: implement · Needs: 2.2 · Check: `cargo test -p termanch-server`
 Context: Goal "manage AI coding agents". MVP has toasts for spawn/complete/error; detection method is only "manual codex in tmux".
 Do:
 1. Define the agent-event contract (spawned/needs-input/completed/error) and how each is detected in tmux (process scan of pane pid tree for codex/claude/herdr; prompt-wait heuristics only as a documented best effort).
-2. Agent emits events to the server on 127.0.0.1/Unix socket only; audit-log without agent output.
+2. Detection runs inside the server (DECISION-0054), per backend session; audit-log without agent output.
 3. Client toasts, unread badge in session list.
 4. If 1.1 confirms installed-PWA Web Push: optional push (VAPID, no paid service), payload carries no terminal content.
 Done-when: running `claude` or `codex` in a tmux pane shows spawn and completion notifications within 5s.
@@ -100,7 +99,7 @@ Issue: #20
 Class: implement · Needs: 2.1, 4.1 · Check: `docker compose -f docker/docker-compose.yml config`
 Context: Hosted-mode bar is ≤2 user actions after the VPS exists (bootstrap-simplicity, scoped by 0052).
 Do:
-1. Server+agent image (target <150MB), cloudflared sidecar, trycloudflare default, named tunnel optional; no inline config edits.
+1. Server image with tmux (target <150MB), cloudflared sidecar, trycloudflare default, named tunnel optional; no inline config edits.
 2. `get` script / compose-URL flow that prints the QR/registration code in the logs.
 3. CI builds and pushes the image (builds run in CI only).
 4. Document the self-hosted client path (Terraform/Pages/OAuth app) separately.
@@ -120,6 +119,29 @@ Done-when: gates enforced in CI.
 
 ---
 
+### 7.1 Verify herdr and other backend CLIs — [ ]
+Issue: #22
+Class: explore · Needs: 2.2 · Check: `test -s docs/facts/0017-backend-clis.md`
+Context: The user wants tmux, herdr or an own alternative (DECISION-0054). The `command` backend needs three CLI invocations per tool; herdr's are unverified (it advertises a CLI and local socket API; sources disagree on repo and license).
+Do:
+1. Install herdr and zellij; find list/create/attach commands; check that attach repaints on start and only detaches when killed, and that a PTY client works.
+2. Record findings and working env snippets in `docs/facts/0017-backend-clis.md` and the README; add an integration test per verified tool, skipped when the binary is absent.
+3. If herdr cannot fit the command shape, note what a dedicated adapter needs (its socket API).
+Done-when: each tool has a verdict, a tested snippet or a written reason it does not fit.
+
+---
+
+### 7.2 Server-native backend — [ ]
+Issue: #23
+Class: plan · Needs: 2.2 · Check: `test -s docs/decisions/0055-native-backend.md`
+Context: "Our own alternative": sessions the server holds itself, for hosts without a multiplexer. Needs a design before code: PTYs live in the server process (die on restart unless handed to a helper), and replay needs terminal state (a VT parser such as `vte`, or a bounded raw ring) since there is no multiplexer to repaint.
+Do:
+1. Write the decision: process model, persistence across server restarts, replay method, memory bound per session (512MB budget), multi-client attach.
+2. Implement `NativeBackend` behind the `SessionBackend` trait with an e2e test equal to the tmux one.
+Done-when: the decision is accepted and the backend passes the shared backend conformance tests.
+
+---
+
 ## Dependency Graph
 ```
 1.1 ─────────┬──────────────► 3.1 ► 3.2
@@ -128,6 +150,8 @@ Done-when: gates enforced in CI.
              └► 4.1 ───────────────────────┘
 ```
 Parallelizable after 1.2: 2.1 ‖ 2.2; after 2.2: 3.1 ‖ 4.1.
+
+Parallel with 7.x: backends are independent of 3.x/4.x.
 
 ## Backlog (deferred; each needs a new decision to start)
 WebTransport transport; WASM core + SSP/CRDT predictive echo; SSH-agent/WebAuthn auth; app-layer E2E encryption; diff viewer, preview, chat view; shell-hook installer; multi-user servers; Herdr-specific protocol; GitHub-Gist server-list sync.

@@ -15,14 +15,15 @@ use tower_http::trace::TraceLayer;
 use tracing::info;
 
 mod auth;
+mod backend;
 #[cfg(test)]
 mod e2e;
 mod pty;
 mod sessions;
-mod tmux;
 mod websocket;
 
 use auth::AuthState;
+use backend::{CommandBackend, SessionBackend, TmuxBackend};
 use sessions::SessionManager;
 use websocket::handle_websocket;
 
@@ -58,6 +59,26 @@ struct Args {
     )]
     client_url: String,
 
+    /// Session manager: `tmux` (built in) or `command` (any CLI, see TERMANCH_BACKEND_*).
+    #[arg(long, env = "TERMANCH_BACKEND", default_value = "tmux")]
+    backend: String,
+
+    /// For `command`: a label shown in logs, e.g. herdr.
+    #[arg(long, env = "TERMANCH_BACKEND_NAME", default_value = "command")]
+    backend_name: String,
+
+    /// For `command`: prints one session per line (`id` or `id|name`).
+    #[arg(long, env = "TERMANCH_BACKEND_LIST")]
+    backend_list: Option<String>,
+
+    /// For `command`: creates a detached session; `{name}` is replaced.
+    #[arg(long, env = "TERMANCH_BACKEND_CREATE")]
+    backend_create: Option<String>,
+
+    /// For `command`: attaches a terminal to a session; `{id}` is replaced.
+    #[arg(long, env = "TERMANCH_BACKEND_ATTACH")]
+    backend_attach: Option<String>,
+
     /// Print the registration link for this (unclaimed) server and exit.
     #[arg(long, default_value = "false")]
     register: bool,
@@ -68,6 +89,27 @@ pub struct AppState {
     pub auth: Arc<AuthState>,
     pub sessions: Arc<SessionManager>,
     pub server_name: String,
+}
+
+fn build_backend(args: &Args) -> anyhow::Result<Arc<dyn SessionBackend>> {
+    match args.backend.as_str() {
+        "tmux" => Ok(Arc::new(TmuxBackend)),
+        "command" => {
+            let need = |v: &Option<String>, name: &str| {
+                v.clone()
+                    .ok_or_else(|| anyhow::anyhow!("TERMANCH_BACKEND=command needs {name}"))
+            };
+            Ok(Arc::new(CommandBackend::new(
+                &args.backend_name,
+                &need(&args.backend_list, "TERMANCH_BACKEND_LIST")?,
+                &need(&args.backend_create, "TERMANCH_BACKEND_CREATE")?,
+                &need(&args.backend_attach, "TERMANCH_BACKEND_ATTACH")?,
+            )?))
+        }
+        other => Err(anyhow::anyhow!(
+            "unknown TERMANCH_BACKEND `{other}` (tmux or command)"
+        )),
+    }
 }
 
 fn print_registration(args: &Args, auth: &AuthState) -> anyhow::Result<()> {
@@ -114,9 +156,11 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    let backend = build_backend(&args)?;
+    info!("Session backend: {}", backend.name());
     let state = AppState {
         auth,
-        sessions: Arc::new(SessionManager::new()),
+        sessions: Arc::new(SessionManager::new(backend)),
         server_name: args.server_name.clone(),
     };
 

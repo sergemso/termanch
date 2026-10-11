@@ -149,10 +149,30 @@ Direction and steps: [docs/plans/termanch-v1.md](docs/plans/termanch-v1.md) (tra
 |----------|----------|-------------|
 | `TERMANCH_PUBLIC_URL` | Recommended | Tunnel URL, written into the registration link |
 | `TERMANCH_CLIENT_URL` | No | Client that opens the link (default: https://app.termanch.dev) |
+| `TERMANCH_BACKEND` | No | `tmux` (default) or `command` (see Session backends) |
 | `TERMANCH_CONFIG_DIR` | No | Where the owner and claim token are stored (a volume) |
 | `TERMANCH_SERVER_NAME` | No | Display name (default: termanch-server) |
 | `TERMANCH_HOST` | No | Bind address (default: 0.0.0.0) |
 | `TERMANCH_PORT` | No | Port (default: 8080) |
+
+### Session backends
+
+Sessions live in a session manager the server drives (DECISION-0054). The default is tmux
+(`TERMANCH_BACKEND=tmux`). To use another tool with a CLI, give three commands (no shell; `{name}` and
+`{id}` are replaced by a validated session name):
+
+```
+TERMANCH_BACKEND=command
+TERMANCH_BACKEND_NAME=zellij
+TERMANCH_BACKEND_LIST=zellij list-sessions --short
+TERMANCH_BACKEND_CREATE=zellij attach --create-background {name}
+TERMANCH_BACKEND_ATTACH=zellij attach {id}
+```
+
+The attach command runs in a PTY. It must repaint the session when it starts and only detach when it is
+killed; that is how a dropped connection resumes. The zellij lines above are an illustration and not
+tested; herdr's CLI is being verified in plan step 7.1. Without a backend that fits, implement the
+`SessionBackend` trait (`packages/server/src/backend.rs`).
 
 ### Client Environment Variables
 

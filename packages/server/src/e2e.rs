@@ -54,7 +54,7 @@ async fn fixture() -> Fixture {
     let claim = auth.claim_token().unwrap().unwrap();
     let state = AppState {
         auth,
-        sessions: Arc::new(SessionManager::new()),
+        sessions: Arc::new(SessionManager::new(Arc::new(crate::backend::TmuxBackend))),
         server_name: "test-vps".into(),
     };
     Fixture {

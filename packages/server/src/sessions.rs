@@ -7,19 +7,23 @@ use tracing::{debug, info};
 
 use termanch_core::protocol::{ClientMessage, ServerMessage};
 
+use std::sync::Arc;
+
+use crate::backend::SessionBackend;
 use crate::pty::Attachment;
-use crate::tmux;
 
 const PING_EVERY: Duration = Duration::from_secs(20);
 
 /// Serves one authenticated WebSocket: lists/creates tmux sessions and bridges one attached session.
-/// Persistence lives in tmux; a dropped connection only detaches (see pty.rs).
-#[derive(Clone, Default)]
-pub struct SessionManager;
+/// Persistence lives in the session backend (tmux by default); a dropped connection only detaches (see pty.rs).
+#[derive(Clone)]
+pub struct SessionManager {
+    backend: Arc<dyn SessionBackend>,
+}
 
 impl SessionManager {
-    pub fn new() -> Self {
-        Self
+    pub fn new(backend: Arc<dyn SessionBackend>) -> Self {
+        Self { backend }
     }
 
     pub async fn handle_websocket(
@@ -61,7 +65,7 @@ impl SessionManager {
                             // The tmux client exited: session killed or detached from inside.
                             attachment = None;
                             send(&mut socket, &ServerMessage::Error { message: "Session ended".into() }).await?;
-                            let sessions = tmux::list().await.unwrap_or_default();
+                            let sessions = self.backend.list().await.unwrap_or_default();
                             send(&mut socket, &ServerMessage::Sessions { sessions }).await?;
                         }
                     }
@@ -88,20 +92,17 @@ impl SessionManager {
             ClientMessage::Auth { .. } => {} // handled once, before this loop (websocket.rs)
             ClientMessage::Ping => send(socket, &ServerMessage::Pong).await?,
             ClientMessage::ListSessions => {
-                let sessions = tmux::list().await?;
+                let sessions = self.backend.list().await?;
                 send(socket, &ServerMessage::Sessions { sessions }).await?;
             }
             ClientMessage::NewSession { name } => {
-                tmux::new_session(&name).await?;
-                let sessions = tmux::list().await?;
+                self.backend.create(&name).await?;
+                let sessions = self.backend.list().await?;
                 send(socket, &ServerMessage::Sessions { sessions }).await?;
             }
             ClientMessage::Attach { session_id } => {
                 *attachment = None; // detach the previous one first
-                if !tmux::valid_name(&session_id) {
-                    return Err(anyhow::anyhow!("Unknown session"));
-                }
-                *attachment = Some(Attachment::spawn(&session_id, *cols, *rows)?);
+                *attachment = Some(self.backend.attach(&session_id, *cols, *rows)?);
                 send(socket, &ServerMessage::SessionAttached { session_id }).await?;
             }
             ClientMessage::Input { data } => {

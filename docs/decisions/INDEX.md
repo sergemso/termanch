@@ -8,7 +8,7 @@
 | 0004 | Binary Protobuf-like Wire Protocol with Varint Encoding | process | active | architect | - |
 | 0005 | iOS Safari Mitigation via Background Fetch, Push, and Service Worker | product | deferred | architect | 2027-10-09 |
 | 0006 | SSH Agent Forwarding for Authentication | product | deferred | architect | - |
-| 0007 | PTY Wrapper with Shell Hooks for Agent Integration | product | active | architect | - |
+| 0007 | PTY Wrapper with Shell Hooks for Agent Integration | product | deferred | architect | - |
 | 0008 | xterm.js with WebGL Addon for Terminal Rendering | product | active | architect | - |
 | 0009 | ChaCha20-Poly1305 for Packet Encryption | process | deferred | architect | - |
 | 0010 | Monorepo with Cargo Workspace and pnpm Workspace | process | active | architect | - |
@@ -57,3 +57,4 @@
 0051-mvp-evolve-baseline,"The hybrid MVP is the baseline; v1-only designs are deferred","architecture, roadmap",active
 0052-both-hosting-modes,"Hosted client and self-hosted client are both supported","deployment, roadmap",active
 0053-single-owner-servers,"A server belongs to one GitHub user","security, auth, roadmap",active
+0054-session-backends,"The server owns sessions through a pluggable backend","architecture, sessions, agents",active
