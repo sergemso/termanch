@@ -43,4 +43,5 @@ coverage/
 *.tfstate.*
 *.tfvars
 *.tfplan
-terraform.tfvarspackages/client/wrangler.toml
+terraform.tfvars
+packages/client/wrangler.toml

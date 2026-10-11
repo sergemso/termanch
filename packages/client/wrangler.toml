@@ -1,9 +1,0 @@
-name = "termanch"
-pages_build_output_dir = "dist"
-compatibility_date = "2026-10-01"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "termanch-directory"
-database_id = "93cd229e-b170-4981-b6d2-b061e4e53767"
-migrations_dir = "migrations"
