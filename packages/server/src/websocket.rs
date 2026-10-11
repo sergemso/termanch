@@ -20,6 +20,20 @@ async fn send(socket: &mut WebSocket, msg: &ServerMessage) -> bool {
         .is_ok()
 }
 
+/// Tell the client why, then close properly. Dropping the socket right after the error would reset
+/// the connection and the browser could lose the message.
+async fn reject(socket: &mut WebSocket, message: &str) {
+    let _ = send(
+        socket,
+        &ServerMessage::Error {
+            message: message.into(),
+        },
+    )
+    .await;
+    let _ = socket.send(Message::Close(None)).await;
+    let _ = tokio::time::timeout(Duration::from_secs(1), socket.recv()).await;
+}
+
 /// Browsers cannot set headers on a WebSocket, so the first message must be `auth`.
 /// Nothing else is read until GitHub has vouched for the token and the user owns this server.
 pub async fn handle_websocket(
@@ -35,13 +49,7 @@ pub async fn handle_websocket(
                 server_token,
             }) => (token, Some(server_token).filter(|t| !t.is_empty())),
             _ => {
-                let _ = send(
-                    &mut socket,
-                    &ServerMessage::Error {
-                        message: "Authenticate first".into(),
-                    },
-                )
-                .await;
+                reject(&mut socket, "Authenticate first").await;
                 return;
             }
         },
@@ -56,13 +64,7 @@ pub async fn handle_websocket(
     let identity = match state.auth.check(&token, claim.as_deref(), ip).await {
         Ok(i) => i,
         Err(e) => {
-            let _ = send(
-                &mut socket,
-                &ServerMessage::Error {
-                    message: e.message().into(),
-                },
-            )
-            .await;
+            reject(&mut socket, e.message()).await;
             return;
         }
     };

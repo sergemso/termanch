@@ -5,26 +5,24 @@
   import { WebglAddon } from 'xterm-addon-webgl';
   import 'xterm/css/xterm.css';
 
+  import type { Connection } from './lib/connection';
+  import { b64ToBytes, textToB64 } from './lib/connection';
+
+  export let connection: Connection;
   export let activeSessionId: string | null = null;
 
   let terminalContainer: HTMLDivElement;
   let term: XTermTerminal | null = null;
   let fitAddon: FitAddon | null = null;
   let resizeObserver: ResizeObserver | null = null;
+  let unsubscribe: (() => void) | null = null;
 
   function sendInput(data: string) {
-    const ws = (window as any).__termanch_ws;
-    if (ws && ws.readyState === WebSocket.OPEN && activeSessionId) {
-      const encoded = btoa(data);
-      ws.send(JSON.stringify({ type: 'input', data: encoded }));
-    }
+    if (activeSessionId) connection.send({ type: 'input', data: textToB64(data) });
   }
 
   function sendResize(cols: number, rows: number) {
-    const ws = (window as any).__termanch_ws;
-    if (ws && ws.readyState === WebSocket.OPEN && activeSessionId) {
-      ws.send(JSON.stringify({ type: 'resize', cols, rows }));
-    }
+    if (activeSessionId) connection.send({ type: 'resize', cols, rows });
   }
 
   onMount(() => {
@@ -73,18 +71,18 @@
     });
     resizeObserver.observe(terminalContainer);
 
-    const ws = (window as any).__termanch_ws;
-    if (ws) {
-      ws.onmessage = (event: MessageEvent) => {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'output') {
-          const decoded = atob(msg.data);
-          term?.write(decoded);
-        }
-      };
-    }
+    unsubscribe = connection.subscribe((msg) => {
+      if (msg.type === 'output') {
+        term?.write(b64ToBytes(msg.data));
+      } else if (msg.type === 'session_attached') {
+        // tmux repaints the screen on attach; start clean so a re-attach never doubles the content.
+        term?.reset();
+        if (term) sendResize(term.cols, term.rows);
+      }
+    });
 
     return () => {
+      unsubscribe?.();
       resizeObserver?.disconnect();
       term?.dispose();
     };

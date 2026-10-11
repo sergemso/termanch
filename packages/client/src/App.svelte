@@ -5,7 +5,8 @@
   import AddServerModal from './AddServerModal.svelte';
   import Toast from './Toast.svelte';
   import type { ServerMessage, SessionInfo, ServerListItem } from './lib/protocol';
-  import { wsUrl, parseAddFragment } from './lib/servers';
+  import { parseAddFragment } from './lib/servers';
+  import { Connection, type ConnState } from './lib/connection';
 
   let user: string | null = null;
   let githubToken: string | null = null;
@@ -13,6 +14,8 @@
   let selectedServer: ServerListItem | null = null;
   let sessions: SessionInfo[] = [];
   let activeSessionId: string | null = null;
+  let connection: Connection | null = null;
+  let connState: ConnState = 'closed';
   let showAddServer = false;
   let addPrefill: Pick<ServerListItem, 'server_url' | 'server_name' | 'claim'> | null = null;
   let toast: { message: string; type: 'success' | 'error' } | null = null;
@@ -95,50 +98,54 @@
   }
 
   function connectToServer(server: ServerListItem) {
+    connection?.close();
     selectedServer = server;
-    try {
-      const ws = new WebSocket(wsUrl(server.server_url));
-      ws.binaryType = 'arraybuffer';
-
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'auth', token: githubToken!, server_token: server.claim ?? '' }));
-      };
-
-      ws.onmessage = (event) => {
-        const msg: ServerMessage = JSON.parse(event.data);
-        if (msg.type === 'auth_ok' && server.claim) {
+    sessions = [];
+    activeSessionId = null;
+    connState = 'connecting';
+    connection = new Connection({
+      serverUrl: server.server_url,
+      token: () => githubToken!,
+      claim: server.claim,
+      onState: (s) => (connState = s),
+      onReady: (msg, isReconnect) => {
+        if (server.claim) {
           // The claim token is single-use: the server now knows its owner.
           const { claim, ...rest } = server;
           server = rest;
           addServer({ ...rest, server_name: msg.server_name || rest.server_name });
         }
-        handleServerMessage(msg);
-      };
+        showToast(isReconnect ? 'Reconnected' : `Connected to ${msg.server_name}`);
+        connection?.send({ type: 'list_sessions' });
+        // tmux kept the session alive; attaching again repaints it.
+        if (activeSessionId) connection?.send({ type: 'attach', session_id: activeSessionId });
+      },
+      onFatal: (message) => {
+        showToast(message, 'error');
+        selectedServer = null;
+      },
+    });
+    connection.subscribe(handleServerMessage);
+    connection.start();
+  }
 
-      ws.onerror = () => showToast('Connection error', 'error');
-      ws.onclose = () => showToast('Disconnected', 'error');
+  function attach(id: string) {
+    activeSessionId = id;
+    connection?.send({ type: 'attach', session_id: id });
+  }
 
-      // Store WS globally for terminal
-      (window as any).__termanch_ws = ws;
-    } catch (e) {
-      showToast('Failed to connect', 'error');
-    }
+  function newSession() {
+    const name = prompt('New tmux session name', `agent-${sessions.length + 1}`);
+    if (name) connection?.send({ type: 'new_session', name });
   }
 
   function handleServerMessage(msg: ServerMessage) {
     switch (msg.type) {
-      case 'auth_ok':
-        showToast(`Connected to ${msg.server_name}`);
-        (window as any).__termanch_ws?.send(JSON.stringify({ type: 'list_sessions' }));
-        break;
       case 'sessions':
         sessions = msg.sessions;
         break;
       case 'session_attached':
         activeSessionId = msg.session_id;
-        break;
-      case 'output':
-        // Handled by terminal component
         break;
       case 'agent_event':
         showToast(`Agent ${msg.agent} ${msg.event} in ${msg.session_id}`);
@@ -156,7 +163,8 @@
     selectedServer = null;
     sessions = [];
     activeSessionId = null;
-    (window as any).__termanch_ws?.close();
+    connection?.close();
+    connection = null;
   }
 
   onMount(async () => {
@@ -212,12 +220,13 @@
         <div style="display: flex; flex: 1; overflow: hidden;">
           <aside style="width: 280px; border-right: 1px solid var(--border); background: var(--bg-secondary); padding: 16px; overflow-y: auto;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-              <h3 style="font-size: 0.875rem; text-transform: uppercase; color: var(--fg-muted);">Sessions</h3>
-              <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem;" on:click={() => { (window as any).__termanch_ws?.send(JSON.stringify({ type: 'list_sessions' })); }}>Refresh</button>
+              <h3 style="font-size: 0.875rem; text-transform: uppercase; color: var(--fg-muted);">Sessions · {connState}</h3>
+              <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem;" on:click={() => connection?.send({ type: 'list_sessions' })}>Refresh</button>
+              <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem;" on:click={newSession}>+ New</button>
             </div>
             <ul style="list-style: none;">
               {#each sessions as session}
-                <li style="padding: 8px 12px; margin-bottom: 4px; border-radius: 6px; cursor: pointer; background: {activeSessionId === session.id ? 'var(--accent)' : 'transparent'}; color: {activeSessionId === session.id ? 'var(--bg)' : 'var(--fg)'};" on:click={() => { activeSessionId = session.id; (window as any).__termanch_ws?.send(JSON.stringify({ type: 'attach', session_id: session.id })); }}>
+                <li style="padding: 8px 12px; margin-bottom: 4px; border-radius: 6px; cursor: pointer; background: {activeSessionId === session.id ? 'var(--accent)' : 'transparent'}; color: {activeSessionId === session.id ? 'var(--bg)' : 'var(--fg)'};" on:click={() => attach(session.id)}>
                   <div style="font-weight: 500;">{session.name}</div>
                   <div style="font-size: 0.75rem; color: var(--fg-muted);">{session.id.slice(0, 12)}</div>
                   {#if session.agent}
@@ -231,7 +240,7 @@
             </ul>
           </aside>
 
-          <Terminal {activeSessionId} />
+          {#if connection}<Terminal {connection} {activeSessionId} />{/if}
         </div>
       {/if}
     </main>

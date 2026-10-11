@@ -15,7 +15,11 @@ use tower_http::trace::TraceLayer;
 use tracing::info;
 
 mod auth;
+#[cfg(test)]
+mod e2e;
+mod pty;
 mod sessions;
+mod tmux;
 mod websocket;
 
 use auth::AuthState;
@@ -116,13 +120,7 @@ async fn main() -> anyhow::Result<()> {
         server_name: args.server_name.clone(),
     };
 
-    // No credentials cross origins here: the WebSocket authenticates in its first message.
-    let app = Router::new()
-        .route("/health", get(|| async { "OK" }))
-        .route("/ws", get(ws_handler))
-        .layer(CorsLayer::permissive())
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
+    let app = router(state);
 
     let addr: SocketAddr = format!("{}:{}", args.host, args.port).parse()?;
     info!("Starting server on {}", addr);
@@ -131,6 +129,16 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+/// No credentials cross origins here: the WebSocket authenticates in its first message.
+fn router(state: AppState) -> Router {
+    Router::new()
+        .route("/health", get(|| async { "OK" }))
+        .route("/ws", get(ws_handler))
+        .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
 }
 
 async fn ws_handler(

@@ -1,6 +1,8 @@
 export type ClientMessage =
   | { type: 'auth'; token: string; server_token: string }
   | { type: 'list_sessions' }
+  | { type: 'new_session'; name: string }
+  | { type: 'ping' }
   | { type: 'attach'; session_id: string }
   | { type: 'input'; data: string }
   | { type: 'resize'; cols: number; rows: number };
@@ -11,7 +13,8 @@ export type ServerMessage =
   | { type: 'session_attached'; session_id: string }
   | { type: 'output'; data: string }
   | { type: 'agent_event'; event: AgentEventType; agent: string; session_id: string }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'pong' };
 
 export interface SessionInfo {
   id: string;

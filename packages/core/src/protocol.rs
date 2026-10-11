@@ -3,10 +3,12 @@ use std::fmt::Display;
 
 /// Client → Server (WebSocket)
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ClientMessage {
     Auth { token: String, server_token: String },
     ListSessions,
+    NewSession { name: String },
+    Ping,
     Attach { session_id: String },
     Input { data: String },
     Resize { cols: u16, rows: u16 },
@@ -14,7 +16,7 @@ pub enum ClientMessage {
 
 /// Server → Client (WebSocket)
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
     AuthOk {
         user: String,
@@ -37,6 +39,7 @@ pub enum ServerMessage {
     Error {
         message: String,
     },
+    Pong,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -67,6 +70,26 @@ impl Display for AgentEventType {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The browser client speaks these exact strings (packages/client/src/lib/protocol.ts).
+    #[test]
+    fn test_wire_names_match_the_client() {
+        let v = serde_json::to_value(ClientMessage::ListSessions).unwrap();
+        assert_eq!(v["type"], "list_sessions");
+        let v = serde_json::to_value(ServerMessage::AuthOk {
+            user: "u".into(),
+            server_name: "s".into(),
+        })
+        .unwrap();
+        assert_eq!(v["type"], "auth_ok");
+        let v = serde_json::to_value(ServerMessage::SessionAttached {
+            session_id: "x".into(),
+        })
+        .unwrap();
+        assert_eq!(v["type"], "session_attached");
+        let v = serde_json::to_value(ClientMessage::NewSession { name: "n".into() }).unwrap();
+        assert_eq!(v["type"], "new_session");
+    }
 
     #[test]
     fn test_client_message_roundtrip() {
