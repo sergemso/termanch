@@ -23,14 +23,20 @@ Plan step 8.7. Prototype: Rust `str0m` 0.24.1 server, one UDP port, no signaling
 - **Concurrency/memory** (debug build, 4 vCPU host): 40 simultaneous browser connections left server RSS unchanged at 17 MB (11.6 MB idle). Established connections cost well under 100 KB each.
 - **Half-open peers**: about 25 KB each (222 peers added about 5.5 MB). They were not removed after 25 s idle.
 
+## Real clients (tested from a home or office network behind NAT; both reports came from the same public IP)
+
+- **iOS Safari 18.3 (iPhone)**: connected with the rewritten ufrag/pwd; channel open 304 ms from page load, RTT median 30 ms; 1 KB, 16 KB (156 ms) and 64 KB (218 ms) messages echo; 200 KB times out.
+- **Chrome 155 on Windows**: channel open 280 ms, RTT median 27 ms, same size results.
+- So a client behind an ordinary NAT reaches the server's single UDP port with no hole-punching, STUN or TURN.
+- Larger messages take longer than the RTT suggests (16 KB in about 140-160 ms): the SCTP window is small. Terminal frames should stay small and bursts may need pacing.
+
 ## Abuse findings
 
 - STUN integrity uses the static server password, which is public by design, so anyone can create peers by sending binding requests. Required mitigations for the real server: a cap on half-open peers (about 256), expiry of peers that do not finish DTLS within about 10 s, a per-source-IP rate limit, and handling timeouts per peer instead of scanning all peers on every packet (the prototype loop is O(peers) per datagram).
 
 ## Still to do (pending, issue #30)
 
-- A phone on LTE and on Wi-Fi: iOS Safari, Chrome Android, Firefox. Firefox and WebKit could not run in this sandbox (missing system libraries) and were not installed.
-- Whether iOS Safari accepts the rewritten ufrag/pwd.
+- Cellular (carrier-grade NAT) with Wi-Fi off, on iOS and Android; Chrome Android, Firefox, and older iOS (16, 17). Firefox and WebKit could not run in this sandbox (missing system libraries) and were not installed.
 - Hetzner Cloud Firewall default (the host firewall was opened for UDP 40000 only for the test). Other providers' defaults: not researched.
 - NAT-mapped public IPs on AWS/GCP/Oracle: not tested; this host has a direct public address.
 - Networks that block UDP: not tested.
