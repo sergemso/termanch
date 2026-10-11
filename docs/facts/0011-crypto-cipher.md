@@ -23,3 +23,5 @@ date: 2026-10-09
 - Output: 32-byte encryption key + 32-byte authentication key (for HMAC if needed)
 
 **Rekey**: Triggered at 1GB encrypted or 1 hour elapsed. New ECDH exchange, seamless key rotation (overlap window for in-flight packets).
+
+> Correction (0016): ChaCha20-Poly1305 is not in Web Crypto; it needs a JS/WASM implementation. Deferred under DECISION-0051.

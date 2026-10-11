@@ -9,7 +9,7 @@
 
 ---
 
-### 1.1 Verify browser-capability assumptions — [ ]
+### 1.1 Verify browser-capability assumptions — [x]
 Issue: #13
 Class: explore · Needs: none · Check: `test -s docs/facts/0016-browser-capabilities.md`
 Context: Deferred designs (0051) and the mobile bar rest on claims never verified. Record what is true today, with sources.

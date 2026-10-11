@@ -17,5 +17,6 @@
 | 0013 | Project License | license, legal, mit | active |
 | 0014 | Terminal Emulation Library | terminal, vte, wasm, emulation | deferred |
 | 0015 | User-Managed Cloudflare Tunnel | deployment, networking, cloudflare | active |
+| 0016 | Browser Capabilities Relevant to Termanch | client, browser-support, ios, pwa, crypto | active |
 
 <!-- bootstrap-generated: true -->

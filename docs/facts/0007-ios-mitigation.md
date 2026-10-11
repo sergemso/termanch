@@ -26,3 +26,5 @@ date: 2026-10-09
 5. **Page Visibility API**: Pause rendering when hidden; resume on visible.
 
 6. **Badge API**: Update app badge with unread agent notifications.
+
+> Correction (0016): Background Fetch is unsupported on iOS and silent push is not available; Web Push works only for installed PWAs. Deferred under DECISION-0051.

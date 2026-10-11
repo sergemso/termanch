@@ -14,3 +14,5 @@ date: 2026-10-09
 - **Safari macOS**: 16+ (WebTransport experimental)
 
 WebTransport fallback to WebSocket ensures functional baseline on all targets.
+
+> Correction (0016): WebTransport availability by Safari version is unverified; WebSocket is the baseline.
