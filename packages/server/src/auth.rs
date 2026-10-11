@@ -253,13 +253,23 @@ pub fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// The link printed by `--register`: the hosted client reads `#add=` from the fragment, which never reaches a server.
-pub fn registration_link(client_url: &str, server_url: &str, name: &str, claim: &str) -> String {
-    let payload = serde_json::json!({ "u": server_url, "t": claim, "n": name });
-    format!(
-        "{}/#add={}",
-        client_url.trim_end_matches('/'),
-        URL_SAFE_NO_PAD.encode(payload.to_string())
+/// What `--register` shows (as text and as a QR): opening it, with the camera app or by scanning in the
+/// client, starts Add Server with this secret. The fragment never reaches any server.
+pub fn claim_link(client_url: &str, claim: &str) -> String {
+    format!("{}/#claim={}", client_url.trim_end_matches('/'), claim)
+}
+
+/// The same link as a terminal QR code: modules drawn light-on-dark for dark terminals; the client's
+/// decoder tries both polarities.
+pub fn claim_qr(link: &str) -> Option<String> {
+    use qrcode::render::unicode::Dense1x2;
+    let code = qrcode::QrCode::new(link.as_bytes()).ok()?;
+    Some(
+        code.render::<Dense1x2>()
+            .dark_color(Dense1x2::Light)
+            .light_color(Dense1x2::Dark)
+            .quiet_zone(true)
+            .build(),
     )
 }
 
@@ -365,20 +375,20 @@ mod tests {
     }
 
     #[test]
-    fn registration_link_carries_url_token_and_name_in_the_fragment() {
-        let link = registration_link(
-            "https://app.example.dev/",
-            "https://s.example.dev",
-            "vps",
-            "tok",
+    fn the_claim_link_carries_only_the_secret_in_the_fragment() {
+        assert_eq!(
+            claim_link("https://app.example.dev/", "tok"),
+            "https://app.example.dev/#claim=tok"
         );
-        let (base, frag) = link.split_once("/#add=").unwrap();
-        assert_eq!(base, "https://app.example.dev");
-        let json: serde_json::Value =
-            serde_json::from_slice(&URL_SAFE_NO_PAD.decode(frag).unwrap()).unwrap();
-        assert_eq!(json["u"], "https://s.example.dev");
-        assert_eq!(json["t"], "tok");
-        assert_eq!(json["n"], "vps");
+    }
+
+    #[test]
+    fn the_qr_encodes_the_link_and_fits_a_terminal() {
+        let link = claim_link("https://app.termanch.dev", &"A".repeat(43));
+        let qr = claim_qr(&link).unwrap();
+        let widest = qr.lines().map(|l| l.chars().count()).max().unwrap();
+        assert!(widest <= 60, "QR is {widest} columns wide");
+        assert!(qr.lines().count() <= 32);
     }
 
     async fn mock_github() -> String {

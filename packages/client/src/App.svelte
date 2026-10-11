@@ -5,7 +5,7 @@
   import AddServerModal from './AddServerModal.svelte';
   import Toast from './Toast.svelte';
   import type { ServerMessage, SessionInfo, ServerListItem } from './lib/protocol';
-  import { parseAddFragment } from './lib/servers';
+  import { parseClaim } from './lib/onboard';
   import { Connection, type ConnState } from './lib/connection';
   import { lookup, type DirRecord } from './lib/directory';
 
@@ -19,7 +19,7 @@
   let connState: ConnState = 'closed';
   let connDetail = '';
   let showAddServer = false;
-  let addPrefill: Pick<ServerListItem, 'server_url' | 'server_name' | 'claim'> | null = null;
+  let addPrefill: string | null = null;
   let toast: { message: string; type: 'success' | 'error' } | null = null;
 
   const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID || '';
@@ -191,10 +191,10 @@
   }
 
   onMount(async () => {
-    // A registration link (#add=...) is remembered across the GitHub login redirect.
-    const fromLink = parseAddFragment(window.location.hash);
-    if (fromLink) {
-      sessionStorage.setItem('termanch_pending_add', JSON.stringify(fromLink));
+    // A claim link (#claim=...), from a QR opened in the camera app, is kept across the GitHub login redirect.
+    const claim = parseClaim(window.location.hash);
+    if (claim) {
+      sessionStorage.setItem('termanch_pending_claim', claim);
       window.history.replaceState({}, '', window.location.pathname);
     }
 
@@ -204,10 +204,10 @@
     if (!authed) return;
 
     loadServers();
-    const pending = sessionStorage.getItem('termanch_pending_add');
+    const pending = sessionStorage.getItem('termanch_pending_claim');
     if (pending) {
-      sessionStorage.removeItem('termanch_pending_add');
-      addPrefill = JSON.parse(pending);
+      sessionStorage.removeItem('termanch_pending_claim');
+      addPrefill = pending;
       showAddServer = true;
     }
   });
@@ -271,7 +271,7 @@
   {/if}
 
   {#if showAddServer}
-    <AddServerModal prefill={addPrefill} onclose={() => showAddServer = false} onadd={(server) => { addServer(server); showAddServer = false; connectToServer(server); }} />
+    <AddServerModal origin={location.origin} prefillSecret={addPrefill} onclose={() => showAddServer = false} onadd={(server) => { addServer(server); showAddServer = false; connectToServer(server); }} />
   {/if}
 
   {#if toast}

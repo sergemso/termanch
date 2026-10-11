@@ -52,10 +52,6 @@ struct Args {
     #[arg(long, env = "TERMANCH_SERVER_NAME", default_value = "termanch-server")]
     server_name: String,
 
-    /// Public URL of this server (the tunnel address), put into the registration link.
-    #[arg(long, env = "TERMANCH_PUBLIC_URL")]
-    public_url: Option<String>,
-
     /// Client that opens the registration link.
     #[arg(
         long,
@@ -143,6 +139,7 @@ fn build_backend(args: &Args) -> anyhow::Result<Arc<dyn SessionBackend>> {
 }
 
 fn print_registration(args: &Args, auth: &AuthState) -> anyhow::Result<()> {
+    use std::io::IsTerminal;
     if let Some(owner) = auth.owner() {
         println!("This server is already registered to @{}.", owner.login);
         return Ok(());
@@ -150,18 +147,16 @@ fn print_registration(args: &Args, auth: &AuthState) -> anyhow::Result<()> {
     let claim = auth
         .claim_token()?
         .ok_or_else(|| anyhow::anyhow!("no claim token"))?;
-    let url = args
-        .public_url
-        .clone()
-        .unwrap_or_else(|| "https://YOUR-TUNNEL-URL".into());
-    let link = auth::registration_link(&args.client_url, &url, &args.server_name, &claim);
-    println!("Open this link in the browser where you are logged in to Termanch:\n\n  {link}\n");
-    println!(
-        "The first GitHub user to connect with it becomes the owner; the link then stops working."
-    );
-    if args.public_url.is_none() {
-        println!("Set TERMANCH_PUBLIC_URL to your tunnel URL so the link fills it in for you.");
+    let link = auth::claim_link(&args.client_url, &claim);
+    if std::io::stdout().is_terminal() {
+        if let Some(qr) = auth::claim_qr(&link) {
+            println!("{qr}");
+        }
     }
+    println!("Scan the code with Termanch (or your phone's camera), or open:\n\n  {link}\n");
+    println!(
+        "The first GitHub user to connect becomes the owner. The code works for 15 minutes, once."
+    );
     Ok(())
 }
 
@@ -172,7 +167,14 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
-    let auth = Arc::new(AuthState::new(args.config_dir.clone())?);
+    // Development only: point GitHub identity checks at a stand-in (used by the end-to-end tests).
+    let github_api = (args.dev_info == "on")
+        .then(|| std::env::var("TERMANCH_GITHUB_API").ok())
+        .flatten();
+    let auth = Arc::new(match github_api {
+        Some(api) => AuthState::with_api(args.config_dir.clone(), api)?,
+        None => AuthState::new(args.config_dir.clone())?,
+    });
 
     if args.register {
         return print_registration(&args, &auth);

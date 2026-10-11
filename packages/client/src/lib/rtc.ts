@@ -8,6 +8,8 @@ import type { Transport } from './transport';
 export const SERVER_UFRAG = 'termanch';
 export const SERVER_PWD = 'termanch-direct-v1-0123456789';
 export const CHANNEL_ID = 0;
+/** How long an ICE 'disconnected' may last before the connection counts as dropped. */
+export const DISCONNECT_GRACE_MS = 3000;
 
 export function randomUfrag(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -49,12 +51,18 @@ class RtcTransport implements Transport {
   onmessage: ((text: string) => void) | null = null;
   onclose: (() => void) | null = null;
   private closed = false;
+  private dropTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private pc: RTCPeerConnection, private dc: RTCDataChannel) {
     dc.onmessage = (e) => typeof e.data === 'string' && this.onmessage?.(e.data);
     dc.onclose = () => this.finish();
     pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'closed') this.finish();
+      const state = pc.iceConnectionState;
+      if (state === 'failed' || state === 'closed') this.finish();
+      // Browsers report 'disconnected' about 5 s after the peer stops answering consent checks and only
+      // 'failed' after about 30 s. Give a brief network switch a moment to recover, then treat it as a drop.
+      if (this.dropTimer) clearTimeout(this.dropTimer);
+      this.dropTimer = state === 'disconnected' ? setTimeout(() => this.finish(), DISCONNECT_GRACE_MS) : null;
     };
   }
 
@@ -70,6 +78,7 @@ class RtcTransport implements Transport {
   private finish() {
     if (this.closed) return;
     this.closed = true;
+    if (this.dropTimer) clearTimeout(this.dropTimer);
     this.pc.close();
     this.onclose?.();
   }

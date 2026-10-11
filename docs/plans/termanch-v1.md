@@ -186,14 +186,15 @@ Done-when: killing the tunnel yields a new URL announced within 30s without huma
 
 ### 8.4 Client: one-step Add Server and auto-reconnect via directory — [ ]
 Issue: #27
-Class: implement · Needs: 8.2, 2.2 · Check: `pnpm --filter termanch-client test`
+Class: implement · Needs: 8.2, 2.2 · Check: `cd packages/client && ./node_modules/.bin/vitest run`
 Context: Replaces the manual URL/link modal.
 Do:
 1. Add Server, flow A: generate the claim secret (expires in 15 minutes, single use), show the single install command with a copy button, poll `pending` until the server announces; verify the HMAC; pin the server key; add the server.
 1b. Flow B: a Scan button decodes the installer's QR from the live camera or from a picked screenshot (small JS decoder; try inverted images); same pending/verify/pin path. Tell the user to delete the screenshot.
 2. On connect failure, look up the server by id, verify the signature against the pinned key, and reconnect to the new address or fingerprint (feeds the 2.2 backoff loop). Pluggable transport inside `Connection`: webrtc-direct first (8.9), WebSocket to `ws_url` as fallback.
-3. Remove manual URL fields and the `#add=` link path.
-Done-when: restarting the VPS tunnel is invisible to a logged-in client apart from a short reconnect.
+3. The `#add=` link path is gone; a claim link is `<client>/#claim=<secret>` (QR or typed). The manual tunnel URL stays under "Advanced" for users who bring their own endpoint.
+4. Known gap, for 8.5: re-adding a server that already has an owner (new phone, cleared storage) needs the installer to accept a fresh secret as proof of root on the VPS and re-bind the owner; today a claimed server ignores new secrets.
+Done-when: restarting the server is invisible to a logged-in client apart from a short reconnect (measured: back in about 8 s; worst case = heartbeat 5 s + 3 s).
 
 ---
 

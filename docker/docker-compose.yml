@@ -10,7 +10,6 @@ services:
     environment:
       - TERMANCH_HOST=0.0.0.0
       - TERMANCH_PORT=8080
-      - TERMANCH_PUBLIC_URL=${TERMANCH_PUBLIC_URL:-}
       - TERMANCH_CLIENT_URL=${TERMANCH_CLIENT_URL:-https://app.termanch.dev}
       - TERMANCH_SERVER_NAME=${SERVER_NAME:-termanch-server}
     volumes:

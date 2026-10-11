@@ -176,7 +176,6 @@ cd termanch/docker
 ```bash
 cat > .env <<EOF
 TERMANCH_SERVER_NAME=my-vps
-TERMANCH_PUBLIC_URL=https://<your tunnel hostname>
 # Self-hosted client only: TERMANCH_CLIENT_URL=https://app.<yourdomain>
 # For quick testing (ephemeral URL):
 # CLOUDFLARE_TUNNEL_TOKEN=
@@ -195,14 +194,15 @@ docker compose ps
 docker compose logs -f termanch-server
 ```
 
-### 4.4 Get the registration link
+### 4.4 Add the server
 
 ```bash
-docker compose exec termanch-server termanch-server --register
+docker compose exec -t termanch-server termanch-server --register
 ```
 
-Open the printed link in the browser where you are logged in to Termanch. The first GitHub user
-to connect with it becomes the server's owner; the link then stops working and anyone else is rejected.
+It prints a QR code and a link. In Termanch choose Add Server → Scan a QR (camera, or a screenshot of the
+code), or open the link. The server appears by itself; the first GitHub user to connect becomes its owner,
+the code works for 15 minutes and once, and anyone else is rejected.
 
 ---
 

@@ -6,8 +6,8 @@ import { openWs } from './ws';
 export type ConnState = 'connecting' | 'connected' | 'reconnecting' | 'unreachable' | 'closed';
 
 const BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 30000];
-const PING_EVERY_MS = 15000;
-const PONG_WITHIN_MS = 10000;
+const PING_EVERY_MS = 5000;
+const PONG_WITHIN_MS = 3000;
 
 /** 1s, 2s, 4s, 8s, 16s, then 30s; +0..25% jitter so many tabs do not reconnect in lockstep. */
 export function backoffDelay(attempt: number, random = Math.random): number {

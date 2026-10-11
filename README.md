@@ -67,15 +67,15 @@ git clone https://github.com/sergemso/termanch
 cd termanch/docker
 cat > .env <<EOF
 TERMANCH_SERVER_NAME=my-vps
-TERMANCH_PUBLIC_URL=https://<your tunnel hostname>
 # TERMANCH_CLIENT_URL=https://app.<yourdomain>   # only for a self-hosted client
 EOF
 
 docker compose up -d
 
-# Register: print the link, open it in the browser where you are logged in.
-# The first GitHub user to connect with it becomes the server's owner.
-docker compose exec termanch-server termanch-server --register
+# Register: shows a QR code and a link. Scan the QR with Termanch (or your phone's camera),
+# or open the link in the browser where you are logged in. The first GitHub user to connect
+# becomes the server's owner; the code works for 15 minutes, once.
+docker compose exec -t termanch-server termanch-server --register
 ```
 
 ## Development
@@ -147,7 +147,6 @@ Direction and steps: [docs/plans/termanch-v1.md](docs/plans/termanch-v1.md) (tra
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `TERMANCH_PUBLIC_URL` | Recommended | Tunnel URL, written into the registration link |
 | `TERMANCH_CLIENT_URL` | No | Client that opens the link (default: https://app.termanch.dev) |
 | `TERMANCH_BACKEND` | No | `tmux` (default) or `command` (see Session backends) |
 | `TERMANCH_UDP_PORT` | No | UDP port of the WebRTC-direct transport (default 4443; open it in the firewall) |

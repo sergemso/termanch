@@ -12,7 +12,7 @@ use crate::backend::SessionBackend;
 use crate::link::{Link, LinkTx};
 use crate::pty::Attachment;
 
-/// Clients ping every 15 s, so a minute of silence means the peer is gone.
+/// Clients ping every 5 s, so a minute of silence means the peer is gone.
 const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Serves one authenticated WebSocket: lists/creates tmux sessions and bridges one attached session.

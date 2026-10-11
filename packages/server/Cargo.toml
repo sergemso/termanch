@@ -24,6 +24,7 @@ portable-pty = { workspace = true }
 str0m = "0.24.1"
 sha2 = { workspace = true }
 hmac = { workspace = true }
+qrcode = { version = "0.14", default-features = false }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 
 [dev-dependencies]
