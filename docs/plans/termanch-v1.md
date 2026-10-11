@@ -96,11 +96,11 @@ Done-when: running `claude` or `codex` in a tmux pane shows spawn and completion
 
 ### 5.1 Container and one-command deploy — [ ]
 Issue: #20
-Class: implement · Needs: 2.1, 4.1 · Check: `docker compose -f docker/docker-compose.yml config`
+Class: implement · Needs: 2.1, 4.1, 8.5 · Check: `docker compose -f docker/docker-compose.yml config`
 Context: Hosted-mode bar is ≤2 user actions after the VPS exists (bootstrap-simplicity, scoped by 0052).
 Do:
 1. Server image with tmux (target <150MB), cloudflared sidecar, trycloudflare default, named tunnel optional; no inline config edits.
-2. `get` script / compose-URL flow that prints the QR/registration code in the logs.
+2. Installer and compose come from step 8.5; nothing is printed for the user to copy.
 3. CI builds and pushes the image (builds run in CI only).
 4. Document the self-hosted client path (Terraform/Pages/OAuth app) separately.
 Done-when: fresh 512MB VPS reaches a working terminal following the README only; image size and idle RSS are reported by CI.
@@ -142,6 +142,79 @@ Done-when: the decision is accepted and the backend passes the shared backend co
 
 ---
 
+### 8.1 Verify tunnel and directory assumptions — [ ]
+Issue: #24
+Class: explore · Needs: none · Check: `test -s docs/facts/0018-connectivity-limits.md`
+Context: DECISION-0056 rests on unverified limits. Also covers the optional "Connect Cloudflare" flow.
+Do:
+1. Quick tunnels: do WebSockets work and stay up for hours; request/connection limits; ToS for non-HTML traffic; how `cloudflared` exposes the URL (metrics endpoint or log) so the server can read it.
+2. Free-tier budget for 10^5 users: D1 writes/reads, Pages Functions requests, announce frequency (one write per tunnel restart).
+3. Cloudflare OAuth: can a self-managed client's scopes create tunnels and DNS records in the user's account; is a verified client domain needed.
+4. Quick tunnel vs named tunnel behaviour on VPS reboot and cloudflared crash.
+Done-when: each item has a verdict and source in the fact; unsupported assumptions are written back into DECISION-0056.
+
+---
+
+### 8.2 Signed directory service — [ ]
+Issue: #25
+Class: implement · Needs: 8.1, 2.1 · Check: `pnpm --filter termanch-client test`
+Context: Pages Functions + D1 under `packages/client/functions/api/directory/`; deployable by self-hosters with their client.
+Do:
+1. `POST /api/directory/announce {server_id (ed25519 pubkey), url, seq, proof_hash, sig}`: verify signature, reject stale `seq`, rate-limit per id, store.
+2. `GET /api/directory/lookup?id=` returns the signed record; `GET /api/directory/pending?h=<hash of claim secret>` returns a first announcement made with that secret.
+3. Records expire (e.g. 30 days idle); caps on URL length and format (https only, trycloudflare or allow-listed pattern).
+4. Tests: bad signature, replayed seq, oversized input, expiry.
+Done-when: a forged or replayed announcement is rejected; a valid one is served unchanged.
+
+---
+
+### 8.3 Server: managed quick tunnel and announce — [ ]
+Issue: #26
+Class: implement · Needs: 8.1, 8.2 · Check: `cargo test -p termanch-server`
+Context: The server supervises `cloudflared`, learns the URL, and announces it; nobody prints or types URLs.
+Do:
+1. Persistent ed25519 identity in the config dir (0600).
+2. Supervisor: start `cloudflared tunnel --url`, parse the URL, restart with backoff when it exits, re-announce on every URL change (signed, increasing `seq`).
+3. First announce carries `HMAC(claim secret, url|seq)` and `hash(claim secret)`; the claim secret comes from the install command, not from stdout.
+4. Remove `--register` printing; keep an explicit `TERMANCH_TUNNEL=off` for users with their own TLS endpoint.
+5. Tests with a fake `cloudflared` script and a fake directory.
+Done-when: killing the tunnel yields a new URL announced within 30s without human input.
+
+---
+
+### 8.4 Client: one-step Add Server and auto-reconnect via directory — [ ]
+Issue: #27
+Class: implement · Needs: 8.2, 2.2 · Check: `pnpm --filter termanch-client test`
+Context: Replaces the manual URL/link modal.
+Do:
+1. Add Server: generate the claim secret, show the single install command with a copy button, poll `pending` until the server announces; verify the HMAC; pin the server key; add the server.
+2. On connect failure, look up the server by id, verify the signature against the pinned key, and reconnect to the new URL (feeds the 2.2 backoff loop).
+3. Remove manual URL fields and the `#add=` link path.
+Done-when: restarting the VPS tunnel is invisible to a logged-in client apart from a short reconnect.
+
+---
+
+### 8.5 One-command installer — [ ]
+Issue: #28
+Class: implement · Needs: 8.3 · Check: `sh -n packages/client/public/install.sh`
+Context: Served from the client origin as `/install.sh` (hosted and self-hosted).
+Do:
+1. Non-interactive POSIX script taking the claim secret and the directory origin: installs Docker if missing, writes the compose file, starts server + bundled `cloudflared`, restarts on reboot.
+2. Idempotent; refuses to run if a different owner is already bound; no prompts, no output the user must act on.
+3. Fresh-VPS test in CI where feasible (container), manual on a real 512MB VPS.
+Done-when: pasting the command on a fresh VPS results in a connected server in the client, with no further input.
+
+---
+
+### 8.6 Optional: Connect Cloudflare for stable tunnels — [ ]
+Issue: #29
+Class: plan · Needs: 8.1 · Check: `test -s docs/decisions/0057-connect-cloudflare.md`
+Context: For users who do have a domain or want a stable URL; only if 8.1 shows OAuth scopes allow it.
+Do: decide go/no-go; if go, design OAuth consent, tunnel + DNS creation in the user's account, token handoff via the install command.
+Done-when: decision recorded either way.
+
+---
+
 ## Dependency Graph
 ```
 1.1 ─────────┬──────────────► 3.1 ► 3.2
@@ -151,7 +224,7 @@ Done-when: the decision is accepted and the backend passes the shared backend co
 ```
 Parallelizable after 1.2: 2.1 ‖ 2.2; after 2.2: 3.1 ‖ 4.1.
 
-Parallel with 7.x: backends are independent of 3.x/4.x.
+Parallel with 7.x and 8.x: backends are independent of 3.x/4.x.
 
 ## Backlog (deferred; each needs a new decision to start)
 WebTransport transport; WASM core + SSP/CRDT predictive echo; SSH-agent/WebAuthn auth; app-layer E2E encryption; diff viewer, preview, chat view; shell-hook installer; multi-user servers; Herdr-specific protocol; GitHub-Gist server-list sync.

@@ -58,3 +58,4 @@
 0052-both-hosting-modes,"Hosted client and self-hosted client are both supported","deployment, roadmap",active
 0053-single-owner-servers,"A server belongs to one GitHub user","security, auth, roadmap",active
 0054-session-backends,"The server owns sessions through a pluggable backend","architecture, sessions, agents",active
+0056-automatic-connectivity,"Servers reach the client automatically through a signed directory and quick tunnels","deployment, networking, security, roadmap",active

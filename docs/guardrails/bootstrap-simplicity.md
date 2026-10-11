@@ -43,3 +43,6 @@ User onboarding from zero to working terminal **MUST** complete in ≤ 2 user-in
 - **Termanch pays**: Cloudflare Pages free tier. GitHub OAuth free. No per-user cost.
 ## Scope (0052)
 The two-click bound applies to the Termanch-hosted client mode. The self-hosted client mode (own domain, Pages, OAuth app, Terraform) is exempt but must be documented as a separate path.
+
+## Scope (0056)
+The irreducible human step is pasting one client-generated command on the VPS. It must contain everything needed (secret included); the user never copies a URL, a token shown separately, or a link between terminal and browser. Nothing is printed for the user to act on.
