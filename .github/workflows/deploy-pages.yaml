@@ -36,8 +36,35 @@ jobs:
       - name: Install Wrangler
         run: npm install -g wrangler
 
+      # Pages Functions are read from ./functions of the directory wrangler runs in, so deploy from the
+      # client package. The directory's D1 binding is written here so each deployment (hosted or
+      # self-hosted) points at its own database.
+      - name: Configure Pages project
+        working-directory: packages/client
+        run: |
+          cat > wrangler.toml <<EOF
+          name = "${{ vars.TERMANCH_PAGES_PROJECT_NAME || 'termanch' }}"
+          pages_build_output_dir = "dist"
+          compatibility_date = "2026-10-01"
+
+          [[d1_databases]]
+          binding = "DB"
+          database_name = "termanch-directory"
+          database_id = "${{ vars.TERMANCH_D1_DATABASE_ID }}"
+          migrations_dir = "migrations"
+          EOF
+
+      - name: Apply directory migrations
+        if: ${{ vars.TERMANCH_D1_DATABASE_ID != '' }}
+        working-directory: packages/client
+        run: wrangler d1 migrations apply termanch-directory --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Deploy to Cloudflare Pages
-        run: wrangler pages deploy packages/client/dist --project-name=${{ vars.TERMANCH_PAGES_PROJECT_NAME || 'termanch' }} --branch=master
+        working-directory: packages/client
+        run: wrangler pages deploy dist --project-name=${{ vars.TERMANCH_PAGES_PROJECT_NAME || 'termanch' }} --branch=master
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

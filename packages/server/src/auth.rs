@@ -11,6 +11,8 @@ use tracing::{info, warn};
 
 const GITHUB_API: &str = "https://api.github.com";
 const IDENTITY_TTL: Duration = Duration::from_secs(60);
+/// A claim secret works for this long after it is issued, then once only.
+const CLAIM_TTL: Duration = Duration::from_secs(15 * 60);
 
 /// A GitHub user, as reported by GitHub for an access token.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,6 +40,7 @@ pub struct AuthState {
     cache: Mutex<HashMap<String, (Identity, Instant)>>,
     // Serialises owner binding so two clients cannot both claim.
     bind_lock: Mutex<()>,
+    claim_ttl: Duration,
 }
 
 impl AuthState {
@@ -56,6 +59,7 @@ impl AuthState {
             dir,
             cache: Mutex::new(HashMap::new()),
             bind_lock: Mutex::new(()),
+            claim_ttl: CLAIM_TTL,
         })
     }
 
@@ -72,21 +76,57 @@ impl AuthState {
         serde_json::from_str(&text).ok()
     }
 
-    /// Returns the claim token of an unclaimed server, creating it if needed. `None` once claimed.
+    #[cfg(test)]
+    pub fn set_claim_ttl(&mut self, ttl: Duration) {
+        self.claim_ttl = ttl;
+    }
+
+    fn now_ms() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
+    }
+
+    /// The unexpired claim secret, if the server is unclaimed. Stored as `secret\nexpires_ms`.
+    pub fn active_claim(&self) -> Option<String> {
+        if self.owner().is_some() {
+            return None;
+        }
+        let text = std::fs::read_to_string(self.claim_path()).ok()?;
+        let (secret, expires) = text.split_once('\n')?;
+        let expires: u64 = expires.trim().parse().ok()?;
+        (!secret.is_empty() && Self::now_ms() < expires).then(|| secret.to_string())
+    }
+
+    fn store_claim(&self, secret: &str) -> Result<()> {
+        let expires = Self::now_ms() + self.claim_ttl.as_millis() as u64;
+        write_private(
+            &self.claim_path(),
+            format!("{secret}\n{expires}").as_bytes(),
+        )
+    }
+
+    /// Uses a secret chosen by the client (from the install command) as the claim token.
+    pub fn provide_claim(&self, secret: &str) -> Result<()> {
+        if self.owner().is_none() && !secret.is_empty() {
+            self.store_claim(secret)?;
+        }
+        Ok(())
+    }
+
+    /// The claim token of an unclaimed server, made fresh when none is valid. `None` once claimed.
     pub fn claim_token(&self) -> Result<Option<String>> {
         if self.owner().is_some() {
             return Ok(None);
         }
-        if let Ok(existing) = std::fs::read_to_string(self.claim_path()) {
-            let existing = existing.trim().to_string();
-            if !existing.is_empty() {
-                return Ok(Some(existing));
-            }
+        if let Some(secret) = self.active_claim() {
+            return Ok(Some(secret));
         }
         let mut bytes = [0u8; 32];
         rand::thread_rng().fill_bytes(&mut bytes);
         let token = URL_SAFE_NO_PAD.encode(bytes);
-        write_private(&self.claim_path(), token.as_bytes())?;
+        self.store_claim(&token)?;
         Ok(Some(token))
     }
 
@@ -201,7 +241,7 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
-fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
+pub fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
     use std::io::Write;
     #[cfg(unix)]
     use std::os::unix::fs::OpenOptionsExt;
@@ -278,6 +318,33 @@ mod tests {
             Decision::NeedsClaim
         );
         assert!(a.owner().is_none());
+    }
+
+    #[test]
+    fn a_client_supplied_secret_claims_the_server_until_it_expires() {
+        let mut a = auth();
+        a.provide_claim("from-the-install-command").unwrap();
+        assert_eq!(
+            a.active_claim().as_deref(),
+            Some("from-the-install-command")
+        );
+        assert_eq!(
+            a.authorize(&id(1), Some("from-the-install-command"))
+                .unwrap(),
+            Decision::Allowed
+        );
+        assert!(a.active_claim().is_none(), "spent");
+
+        let mut b = auth();
+        b.set_claim_ttl(Duration::from_millis(1));
+        b.provide_claim("late").unwrap();
+        std::thread::sleep(Duration::from_millis(5));
+        assert!(b.active_claim().is_none());
+        assert_eq!(
+            b.authorize(&id(1), Some("late")).unwrap(),
+            Decision::NeedsClaim,
+            "expired secrets are refused"
+        );
     }
 
     #[test]

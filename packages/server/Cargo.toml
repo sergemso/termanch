@@ -23,6 +23,8 @@ reqwest = { workspace = true }
 portable-pty = { workspace = true }
 str0m = "0.24.1"
 sha2 = { workspace = true }
+hmac = { workspace = true }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
 
 [dev-dependencies]
 tokio-tungstenite = "0.21"

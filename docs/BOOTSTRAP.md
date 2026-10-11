@@ -132,7 +132,18 @@ terraform apply
 
 ---
 
-## 3. Set the Pages Function secrets
+## 3. Create the directory database and set the Pages Function secrets
+
+The client's Pages project also hosts the signed server directory (DECISION-0056), which needs a D1 database.
+Your API token needs the D1 Edit permission.
+
+```bash
+wrangler d1 create termanch-directory          # note the database_id
+# GitHub repo variable read by the deploy workflow:
+gh variable set TERMANCH_D1_DATABASE_ID --body <database_id>
+```
+
+The deploy workflow applies `packages/client/migrations/` for you.
 
 The client's Pages Function exchanges the GitHub login code, so it needs the OAuth app credentials.
 The servers need no secrets.
