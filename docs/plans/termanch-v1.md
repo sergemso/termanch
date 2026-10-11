@@ -184,7 +184,7 @@ Done-when: killing the tunnel yields a new URL announced within 30s without huma
 
 ---
 
-### 8.4 Client: one-step Add Server and auto-reconnect via directory — [ ]
+### 8.4 Client: one-step Add Server and auto-reconnect via directory — [x]
 Issue: #27
 Class: implement · Needs: 8.2, 2.2 · Check: `cd packages/client && ./node_modules/.bin/vitest run`
 Context: Replaces the manual URL/link modal.
