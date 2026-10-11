@@ -218,7 +218,7 @@ Done-when: decision recorded either way.
 
 ---
 
-### 8.7 Prototype WebRTC direct — [ ]
+### 8.7 Prototype WebRTC direct — [x]
 Issue: #30
 Class: explore · Needs: 8.1 · Check: `test -s docs/facts/0021-webrtc-direct.md`
 Context: DECISION-0057. No hole-punching, STUN, TURN or signaling: server public IP + one UDP port + fixed DTLS certificate; the client builds the remote description itself.

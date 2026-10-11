@@ -8,7 +8,7 @@ date: 2026-10-11
 
 # WebRTC Direct Prototype Results
 
-Plan step 8.7. Prototype: Rust `str0m` 0.24.1 server, one UDP port, no signaling, no STUN/TURN; a plain HTML page as client. Run on a Hetzner Cloud VPS whose public IP is on `eth0` (no NAT). Items marked "pending" need a real phone and are open on issue #30.
+Plan step 8.7. Prototype: Rust `str0m` 0.24.1 server, one UDP port, no signaling, no STUN/TURN; a plain HTML page as client. Run on a Hetzner Cloud VPS whose public IP is on `eth0` (no NAT). Closed by issue #30 with the open items listed at the end.
 
 ## What works (tested)
 
@@ -27,6 +27,8 @@ Plan step 8.7. Prototype: Rust `str0m` 0.24.1 server, one UDP port, no signaling
 
 - **iOS Safari 18.3 (iPhone)**: connected with the rewritten ufrag/pwd; channel open 304 ms from page load, RTT median 30 ms; 1 KB, 16 KB (156 ms) and 64 KB (218 ms) messages echo; 200 KB times out.
 - **Chrome 155 on Windows**: channel open 280 ms, RTT median 27 ms, same size results.
+- **Chrome 154 on Android 10, Wi-Fi**: channel open 669 ms, RTT median 29 ms, 64 KB in 208 ms.
+- **Chrome 154 on Android 10, LTE (different public IP, carrier network)**: connected with no hole-punching; channel open 747 ms, RTT median 65 ms (max 1,106 ms), 1 KB in 92 ms, 16 KB in 694 ms, 64 KB in 2.5 s, 200 KB fails. Cellular jitter is large and bulk transfer is slow, so large output bursts need pacing and the client needs a connection-quality indicator.
 - So a client behind an ordinary NAT reaches the server's single UDP port with no hole-punching, STUN or TURN.
 - Larger messages take longer than the RTT suggests (16 KB in about 140-160 ms): the SCTP window is small. Terminal frames should stay small and bursts may need pacing.
 
@@ -36,7 +38,7 @@ Plan step 8.7. Prototype: Rust `str0m` 0.24.1 server, one UDP port, no signaling
 
 ## Still to do (pending, issue #30)
 
-- Cellular (carrier-grade NAT) with Wi-Fi off, on iOS and Android; Chrome Android, Firefox, and older iOS (16, 17). Firefox and WebKit could not run in this sandbox (missing system libraries) and were not installed.
+- iOS on cellular, Firefox, and older iOS (16, 17). Android Chrome on LTE passed. Firefox and WebKit could not run in this sandbox (missing system libraries) and were not installed.
 - Hetzner Cloud Firewall default (the host firewall was opened for UDP 40000 only for the test). Other providers' defaults: not researched.
 - NAT-mapped public IPs on AWS/GCP/Oracle: not tested; this host has a direct public address.
 - Networks that block UDP: not tested.
