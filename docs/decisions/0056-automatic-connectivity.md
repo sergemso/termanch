@@ -9,6 +9,8 @@ accepted-by: Sergey Strebulaev <s@vivantel.dev>
 supersedes: [0013]
 ---
 
+> Update: the transport default (quick tunnel) is superseded by 0057 (WebRTC direct). The directory, the signed record (now IP, UDP port, fingerprint) and onboarding flows A and B stay.
+
 ## Decision
 
 Regular users have no domain and no Cloudflare account, so connectivity is automatic and user-owned:

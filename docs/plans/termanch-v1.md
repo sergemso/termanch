@@ -158,20 +158,20 @@ Done-when: each item has a verdict and source in the fact; unsupported assumptio
 ### 8.2 Signed directory service — [ ]
 Issue: #25
 Class: implement · Needs: 8.1, 2.1 · Check: `pnpm --filter termanch-client test`
-Context: Pages Functions + D1 under `packages/client/functions/api/directory/`; deployable by self-hosters with their client.
+Context: Pages Functions + D1 under `packages/client/functions/api/directory/`; deployable by self-hosters with their client. The signed record carries `ip`, `udp_port`, `dtls_fingerprint` and an optional `ws_url` (tunnel fallback), per DECISION-0057.
 Do:
-1. `POST /api/directory/announce {server_id (ed25519 pubkey), url, seq, proof_hash, sig}`: verify signature, reject stale `seq`, rate-limit per id, store.
+1. `POST /api/directory/announce {server_id (ed25519 pubkey), ip, udp_port, dtls_fingerprint, ws_url?, seq, proof_hash, sig}`: verify signature, reject stale `seq`, rate-limit per id, store.
 2. `GET /api/directory/lookup?id=` returns the signed record; `GET /api/directory/pending?h=<hash of claim secret>` returns a first announcement made with that secret.
-3. Keep requests cheap: `pending` supports backoff (2s, 4s, 8s, then 10s) and a total timeout; steady state needs no polling (FACT-0018 budget). Records expire (e.g. 30 days idle); caps on URL length and format (https only, trycloudflare or allow-listed pattern).
+3. Validate `ip` (public unicast only; reject private, loopback, link-local, multicast) and `udp_port`. Keep requests cheap: `pending` supports backoff (2s, 4s, 8s, then 10s) and a total timeout; steady state needs no polling (FACT-0018 budget). Records expire (e.g. 30 days idle); caps on URL length and format (https only, trycloudflare or allow-listed pattern).
 4. Tests: bad signature, replayed seq, oversized input, expiry.
 Done-when: a forged or replayed announcement is rejected; a valid one is served unchanged.
 
 ---
 
-### 8.3 Server: managed quick tunnel and announce — [ ]
+### 8.3 Server: managed quick tunnel (fallback transport, after 8.8) — [ ]
 Issue: #26
 Class: implement · Needs: 8.1, 8.2 · Check: `cargo test -p termanch-server`
-Context: The server supervises `cloudflared`, learns the URL, and announces it; nobody prints or types URLs.
+Context: Fallback for networks or VPSes without a reachable UDP port (DECISION-0057). The server supervises `cloudflared`, learns the URL, and announces it as the record's `ws_url`; nobody prints or types URLs.
 Do:
 0. Start `cloudflared` with `--metrics 127.0.0.1:PORT` and read the URL from `GET /quicktunnel` (FACT-0018); health from `/ready`.
 1. Persistent ed25519 identity in the config dir (0600).
@@ -190,7 +190,7 @@ Context: Replaces the manual URL/link modal.
 Do:
 1. Add Server, flow A: generate the claim secret (expires in 15 minutes, single use), show the single install command with a copy button, poll `pending` until the server announces; verify the HMAC; pin the server key; add the server.
 1b. Flow B: a Scan button decodes the installer's QR from the live camera or from a picked screenshot (small JS decoder; try inverted images); same pending/verify/pin path. Tell the user to delete the screenshot.
-2. On connect failure, look up the server by id, verify the signature against the pinned key, and reconnect to the new URL (feeds the 2.2 backoff loop).
+2. On connect failure, look up the server by id, verify the signature against the pinned key, and reconnect to the new address or fingerprint (feeds the 2.2 backoff loop). Pluggable transport inside `Connection`: webrtc-direct first (8.9), WebSocket to `ws_url` as fallback.
 3. Remove manual URL fields and the `#add=` link path.
 Done-when: restarting the VPS tunnel is invisible to a logged-in client apart from a short reconnect.
 
@@ -201,7 +201,7 @@ Issue: #28
 Class: implement · Needs: 8.3 · Check: `sh -n packages/client/public/install.sh`
 Context: Served from the client origin as `/install.sh` (hosted and self-hosted).
 Do:
-1. Non-interactive POSIX script taking the claim secret and the directory origin: installs Docker if missing, writes the compose file, starts server + bundled `cloudflared`, restarts on reboot.
+1. Non-interactive POSIX script taking the claim secret and the directory origin: installs Docker if missing, writes the compose file, starts the server (UDP port published; opens it in `ufw`/`firewalld` when present), restarts on reboot. `cloudflared` is added only when the fallback (8.3) exists.
 2. Idempotent; refuses to run if a different owner is already bound; no prompts, no output the user must act on.
 3. Fresh-VPS test in CI where feasible (container), manual on a real 512MB VPS.
 3. When stdout is a terminal, also draw the claim QR (white quiet zone, large modules); never when piped or run from cloud-init.
@@ -215,6 +215,46 @@ Class: plan · Needs: 8.1 · Check: `test -s docs/decisions/0057-connect-cloudfl
 Context: For users who do have a domain on Cloudflare (a public tunnel hostname needs a zone they own, FACT-0018) or want a stable URL. Scopes exist (Tunnel Write, DNS Write); public clients need PKCE and a verified domain TXT record.
 Do: decide go/no-go; if go, design OAuth consent, tunnel + DNS creation in the user's account, token handoff via the install command.
 Done-when: decision recorded either way.
+
+---
+
+### 8.7 Prototype WebRTC direct — [ ]
+Issue: #30
+Class: explore · Needs: 8.1 · Check: `test -s docs/facts/0021-webrtc-direct.md`
+Context: DECISION-0057. No hole-punching, STUN, TURN or signaling: server public IP + one UDP port + fixed DTLS certificate; the client builds the remote description itself.
+Do:
+1. Pick the Rust stack (str0m, webrtc-rs or other): ICE-lite, one UDP port for all clients, persisted DTLS certificate, memory per connection on a 512MB VPS.
+2. Browser side: build the remote SDP locally (server ufrag/pwd convention, candidate, fingerprint) and connect from Chrome, Firefox, Android Chrome and iOS Safari 16+; record which need SDP munging.
+3. Public IP on NAT-mapped clouds (AWS, GCP, Oracle): discovery and the explicit candidate address.
+4. Reachability: default UDP firewalls of Hetzner, DigitalOcean, AWS, GCP, Oracle; what the installer can open; behaviour on mobile and common Wi-Fi networks that block UDP; failure detection time in the client.
+5. Data channel limits: max message size, ordering, throughput and latency against WebSocket.
+6. Abuse: unauthenticated-peer limits (handshake rate, memory cap) since credentials are static.
+Done-when: a phone on LTE types into a tmux session on a real VPS over the prototype; each item has a verdict in the fact.
+
+---
+
+### 8.8 Server: WebRTC-direct transport — [ ]
+Issue: #31
+Class: implement · Needs: 8.7, 2.1 · Check: `cargo test -p termanch-server`
+Context: Makes the session path transport-agnostic and adds the primary transport.
+Do:
+1. Extract a `Transport` seam under `sessions.rs` (messages in/out, close); WebSocket becomes one implementation.
+2. Data-channel transport per 8.7; auth and owner binding in the first message; unauthenticated peers limited and timed out.
+3. Announce `ip`, `udp_port`, `dtls_fingerprint` to the directory (8.2), signed.
+4. e2e test: a Rust WebRTC client (or headless browser in CI) through the whole auth + tmux + reconnect path.
+Done-when: the e2e suite passes over WebRTC and WebSocket from one set of tests.
+
+---
+
+### 8.9 Client: WebRTC-direct transport — [ ]
+Issue: #32
+Class: implement · Needs: 8.7, 8.2, 2.2 · Check: `pnpm --filter termanch-client test`
+Context: `Connection` gains a transport interface; WebRTC first, WebSocket fallback.
+Do:
+1. `RTCPeerConnection` + data channel built from the directory record; fingerprint pinned from the signed record.
+2. Failure detection within 5 s with a clear "server unreachable on UDP port N" state; fallback to `ws_url` when present.
+3. Same heartbeat, backoff and re-attach behaviour as 2.2.
+Done-when: unit tests for transport selection and fallback; works on iOS Safari and Android Chrome per the 8.7 matrix.
 
 ---
 

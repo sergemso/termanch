@@ -59,3 +59,4 @@
 0053-single-owner-servers,"A server belongs to one GitHub user","security, auth, roadmap",active
 0054-session-backends,"The server owns sessions through a pluggable backend","architecture, sessions, agents",active
 0056-automatic-connectivity,"Servers reach the client automatically through a signed directory and quick tunnels","deployment, networking, security, roadmap",active
+0057-webrtc-direct-transport,"The browser reaches the server over a direct WebRTC data channel","transport, networking, security, roadmap",active
