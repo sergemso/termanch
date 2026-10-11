@@ -155,9 +155,9 @@ Done-when: each item has a verdict and source in the fact; unsupported assumptio
 
 ---
 
-### 8.2 Signed directory service — [ ]
+### 8.2 Signed directory service — [x]
 Issue: #25
-Class: implement · Needs: 8.1, 2.1 · Check: `pnpm --filter termanch-client test`
+Class: implement · Needs: 8.1, 2.1 · Check: `cd packages/client && ./node_modules/.bin/vitest run`
 Context: Pages Functions + D1 under `packages/client/functions/api/directory/`; deployable by self-hosters with their client. The signed record carries `ip`, `udp_port`, `dtls_fingerprint` and an optional `ws_url` (tunnel fallback), per DECISION-0057.
 Do:
 0. Server side: after startup and on every address change, sign and POST the record (`RtcInfo` plus `seq`) with the persisted server key.
