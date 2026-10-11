@@ -10,6 +10,9 @@ This guide walks through setting up the cloud infrastructure (Cloudflare + GitHu
 5. Run `terraform apply`
 5. Deploy server to your VPS
 
+
+> **Self-hosted client path.** This guide sets up your own domain, Cloudflare Pages and GitHub OAuth app. To use the Termanch-hosted client at `app.termanch.dev` instead, skip to "Deploy server to your VPS" (DECISION-0052).
+
 ---
 
 ## Prerequisites

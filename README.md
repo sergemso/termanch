@@ -17,10 +17,10 @@ A web-based terminal for managing remote AI coding agents (Codex, Claude Code, H
                                          └─────────────────┘
 ```
 
-- **Client**: Hosted on your Cloudflare Pages at `app.{yourdomain}` (or `app.{project}.{yourdomain}` with optional `pages_project_name`)
+- **Client**: Termanch-hosted at `app.termanch.dev` (quick start), or self-hosted on your Cloudflare Pages at `app.{yourdomain}` (or `app.{project}.{yourdomain}` with optional `pages_project_name`)
 - **Server**: Self-hosted on your VPS via Docker + Cloudflare Tunnel
 - **Auth**: GitHub OAuth (our OAuth app)
-- **Transport**: WebSocket (MVP), WebTransport (planned)
+- **Transport**: WebSocket (WebTransport deferred)
 - **Terminal**: xterm.js WebGL in browser
 
 ## Quick Start
@@ -135,14 +135,13 @@ termanch/
 - ✅ Agent notifications (spawn/complete/error)
 - ✅ Write prompts to agents via terminal
 
-## Not in MVP
+## Not yet built
 
-- WebTransport (WebSocket only)
-- WASM terminal engine (xterm.js direct)
-- SSH agent auth (GitHub OAuth only)
-- SSP/CRDT sync (full frame deltas)
-- Mobile PWA/offline/gestures/voice
-- Self-hosted client option
+Direction and steps: [docs/plans/termanch-v1.md](docs/plans/termanch-v1.md) (tracked in GitHub issues).
+
+- Mobile UX, installable PWA, reconnect with screen replay
+- Single-owner server binding (a server belongs to one GitHub user)
+- Deferred designs, each needing a new decision: WebTransport, WASM/SSP sync, SSH-agent auth, end-to-end encryption
 
 ## Configuration
 
