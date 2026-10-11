@@ -234,7 +234,7 @@ Done-when: a phone on LTE types into a tmux session on a real VPS over the proto
 
 ---
 
-### 8.8 Server: WebRTC-direct transport — [ ]
+### 8.8 Server: WebRTC-direct transport — [x]
 Issue: #31
 Class: implement · Needs: 8.7, 2.1 · Check: `cargo test -p termanch-server`
 Context: Makes the session path transport-agnostic and adds the primary transport.
