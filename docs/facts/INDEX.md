@@ -21,5 +21,6 @@
 | 0018 | Quick Tunnel, Directory Budget and Cloudflare OAuth Limits | networking, cloudflare, limits, tunnels | active |
 | 0019 | Server Onboarding Options and VPS Provider Capabilities | onboarding, deployment, providers, ux | active |
 | 0020 | Free Relay Service Limits for Terminal Traffic | networking, limits, relay | active |
+| 0021 | WebRTC Direct Prototype Results | transport, webrtc, networking, prototype | active |
 
 <!-- bootstrap-generated: true -->
