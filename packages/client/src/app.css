@@ -101,7 +101,7 @@ a:hover {
 }
 
 .toast {
-  position: fixed;
+  position: absolute; /* inside the app shell, which follows the visible area; fixed would follow the layout viewport */
   bottom: 24px;
   right: 24px;
   background: var(--bg-secondary);

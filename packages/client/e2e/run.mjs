@@ -3,7 +3,7 @@
 //   TERMANCH_BIN   server binary          (default ../../target/release/termanch-server)
 //   CHROME_PATH    Chrome/Chromium binary (default: Playwright's "chrome" channel)
 import { chromium } from 'playwright-core';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdtempSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -153,10 +153,13 @@ try {
       page.evaluate(() => {
         const r = document.querySelector('[role=toolbar]').getBoundingClientRect();
         const vv = window.visualViewport;
-        return { top: r.top, bottom: r.bottom, headerTop: document.querySelector('header').getBoundingClientRect().top, viewTop: vv.offsetTop, viewBottom: vv.offsetTop + vv.height };
+        return { top: r.top, bottom: r.bottom, headerTop: document.querySelector('header').getBoundingClientRect().top,
+          toastTop: document.querySelector('.toast').getBoundingClientRect().top,
+          toastBottom: document.querySelector('.toast').getBoundingClientRect().bottom, viewTop: vv.offsetTop, viewBottom: vv.offsetTop + vv.height };
       });
     // Flush with the keyboard (no gap below, nothing cut off), and the header still at the top of the view.
-    const inside = (m) => Math.abs(m.bottom - m.viewBottom) <= 1 && m.top >= m.viewTop - 0.5 && Math.abs(m.headerTop - m.viewTop) <= 1;
+    // The toast must stay inside the visible area too (it used to follow the layout viewport and slid out of view).
+    const inside = (m) => Math.abs(m.bottom - m.viewBottom) <= 1 && m.top >= m.viewTop - 0.5 && Math.abs(m.headerTop - m.viewTop) <= 1 && m.toastTop >= m.viewTop - 0.5 && m.toastBottom <= m.viewBottom + 0.5;
     const closed = await keyRowInView();
     if (!inside(closed)) fail(`key row outside the view with no keyboard: ${JSON.stringify(closed)}`);
     await page.evaluate(() => window.__vv({ height: 800 - 336 }, 'resize'));
@@ -165,6 +168,15 @@ try {
     await page.evaluate(() => window.__vv({ height: 800 - 336 - 44, offsetTop: 180 }, 'scroll'));
     const panned = await keyRowInView();
     if (!inside(panned)) fail(`key row hidden when Safari pans the viewport: ${JSON.stringify(panned)}`);
+    // A dialog opened while the view is panned must sit inside the visible area as well.
+    await page.evaluate(() => window.__showDialog());
+    const card = await page.evaluate(() => {
+      const r = document.querySelector('[aria-label="Report a problem"] .card').getBoundingClientRect();
+      const vv = window.visualViewport;
+      return { top: r.top, bottom: r.bottom, viewTop: vv.offsetTop, viewBottom: vv.offsetTop + vv.height };
+    });
+    if (card.top < card.viewTop - 0.5 || card.bottom > card.viewBottom + 0.5) fail(`dialog outside the visible area: ${JSON.stringify(card)}`);
+    await page.evaluate(() => window.__hideDialog());
     await page.evaluate(() => window.__vv({ height: 800, offsetTop: 0 }, 'resize'));
     if (!inside(await keyRowInView())) fail('key row not restored after the keyboard closed');
     // Toggle keys must return to their normal colour after a tap on a touch screen (no sticky :hover).
@@ -308,6 +320,28 @@ try {
         if (!/keydown key="h"/.test(copied)) fail(`Copy did not copy the log: ${copied.slice(0, 80)}`);
         await page.locator('.log').getByRole('button', { name: 'Clear', exact: true }).click();
         await page.waitForFunction(() => /input events \(0\)/.test(document.querySelector('.log .bar')?.textContent ?? ''), null, { timeout: 3000 });
+        // iOS swipe typing: picking another suggestion fires insertReplacementText with the old word selected
+        // (sequence captured on an iPhone, fact 0027). The terminal must end up with the replacement.
+        await page.locator('.xterm-helper-textarea').focus();
+        await page.keyboard.press('Control+u'); // clear the "hi" typed above
+        await page.keyboard.type('echo hello');
+        await page.evaluate(() => {
+          const area = document.querySelector('.xterm-helper-textarea');
+          area.value = 'hello';
+          area.setSelectionRange(0, 5);
+          area.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertReplacementText', data: 'world', bubbles: true, cancelable: true }));
+        });
+        await page.keyboard.press('Enter');
+        await waitFor(
+          () => /^world$/m.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: { ...process.env, TMUX_TMPDIR: home }, encoding: 'utf8' })),
+          'the replacement word in the shell output',
+          10000,
+        ).catch((e) => {
+          console.log('pane:', execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: { ...process.env, TMUX_TMPDIR: home }, encoding: 'utf8' }).split('\n').filter(Boolean).slice(-6));
+          throw e;
+        });
+        const pane = execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: { ...process.env, TMUX_TMPDIR: home }, encoding: 'utf8' });
+        if (/^hello$/m.test(pane)) fail('the old word reached the shell as well');
         await page.evaluate(() => {
           localStorage.setItem('termanch_debug', '0');
           window.dispatchEvent(new Event('termanch-debug'));

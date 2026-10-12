@@ -134,7 +134,7 @@
   });
 </script>
 
-<div class="modal-overlay" on:click={onclose} style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 24px;">
+<div class="modal-overlay" on:click={onclose} style="position: absolute; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 24px;">
   <div class="modal" on:click={(e) => e.stopPropagation()} style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto;">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
       <h2 style="font-size: 1.25rem;">Add Server</h2>

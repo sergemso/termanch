@@ -48,11 +48,12 @@
   style={pinned ? `top: ${box.top}px; left: ${box.left}px; width: ${box.width}px; height: ${box.height}px;` : ''}
 >
   <slot />
+  {#if debug}<pre class="debug">{overlay}</pre>{/if}
 </div>
-{#if debug}<pre class="debug">{overlay}</pre>{/if}
 
 <style>
   .shell {
+    position: relative; /* overlays (toast, dialogs, debug) are placed inside the shell, not the layout viewport */
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -75,7 +76,7 @@
     overscroll-behavior: none;
   }
   .debug {
-    position: fixed;
+    position: absolute;
     top: 0;
     right: 0;
     z-index: 2000;

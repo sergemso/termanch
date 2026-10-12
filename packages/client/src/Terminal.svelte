@@ -11,6 +11,7 @@
   import KeyRow from './KeyRow.svelte';
   import InputLog from './InputLog.svelte';
   import { attachInputLogger } from './lib/inputlog';
+  import { replacementData, replacementKeys } from './lib/swipe';
   import { DEBUG_KEY, debugEnabled } from './lib/viewport';
 
   export let connection: Connection;
@@ -33,6 +34,7 @@
   let webgl: WebglAddon | null = null;
   let disposed = false;
   let stopLog: (() => void) | null = null;
+  let stopReplace: (() => void) | null = null;
   let debug = debugEnabled(location.search, localStorage.getItem(DEBUG_KEY));
   const syncDebug = () => (debug = debugEnabled(location.search, localStorage.getItem(DEBUG_KEY)));
 
@@ -41,6 +43,7 @@
     if (disposed) return;
     disposed = true;
     stopLog?.();
+    stopReplace?.();
     window.removeEventListener('termanch-debug', syncDebug);
     if (qualityTimer) clearInterval(qualityTimer);
     try {
@@ -188,7 +191,17 @@
     }
     fitAddon.fit();
 
-    if (term.textarea) stopLog = attachInputLogger(term.textarea);
+    if (term.textarea) {
+      stopLog = attachInputLogger(term.textarea);
+      // iOS swipe typing: choosing another suggestion replaces the word xterm already sent (fact 0027).
+      const area = term.textarea;
+      const onReplace = (e: Event) => {
+        const data = replacementData(e as InputEvent);
+        if (data !== null) sendInput(replacementKeys(area.value, area.selectionStart, area.selectionEnd, data));
+      };
+      area.addEventListener('beforeinput', onReplace, true);
+      stopReplace = () => area.removeEventListener('beforeinput', onReplace, true);
+    }
     window.addEventListener('termanch-debug', syncDebug);
     term.onData((data) => typed(data));
     term.onResize(({ cols, rows }) => sendResize(cols, rows));
