@@ -198,7 +198,7 @@ Done-when: restarting the server is invisible to a logged-in client apart from a
 
 ---
 
-### 8.5 One-command installer — [ ]
+### 8.5 One-command installer — [x]
 Issue: #28
 Class: implement · Needs: 8.3 · Check: `sh -n packages/client/public/install.sh && dash -n packages/client/public/install.sh`
 Context: Served from the client origin as `/install.sh` (hosted and self-hosted).
@@ -207,7 +207,7 @@ Do:
 2. Idempotent; refuses to run if a different owner is already bound; no prompts, no output the user must act on.
 3. Fresh-VPS test in CI where feasible (container), manual on a real 512MB VPS.
 3. When stdout is a terminal, also draw the claim QR (white quiet zone, large modules); never when piped or run from cloud-init.
-Done-when: pasting the command on a fresh VPS results in a connected server in the client, with no further input; the QR scans from a phone screenshot of a dark terminal.
+Done-when: pasting the command on a fresh VPS results in a connected server in the client, with no further input; the QR scans from a phone screenshot of a dark terminal. (Verified with the published image on a real VPS: install, announce to the production directory, verify, connect over WebRTC; not yet from a phone.)
 
 ---
 
