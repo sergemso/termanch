@@ -6,7 +6,7 @@ A web terminal for managing remote AI coding agents (Codex, Claude Code, Herdr) 
 
 ```
  Browser (client)  ── WebRTC data channel, direct, end-to-end encrypted ──►  Your VPS (Docker)
- app.termanch.dev                  one UDP port                               termanch-server + tmux
+ app.termanch.vivantel.dev          one UDP port                               termanch-server + tmux
         │                                                                          │
         └── GitHub login ── signed directory (address + key, never traffic) ◄──────┘
 ```
@@ -20,13 +20,13 @@ A web terminal for managing remote AI coding agents (Codex, Claude Code, Herdr) 
 
 You need a Linux VPS with a public IP (512 MB RAM, 1 vCPU is enough) and root access.
 
-1. Open **https://app.termanch.dev** and log in with GitHub.
+1. Open **https://app.termanch.vivantel.dev** and log in with GitHub.
 2. Choose **Add Server**. Copy the command it shows and run it on your VPS.
 3. Wait a minute. The server appears in the list. Tap it.
 
 That is the whole setup. The command installs Docker if needed, picks a free UDP port, starts the server and hands it a one-time secret. It is safe to run again; running it with a new secret re-claims the server for a new owner.
 
-**Prefer to scan?** On the VPS run `curl -fsSL https://app.termanch.dev/install.sh | sh -s -- - https://app.termanch.dev`. It shows a QR code; in Add Server choose **Scan a QR** and use the camera, or take a screenshot of the code and pick it from the gallery (delete the screenshot afterwards).
+**Prefer to scan?** On the VPS run `curl -fsSL https://app.termanch.vivantel.dev/install.sh | sh -s -- - https://app.termanch.vivantel.dev`. It shows a QR code; in Add Server choose **Scan a QR** and use the camera, or take a screenshot of the code and pick it from the gallery (delete the screenshot afterwards).
 
 ### Firewalls
 
@@ -60,7 +60,7 @@ docker rm -f termanch && sudo rm -rf /opt/termanch
 
 ## Hosting your own client
 
-By default everything uses the hosted client at app.termanch.dev. To run your own (your domain, your OAuth app, your directory) follow [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md). Servers then need `TERMANCH_CLIENT_URL=https://your-client` (the install command carries it).
+By default everything uses the hosted client at app.termanch.vivantel.dev. To run your own (your domain, your OAuth app, your directory) follow [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md). Servers then need `TERMANCH_CLIENT_URL=https://your-client` (the install command carries it).
 
 ## Session backends
 
@@ -83,7 +83,7 @@ Server (environment variables of the container; the installer sets the first two
 | Variable | Description |
 |---|---|
 | `TERMANCH_UDP_PORT` | UDP port of the WebRTC transport (default 4443) |
-| `TERMANCH_CLIENT_URL` | Client and directory origin (default https://app.termanch.dev) |
+| `TERMANCH_CLIENT_URL` | Client and directory origin (default https://app.termanch.vivantel.dev) |
 | `TERMANCH_PUBLIC_IP` | Address clients connect to; detected when unset |
 | `TERMANCH_WEBRTC` | `off` for WebSocket only |
 | `TERMANCH_SERVER_NAME` | Display name |

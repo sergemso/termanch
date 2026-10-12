@@ -2,7 +2,7 @@
 
 This guide walks through setting up the cloud infrastructure (Cloudflare + GitHub OAuth) required to run Termanch.
 
-**You only need this guide to host your own client** (your domain, your GitHub OAuth app, your signed directory). To use the hosted client at app.termanch.dev, skip it: see the README quick start (DECISION-0052).
+**You only need this guide to host your own client** (your domain, your GitHub OAuth app, your signed directory). To use the hosted client at app.termanch.vivantel.dev, skip it: see the README quick start (DECISION-0052).
 
 What you set up once:
 1. A domain on Cloudflare
