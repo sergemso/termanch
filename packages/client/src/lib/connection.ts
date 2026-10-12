@@ -64,6 +64,7 @@ export class Connection {
   constructor(private opts: ConnectionOptions) {
     document.addEventListener('visibilitychange', this.wake);
     window.addEventListener('online', this.wake);
+    window.addEventListener('pageshow', this.wake);
   }
 
   /** Which transport is carrying the session, for a connection-quality indicator. */
@@ -89,6 +90,7 @@ export class Connection {
     this.clearTimers();
     document.removeEventListener('visibilitychange', this.wake);
     window.removeEventListener('online', this.wake);
+    window.removeEventListener('pageshow', this.wake);
     this.transport?.close();
     this.transport = null;
     this.opts.onState('closed');
