@@ -1,6 +1,6 @@
 # Termanch Plan: environment, app/session/agent UX, directory scale
 
-Companion to `termanch-v1.md` (which still owns issues #15–#23). Decisions: 0058 run modes, 0059 environment profile, 0060 directory scale, 0061 agent state and push; guardrails `host-mode-explicit-consent`, `directory-request-budget`; fact 0022. Order, by decision: mobile UX + PWA first, then environment, then directory scale. A fresh session needs only this file, those artifacts and the repo.
+Companion to `termanch-v1.md`, which still owns #15, #16, #20, #23, #26 and #29; its steps 3.1, 3.2, 4.1, 6.1 and 7.1 moved here (A.1, A.2, B.7, 0.2, B.1). Archive v1 when #15 and #16 close. Decisions: 0058 run modes, 0059 environment profile, 0060 directory scale, 0061 agent state and push; guardrails `host-mode-explicit-consent`, `directory-request-budget`; fact 0022. Order, by decision: mobile UX + PWA first, then environment, then directory scale. A fresh session needs only this file, those artifacts and the repo.
 
 Repo facts for a cold start: Rust server `packages/server` (tmux/PTY via `SessionBackend`, WebRTC in `rtc.rs`, directory announcer in `directory.rs`), Svelte 5 client `packages/client` (`src/App.svelte`, `AddServerModal.svelte`, `ServerList.svelte`, `lib/`), Cloudflare Pages Functions in `packages/client/functions/api/{oauth,directory}`, installer `packages/client/public/install.sh`, image `docker/Dockerfile`. Use `npx --yes pnpm@9`. Hosted client https://app.termanch.vivantel.dev. Land every step as one squashed PR with green CI.
 
