@@ -71,3 +71,6 @@
 0066-web-baseline-and-privacy,"The hosted client ships a strict CSP, a disclosure policy, a privacy notice and data deletion","security, privacy, web, roadmap",active
 0067-change-journal-and-revert,"Every host change is journaled, previewed and revertible","safety, deployment, roadmap",active
 0068-user-data-in-r2-and-live-sync,"The owner's server list and settings are encrypted objects read from the CDN, with live sync through servers","directory, scale, sync, roadmap",draft
+0069-ui-foundation-tailwind-shadcn,"The client UI is built with Tailwind v4 and shadcn-svelte","client, build, mobile",active
+0070-session-navigation-and-connections,"Sessions of all servers are navigated in one place over simultaneous connections","client, mobile, protocol",active
+0071-context-aware-key-row,"The key row adapts to the detected multiplexer, with a sticky Prefix key","client, terminal, mobile, protocol",active

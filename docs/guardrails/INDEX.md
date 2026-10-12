@@ -37,3 +37,6 @@ directory-request-budget,"The directory stays within the free request budget at 
 github-token-stays-in-browser,"The GitHub token never goes to a server","security, auth",active
 releases-are-signed,"Releases, bundled tools and the installer are signed and verified","security, supply-chain",active
 host-changes-are-journaled,"Host changes are journaled and revertible","safety, deployment",active
+soft-keyboard-never-hides-input,"The soft keyboard never hides the key row or terminal input","client, mobile, ios",active
+kill-session-needs-confirmation,"Killing a session needs confirmation","client, protocol",active
+connections-warn-never-drop,"Connections are limited by warning, never by dropping","client, mobile, performance",active

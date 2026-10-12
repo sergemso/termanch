@@ -53,7 +53,7 @@ Do: 1. `TERMANCH_RUN=container|host` plus `TERMANCH_RUN_USER`, with the dedicate
 Done-when: host mode shows the host's `/etc/hostname` and processes; container mode does not; tests pass.
 
 ### B.3 Add Server mode choice and server settings — [ ]
-Class: implement · Needs: B.2, A.1 · Check: `cd packages/client && npx --yes pnpm@9 test`
+Class: implement · Needs: B.2, A.1, U.1 (docs/plans/termanch-v3-ui.md: the UI foundation lands first so this screen is written once) · Check: `cd packages/client && npx --yes pnpm@9 test`
 Context: `AddServerModal.svelte` builds the command through `lib/onboard.ts installCommand`.
 Do: mode radio with the host warning, root/user choice, mode badge on server card and session header, a Server settings screen (name, mode, remove, re-claim).
 Done-when: the generated command and QR carry the choice; badge visible.

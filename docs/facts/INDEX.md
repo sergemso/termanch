@@ -26,5 +26,6 @@
 | 0023 | Threat model | security, threat-model | active |
 | 0024 | R2 and CDN spike results | directory, scale, cloudflare, r2, spike | active |
 | 0025 | Free write path spike results | directory, scale, nostr, spike | active |
+| 0026 | Client UI baseline before the v3 UI work | client, mobile, ios | active |
 
 <!-- bootstrap-generated: true -->
