@@ -93,8 +93,18 @@ until docker exec "$NAME" termanch-server --help >/dev/null 2>&1; do
 done
 
 if [ "$SECRET" = "-" ]; then
-  say "Scan this with Termanch (Add Server > Scan a QR), or open the link:"
-  docker exec "$NAME" termanch-server --register --qr
+  OUT="$(docker exec "$NAME" termanch-server --register --qr)"
+  case "$OUT" in
+    *"already registered"*)
+      say "$OUT"
+      say "To add it to another browser, or after removing it from the app, open Add Server > Paste a command"
+      say "in Termanch and run the command shown there: it starts a fresh registration for this server."
+      ;;
+    *)
+      say "Scan this with Termanch (Add Server > Scan a QR), or open the link:"
+      say "$OUT"
+      ;;
+  esac
 else
   docker exec "$NAME" termanch-server --claim "$SECRET" >/dev/null
   say "Termanch server started. It will appear in the app within a minute."
