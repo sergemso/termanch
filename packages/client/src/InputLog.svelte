@@ -1,40 +1,34 @@
 <script lang="ts">
   import { inputLog } from './lib/inputlog';
+  import { copyText } from './lib/clipboard';
 
-  let copied = false;
+  let status = '';
   async function copy() {
-    try {
-      await navigator.clipboard.writeText($inputLog.join('\n'));
-      copied = true;
-      setTimeout(() => (copied = false), 1500);
-    } catch {
-      /* clipboard unavailable: the lines stay on screen to read */
-    }
+    status = (await copyText($inputLog.join('\n'))) ? 'Copied' : 'Copy failed';
+    setTimeout(() => (status = ''), 2000);
   }
 </script>
 
+<!-- In the layout (not fixed): a fixed panel sits in the layout viewport, which iOS pans away from the
+     visible area while the keyboard is open, so its buttons were out of reach. -->
 <div class="log">
   <div class="bar">
-    <span>input events ({$inputLog.length})</span>
-    <button on:pointerdown|preventDefault={copy}>{copied ? 'Copied' : 'Copy'}</button>
-    <button on:pointerdown|preventDefault={() => inputLog.set([])}>Clear</button>
+    <span>input events ({$inputLog.length}) {status}</span>
+    <button type="button" on:click={copy}>Copy</button>
+    <button type="button" on:click={() => inputLog.set([])}>Clear</button>
   </div>
-  <pre>{$inputLog.slice(-12).join('\n')}</pre>
+  <pre>{$inputLog.slice(-8).join('\n')}</pre>
 </div>
 
 <style>
   .log {
-    position: fixed;
-    left: 0;
-    right: 0;
-    top: 64px;
-    z-index: 1999;
-    max-height: 32vh;
+    flex: none;
+    max-height: 26%;
     overflow: hidden;
-    background: rgba(0, 0, 0, 0.8);
+    background: #000;
     color: #fff;
     font: 10px/1.3 monospace;
-    pointer-events: none;
+    border-bottom: 1px solid var(--border);
   }
   .bar {
     display: flex;
@@ -44,17 +38,19 @@
   }
   .bar span {
     flex: 1;
+    min-width: 0;
   }
   button {
-    pointer-events: auto;
-    padding: 2px 8px;
-    min-height: 24px;
-    font-size: 10px;
+    padding: 2px 12px;
+    min-height: 30px;
+    font-size: 11px;
   }
   pre {
     margin: 0;
     padding: 0 6px 4px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+    overflow-y: auto;
+    max-height: 100%;
   }
 </style>
