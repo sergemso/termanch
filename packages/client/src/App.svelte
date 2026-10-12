@@ -388,7 +388,7 @@
     </div>
   {:else}
     <header style="display: flex; justify-content: space-between; align-items: center; padding: {narrow ? '8px 12px' : '16px 24px'}; border-bottom: 1px solid var(--border); background: var(--bg-secondary);">
-      <h1 style="font-size: 1.25rem; user-select: none; -webkit-user-select: none;" on:click={titleTapped}>Termanch</h1>
+      <h1 style="font-size: 1.25rem; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation;" on:click={titleTapped}>Termanch</h1>
       <div style="display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 12px;">
         <button class="secondary" on:click={openReport} style="padding: 6px 12px;">Report a problem</button>
         {#if $updateAvailable}<button on:click={() => location.reload()} style="padding: 6px 12px;">Update available</button>{/if}

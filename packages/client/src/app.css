@@ -5,6 +5,8 @@
 }
 
 :root {
+  /* Under the status bar, the Dynamic Island and the microphone/camera indicator: nothing may be drawn there. */
+  --safe-top: env(safe-area-inset-top, 0px);
   --bg: #0d1117;
   --bg-secondary: #161b22;
   --fg: #e6edf3;
@@ -20,6 +22,7 @@
 }
 
 body {
+  touch-action: manipulation; /* no double-tap zoom (the debug switch is five quick taps) */
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--fg);
@@ -127,7 +130,7 @@ a:hover {
   }
   /* Top, not bottom: the bottom edge belongs to the terminal key row. */
   .toast {
-    top: 8px;
+    top: calc(var(--safe-top) + 8px);
     bottom: auto;
     left: 8px;
     right: 8px;

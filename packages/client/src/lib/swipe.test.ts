@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isWordKey, replacementData, replacementKeys } from './swipe';
+import { isWordKey, replacementData, replacementKeys, syncTextarea } from './swipe';
 
 describe('replacementKeys', () => {
   it('replays the sequence captured on an iPhone: "hello" swiped, "he\'ll" chosen', () => {
@@ -39,5 +39,31 @@ describe('isWordKey', () => {
     for (const key of ['з', 'a', ' ', '😀', 'Enter', 'Backspace', 'ArrowLeft', 'Tab', 'Dead', 'Unidentified', 'Process', 'Shift', 'F1', 'F12']) {
       expect(isWordKey(key), key).toBe(false);
     }
+  });
+});
+
+describe('syncTextarea', () => {
+  const field = (value: string) => {
+    const f = { value, range: [-1, -1], setSelectionRange(a: number, b: number) { this.range = [a, b]; } };
+    return f;
+  };
+
+  it('replaces stale text with the word being typed and puts the caret at its end', () => {
+    const f = field('утромпа'); // captured while typing "па"
+    expect(syncTextarea(f, 'па')).toBe(true);
+    expect(f.value).toBe('па');
+    expect(f.range).toEqual([2, 2]);
+  });
+
+  it('leaves a field alone when it is already right (no caret jumps)', () => {
+    const f = field('па');
+    expect(syncTextarea(f, 'па')).toBe(false);
+    expect(f.range).toEqual([-1, -1]);
+  });
+
+  it('empties the field between words', () => {
+    const f = field('паспорт');
+    syncTextarea(f, '');
+    expect(f.value).toBe('');
   });
 });

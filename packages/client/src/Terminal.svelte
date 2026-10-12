@@ -11,7 +11,7 @@
   import { beep, bellEnabled, installAudioUnlock, setBellEnabled, unlockAudio } from './lib/bell';
   import { copyText } from './lib/clipboard';
   import { attachInputLogger } from './lib/inputlog';
-  import { attachSwipeSupport } from './lib/swipe';
+  import { attachInputMirror, attachSwipeSupport } from './lib/swipe';
   import { DEBUG_KEY, debugEnabled } from './lib/viewport';
   import { KeyboardMode } from './lib/terminal/keyboardMode';
   import { setEnterKeyHint } from './lib/terminal/inputGuards';
@@ -214,6 +214,7 @@
     if (term.textarea) {
       cleanups.push(attachInputLogger(term.textarea));
       cleanups.push(attachSwipeSupport(term.textarea, sendInput, words)); // fact 0027
+      cleanups.push(attachInputMirror(term.textarea, words)); // the field always shows the word being typed
       setEnterKeyHint(term.textarea);
       // Hiding the keyboard (OK, or its own hide key) must not leave the terminal inactive.
       const onBlur = (e: FocusEvent) => !disposed && keyboard.onBlur({ to: e.relatedTarget });

@@ -68,3 +68,43 @@ export function attachSwipeSupport(area: HTMLTextAreaElement, send: (keys: strin
     area.removeEventListener('beforeinput', onBeforeInput, true);
   };
 }
+
+/** What the hidden input needs to look like: exactly the word being typed, caret at the end. */
+export interface MirrorTarget {
+  value: string;
+  setSelectionRange(start: number, end: number): void;
+}
+
+/** Makes `field` show `word`; returns whether it had to change. */
+export function syncTextarea(field: MirrorTarget, word: string): boolean {
+  if (field.value === word) return false;
+  field.value = word;
+  field.setSelectionRange(word.length, word.length);
+  return true;
+}
+
+/**
+ * xterm never cleans its hidden input, so after a few words it holds stale text (captured: "утромпа" while typing
+ * "па"). iOS builds suggestions from that text and answers differently depending on it: the whole word when the
+ * field is empty, only the missing tail when it holds the typed prefix. Keeping the field equal to the word being
+ * typed gives the keyboard the true context, so a tapped suggestion arrives as the tail or as a replacement of
+ * exactly that word, both of which are handled. Runs after xterm's own listeners, never during composition.
+ */
+export function attachInputMirror(area: HTMLTextAreaElement, words: WordTracker): () => void {
+  let composing = false;
+  const sync = () => {
+    if (!composing) queueMicrotask(() => !composing && syncTextarea(area, words.current));
+  };
+  const onStart = () => (composing = true);
+  const onEnd = () => ((composing = false), sync());
+  area.addEventListener('compositionstart', onStart);
+  area.addEventListener('compositionend', onEnd);
+  area.addEventListener('input', sync);
+  area.addEventListener('keyup', sync);
+  return () => {
+    area.removeEventListener('compositionstart', onStart);
+    area.removeEventListener('compositionend', onEnd);
+    area.removeEventListener('input', sync);
+    area.removeEventListener('keyup', sync);
+  };
+}
