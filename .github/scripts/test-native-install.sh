@@ -11,7 +11,7 @@ SECRET="$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 43)"
 RUN_USER=termanch
 [ "$MODE" = host ] && RUN_USER=root
 
-# /release (0.1.0), /release2 (0.1.1 works), /release3 (0.1.2 starts but never serves), /release4 (0.1.3 is frozen)
+# /release (first install), /release2 (9.0.1 works), /release3 (9.0.2 starts but never serves), /release4 (9.0.3 is frozen)
 export TERMANCH_RELEASE_URL=file:///release
 TERMANCH_RELEASE_KEYS="$(cat /keys.txt)"
 export TERMANCH_RELEASE_KEYS
@@ -62,7 +62,7 @@ helper /release4 | grep -q "paused" || fail "a frozen release was not reported"
 [ "$(sha /usr/local/bin/termanch-server)" = "$before_sha" ] || fail "a frozen release changed the binary"
 
 echo "== a newer release is installed, the old binary is kept, the service comes back"
-helper /release2 | grep -q "updated 0.1.0 -> 0.1.1" || fail "the update did not report success"
+helper /release2 | grep -q "updated .* -> 9.0.1" || fail "the update did not report success"
 [ "$(sha /usr/local/bin/termanch-server)" = "$(sha /release2/termanch-server-x86_64-linux)" ] || fail "the new binary is not in place"
 [ -f /usr/local/bin/termanch-server.prev ] || fail "the previous binary was not kept"
 systemctl is-active --quiet termanch || fail "the service is not active after the update"
