@@ -9,6 +9,9 @@
   import { b64ToBytes, textToB64 } from './lib/connection';
   import { applyMods, clampFont, pinchFont, FONT_DEFAULT, type Mods } from './lib/keys';
   import KeyRow from './KeyRow.svelte';
+  import InputLog from './InputLog.svelte';
+  import { attachInputLogger } from './lib/inputlog';
+  import { DEBUG_KEY, debugEnabled } from './lib/viewport';
 
   export let connection: Connection;
   export let activeSessionId: string | null = null;
@@ -29,11 +32,16 @@
   let unsubscribe: (() => void) | null = null;
   let webgl: WebglAddon | null = null;
   let disposed = false;
+  let stopLog: (() => void) | null = null;
+  let debug = debugEnabled(location.search, localStorage.getItem(DEBUG_KEY));
+  const syncDebug = () => (debug = debugEnabled(location.search, localStorage.getItem(DEBUG_KEY)));
 
   /** Runs once: the WebGL addon goes before the terminal (the other order throws), and nothing here may throw. */
   function teardown() {
     if (disposed) return;
     disposed = true;
+    stopLog?.();
+    window.removeEventListener('termanch-debug', syncDebug);
     if (qualityTimer) clearInterval(qualityTimer);
     try {
       unsubscribe?.();
@@ -180,6 +188,8 @@
     }
     fitAddon.fit();
 
+    if (term.textarea) stopLog = attachInputLogger(term.textarea);
+    window.addEventListener('termanch-debug', syncDebug);
     term.onData((data) => typed(data));
     term.onResize(({ cols, rows }) => sendResize(cols, rows));
 
@@ -213,6 +223,7 @@
   });
 </script>
 
+{#if debug}<InputLog />{/if}
 <div class="wrap">
   <div
     class="screen"
