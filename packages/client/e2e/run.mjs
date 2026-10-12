@@ -278,6 +278,24 @@ try {
       await page.getByRole('button', { name: 'Sessions' }).click();
       await page.getByText('s1', { exact: true }).first().click();
       await page.locator('.xterm').waitFor({ timeout: 5000 });
+      if (lap === 3) {
+        // The swipe-typing recorder: silent normally, listing the textarea's events when the debug switch is on.
+        if (await page.locator('.log').count()) fail('the input log shows without the debug switch');
+        await page.evaluate(() => {
+          localStorage.setItem('termanch_debug', '1');
+          window.dispatchEvent(new Event('termanch-debug'));
+        });
+        await page.locator('.xterm-helper-textarea').focus();
+        await page.keyboard.type('hi');
+        await page.waitForFunction(() => /keydown key="h"/.test(document.querySelector('.log pre')?.textContent ?? ''), null, { timeout: 5000 }).catch(async (e) => {
+          console.log('log panel:', await page.evaluate(() => document.querySelector('.log')?.textContent ?? 'none'));
+          throw e;
+        });
+        await page.evaluate(() => {
+          localStorage.setItem('termanch_debug', '0');
+          window.dispatchEvent(new Event('termanch-debug'));
+        });
+      }
       await page.getByRole('button', { name: 'Sessions' }).click();
       await page.getByRole('button', { name: '← Servers' }).click();
       await page.getByText('Your Servers').waitFor({ timeout: 5000 });
