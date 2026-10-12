@@ -117,3 +117,92 @@ jobs:
         env:
           TERMANCH_BIN: ${{ github.workspace }}/bin/termanch-server
         run: node e2e/run.mjs
+  # The native host mode (decision 0075) ships one static musl binary per architecture: no glibc, no OpenSSL,
+  # nothing to install. Build both on the native runners and fail if anything is linked dynamically.
+  static:
+    name: Static binary (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-latest, target: x86_64-unknown-linux-musl }
+          - { arch: aarch64, runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install the musl toolchain (aws-lc-rs compiles C code)
+        run: sudo apt-get update && sudo apt-get install -y musl-tools cmake
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            target/
+          key: static-${{ matrix.arch }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CC_aarch64_unknown_linux_musl: musl-gcc
+        run: cargo build --release -p termanch-server --target ${{ matrix.target }}
+
+      - name: Gate - the binary is fully static
+        run: |
+          bin=target/${{ matrix.target }}/release/termanch-server
+          strip "$bin"
+          file "$bin"
+          if ldd "$bin" 2>&1 | grep -qv 'not a dynamic executable'; then echo "dynamic dependencies found"; ldd "$bin"; exit 1; fi
+          ls -l "$bin"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: termanch-server-musl-${{ matrix.arch }}
+          path: target/${{ matrix.target }}/release/termanch-server
+          retention-days: 7
+
+  # The same end-to-end test as above against the static binary, so musl-specific problems (DNS, DTLS, PTY, the
+  # directory announce) cannot reach a release unnoticed.
+  e2e-static:
+    name: Browser end-to-end with the static binary
+    needs: static
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: termanch-server-musl-x86_64
+          path: bin
+
+      - run: chmod +x bin/termanch-server
+
+      - run: pnpm --filter termanch-client run e2e:build
+
+      - name: Run the browser end-to-end test
+        working-directory: packages/client
+        env:
+          TERMANCH_BIN: ${{ github.workspace }}/bin/termanch-server
+        run: node e2e/run.mjs
