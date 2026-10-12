@@ -2,6 +2,7 @@ import type { ClientMessage, ServerMessage } from './protocol';
 import { openRtc } from './rtc';
 import { openTransport, Unreachable, type Openers, type Target, type Transport } from './transport';
 import { openWs } from './ws';
+import type { Credentials } from './device';
 
 export type ConnState = 'connecting' | 'connected' | 'reconnecting' | 'unreachable' | 'closed';
 
@@ -33,13 +34,17 @@ export interface ConnectionOptions {
   /** Resolved on every attempt, so a reconnect can pick up a new address from the directory. */
   target: () => Promise<Target>;
   openers?: Openers;
-  token: () => string;
+  /** The device certificate and its signer; asked for on every attempt, so a fresh login is picked up. */
+  credentials: () => Promise<Credentials>;
   claim?: string;
+  /** The server id this connection was made for (pinned when the server was added). The challenge must name it,
+   *  so a server relaying another server's challenge gets no usable signature. */
+  serverId?: string;
   /** `detail` explains `unreachable`. */
   onState: (state: ConnState, detail?: string) => void;
   /** Called after every successful auth, including after a reconnect. */
   onReady: (msg: Extract<ServerMessage, { type: 'auth_ok' }>, isReconnect: boolean) => void;
-  /** Auth errors are final: retrying with the same token would be rejected again. */
+  /** Auth errors are final: retrying with the same credentials would be rejected again. */
   onFatal: (message: string) => void;
 }
 
@@ -151,13 +156,17 @@ export class Connection {
       this.opts.onState('reconnecting');
       this.scheduleRetry();
     };
-    transport.send(JSON.stringify({ type: 'auth', token: this.opts.token(), server_token: this.opts.claim ?? '' }));
+    transport.send(JSON.stringify({ type: 'hello' }));
   }
 
   private onText(transport: Transport, text: string) {
     if (this.transport !== transport) return;
     const msg: ServerMessage = JSON.parse(text);
     this.heard();
+    if (msg.type === 'challenge') {
+      void this.answer(transport, msg.server_id, msg.nonce);
+      return;
+    }
     if (msg.type === 'auth_ok') {
       const isReconnect = this.everReady;
       this.authed = true;
@@ -177,6 +186,26 @@ export class Connection {
       if (this.pingSentAt) this.rtt = Math.round(performance.now() - this.pingSentAt);
     } else {
       this.listeners.forEach((fn) => fn(msg));
+    }
+  }
+
+  /** Signs the server's challenge with the device key; the server id in it was pinned when the server was added. */
+  private async answer(transport: Transport, serverId: string, nonce: string) {
+    try {
+      if (this.opts.serverId && this.opts.serverId !== serverId) {
+        throw new Error('This server is not the one you added');
+      }
+      const { cert, sign } = await this.opts.credentials();
+      const signature = await sign(serverId, nonce);
+      if (this.transport === transport) {
+        transport.send(JSON.stringify({ type: 'auth', cert, signature, server_token: this.opts.claim ?? '' }));
+      }
+    } catch (e) {
+      if (this.transport !== transport) return;
+      this.stopped = true;
+      transport.close();
+      this.opts.onState('closed');
+      this.opts.onFatal(e instanceof Error ? e.message : 'Sign in again');
     }
   }
 

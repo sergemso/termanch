@@ -86,7 +86,7 @@ Done-when: with the PWA closed, a needs-input event reaches the phone.
 
 ## Phase S: security (decisions 0062–0067, fact 0023)
 
-### S.1 Device-key credentials (0062) — [ ]
+### S.1 Device-key credentials (0062) — [x] (code; needs the `CERT_SIGNING_KEY` Pages secret before deploy; device list for revoke UI is S.2)
 Class: implement · Needs: 0.1 · Check: `cargo test -p termanch-server && cd packages/client && npx --yes pnpm@9 test`
 Context: Today `App.svelte` passes `githubToken` to `Connection` (`token: () => githubToken!`) and `packages/server/src/auth.rs` `identify()` asks GitHub who owns it, so every server sees a replayable token. Guardrail `github-token-stays-in-browser`. `packages/client/functions/api/oauth/exchange.ts` already holds `GITHUB_CLIENT_SECRET`.
 Do: 1. Client: non-extractable ECDSA P-256 key in IndexedDB. 2. Function: after the OAuth exchange, sign a device certificate (GitHub id, device public key, 7-day expiry, `kid`) with an Ed25519 key from a new Pages secret `CERT_SIGNING_KEY`; keep the cached `CryptoKey` in module scope (10 ms CPU limit); do not return the GitHub token to the browser beyond what the app needs, and never send it to servers. 3. Server: accept `kid`-addressed public keys from config, verify certificate and a signature over a server challenge that includes the `server_id`; keep the owner check and claim flow of 0053. 4. Per-owner revoked-device list stored on the server. 5. Remove the token from the wire protocol (`packages/core`), update tests and the e2e harness.

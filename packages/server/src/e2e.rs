@@ -4,7 +4,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use axum::{http::HeaderMap, routing::get, Json, Router};
+use axum::Router;
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
@@ -17,7 +17,8 @@ use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-use crate::auth::{AuthState, Identity};
+use crate::auth::AuthState;
+use crate::cert::testing::{now, Device, Signer};
 use crate::rtc::{self, RtcInfo, CHANNEL_ID, SERVER_PWD, SERVER_UFRAG};
 use crate::sessions::SessionManager;
 use crate::{router, AppState};
@@ -29,40 +30,38 @@ async fn serve(app: Router) -> String {
     format!("127.0.0.1:{}", addr.port())
 }
 
-/// Tokens "alice" and "bob" are valid GitHub users 1 and 2.
-async fn mock_github() -> String {
-    async fn user(headers: HeaderMap) -> Result<Json<Identity>, axum::http::StatusCode> {
-        match headers.get("authorization").and_then(|v| v.to_str().ok()) {
-            Some("Bearer alice") => Ok(Json(Identity {
-                id: 1,
-                login: "alice".into(),
-            })),
-            Some("Bearer bob") => Ok(Json(Identity {
-                id: 2,
-                login: "bob".into(),
-            })),
-            _ => Err(axum::http::StatusCode::UNAUTHORIZED),
-        }
-    }
-    format!(
-        "http://{}",
-        serve(Router::new().route("/user", get(user))).await
-    )
-}
-
 struct Fixture {
     ws_addr: String,
     rtc: RtcInfo,
     claim: String,
+    signer: Signer,
+    server_id: String,
+    auth: Arc<AuthState>,
+}
+
+/// A browser: its device key and the certificate the hosted function issued for it.
+struct Who {
+    device: Device,
+    cert: String,
+}
+
+impl Fixture {
+    fn who(&self, id: u64, login: &str) -> Who {
+        let device = Device::new();
+        let cert = self.signer.issue(&device, id, login, now() + 3600);
+        Who { device, cert }
+    }
 }
 
 async fn fixture() -> Fixture {
     let dir = std::env::temp_dir().join(format!("termanch-e2e-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
-    let auth = Arc::new(AuthState::with_api(dir.clone(), mock_github().await).unwrap());
+    let signer = Signer::new("k1");
+    let server_id = "test-server-id".to_string();
+    let auth = Arc::new(AuthState::new(dir.clone(), signer.keys(), server_id.clone()).unwrap());
     let claim = auth.claim_token().unwrap().unwrap();
     let mut state = AppState {
-        auth,
+        auth: auth.clone(),
         sessions: Arc::new(SessionManager::new(Arc::new(crate::backend::TmuxBackend))),
         server_name: "test-vps".into(),
         rtc_info: None,
@@ -82,6 +81,9 @@ async fn fixture() -> Fixture {
         ws_addr: serve(router(state, false)).await,
         rtc,
         claim,
+        signer,
+        server_id,
+        auth,
     }
 }
 
@@ -117,6 +119,22 @@ impl Conn {
                     .unwrap(),
             ),
         }
+    }
+
+    /// Runs the handshake as `who`, signing for `server_id`; the reply (`auth_ok` or `error`) is next.
+    async fn login(&mut self, f: &Fixture, who: &Who, claim: &str) {
+        self.login_for(&f.server_id, who, &who.cert, claim).await
+    }
+
+    async fn login_for(&mut self, server_id: &str, who: &Who, cert: &str, claim: &str) {
+        self.send(json!({"type":"hello"})).await;
+        let ch = self.recv_type("challenge").await;
+        let nonce = ch["nonce"].as_str().unwrap();
+        self.send(json!({
+            "type":"auth","cert":cert,"server_token":claim,
+            "signature": who.device.sign(server_id, nonce),
+        }))
+        .await;
     }
 
     async fn send(&mut self, v: Value) {
@@ -302,20 +320,23 @@ impl RtcClient {
 
 async fn only_the_claiming_github_user_gets_in(kind: Kind) {
     let f = fixture().await;
+    let (alice, bob) = (f.who(1, "alice"), f.who(2, "bob"));
 
     // Unclaimed: no claim token, no entry.
     let mut c = Conn::open(kind, &f).await;
-    c.send(json!({"type":"auth","token":"alice","server_token":""}))
-        .await;
+    c.login(&f, &alice, "").await;
     assert!(c.recv_type("error").await["message"]
         .as_str()
         .unwrap()
         .contains("not registered"));
 
-    // A bad GitHub token is rejected.
+    // A certificate from an unknown signer is rejected.
+    let mallory = Who {
+        cert: Signer::new("k1").issue(&alice.device, 1, "alice", now() + 60),
+        device: Device::new(),
+    };
     let mut c = Conn::open(kind, &f).await;
-    c.send(json!({"type":"auth","token":"mallory","server_token":f.claim}))
-        .await;
+    c.login(&f, &mallory, &f.claim).await;
     assert!(c.recv_type("error").await["message"]
         .as_str()
         .unwrap()
@@ -323,8 +344,7 @@ async fn only_the_claiming_github_user_gets_in(kind: Kind) {
 
     // Alice claims it.
     let mut c = Conn::open(kind, &f).await;
-    c.send(json!({"type":"auth","token":"alice","server_token":f.claim}))
-        .await;
+    c.login(&f, &alice, &f.claim).await;
     let ok = c.recv_type("auth_ok").await;
     assert_eq!(
         (
@@ -336,16 +356,74 @@ async fn only_the_claiming_github_user_gets_in(kind: Kind) {
 
     // Bob cannot, even with the (now spent) claim token; Alice returns without it.
     let mut c = Conn::open(kind, &f).await;
-    c.send(json!({"type":"auth","token":"bob","server_token":f.claim}))
-        .await;
+    c.login(&f, &bob, &f.claim).await;
     assert!(c.recv_type("error").await["message"]
         .as_str()
         .unwrap()
         .contains("another GitHub user"));
     let mut c = Conn::open(kind, &f).await;
-    c.send(json!({"type":"auth","token":"alice","server_token":""}))
-        .await;
+    c.login(&f, &alice, "").await;
     c.recv_type("auth_ok").await;
+}
+
+async fn a_connection_for_another_server_expired_or_revoked_certificates_fail(kind: Kind) {
+    let f = fixture().await;
+    let alice = f.who(1, "alice");
+    let mut c = Conn::open(kind, &f).await;
+    c.login(&f, &alice, &f.claim).await;
+    c.recv_type("auth_ok").await;
+
+    // A signature a rogue server collected for itself does not work here.
+    let mut c = Conn::open(kind, &f).await;
+    c.login_for("some-other-server", &alice, &alice.cert, "")
+        .await;
+    assert!(c.recv_type("error").await["message"]
+        .as_str()
+        .unwrap()
+        .contains("sign in again"));
+
+    // An expired certificate.
+    let old = f.signer.issue(&alice.device, 1, "alice", now() - 5);
+    let mut c = Conn::open(kind, &f).await;
+    c.login_for(&f.server_id, &alice, &old, "").await;
+    assert!(c.recv_type("error").await["message"]
+        .as_str()
+        .unwrap()
+        .contains("expired"));
+
+    // A certificate from a signer under an unknown kid.
+    let unknown = Signer::new("unknown").issue(&alice.device, 1, "alice", now() + 60);
+    let mut c = Conn::open(kind, &f).await;
+    c.login_for(&f.server_id, &alice, &unknown, "").await;
+    c.recv_type("error").await;
+
+    // The old wire format, which carried a GitHub token, is not accepted.
+    let mut c = Conn::open(kind, &f).await;
+    c.send(json!({"type":"auth","token":"gho_secret","server_token":""}))
+        .await;
+    assert!(c.recv_type("error").await["message"]
+        .as_str()
+        .unwrap()
+        .contains("Authenticate first"));
+
+    // Revoking a device (as the owner, from another device) locks it out.
+    let phone = f.who(1, "alice");
+    let mut c = Conn::open(kind, &f).await;
+    c.login(&f, &phone, "").await;
+    c.recv_type("auth_ok").await;
+    c.send(json!({"type":"revoke_device","device":phone.device.id()}))
+        .await;
+    c.recv_type("device_revoked").await;
+    let mut c = Conn::open(kind, &f).await;
+    c.login(&f, &phone, "").await;
+    assert!(c.recv_type("error").await["message"]
+        .as_str()
+        .unwrap()
+        .contains("revoked"));
+    let mut c = Conn::open(kind, &f).await;
+    c.login(&f, &alice, "").await;
+    c.recv_type("auth_ok").await;
+    assert_eq!(f.auth.revoked_devices(), vec![phone.device.id()]);
 }
 
 async fn nothing_is_served_before_auth(kind: Kind) {
@@ -370,9 +448,9 @@ async fn reconnect_resumes_the_tmux_session_with_its_screen(kind: Kind) {
     let f = fixture().await;
     let name = format!("e2e{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
 
+    let alice = f.who(1, "alice");
     let mut c = Conn::open(kind, &f).await;
-    c.send(json!({"type":"auth","token":"alice","server_token":f.claim}))
-        .await;
+    c.login(&f, &alice, &f.claim).await;
     c.recv_type("auth_ok").await;
     c.send(json!({"type":"new_session","name":name})).await;
     let sessions = c.recv_type("sessions").await;
@@ -393,8 +471,7 @@ async fn reconnect_resumes_the_tmux_session_with_its_screen(kind: Kind) {
 
     // The client reconnects without a claim token, lists, and re-attaches: the screen comes back.
     let mut c = Conn::open(kind, &f).await;
-    c.send(json!({"type":"auth","token":"alice","server_token":""}))
-        .await;
+    c.login(&f, &alice, "").await;
     c.recv_type("auth_ok").await;
     c.send(json!({"type":"attach","session_id":name})).await;
     c.recv_type("session_attached").await;
@@ -419,6 +496,7 @@ macro_rules! over_both_transports {
 
 over_both_transports!(
     only_the_claiming_github_user_gets_in,
+    a_connection_for_another_server_expired_or_revoked_certificates_fail,
     nothing_is_served_before_auth,
     reconnect_resumes_the_tmux_session_with_its_screen
 );
