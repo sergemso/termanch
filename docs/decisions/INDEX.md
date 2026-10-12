@@ -70,3 +70,4 @@
 0065-host-mode-step-up,"Root host sessions need a passkey step-up and devices can be revoked","security, auth, deployment, roadmap",active
 0066-web-baseline-and-privacy,"The hosted client ships a strict CSP, a disclosure policy, a privacy notice and data deletion","security, privacy, web, roadmap",active
 0067-change-journal-and-revert,"Every host change is journaled, previewed and revertible","safety, deployment, roadmap",active
+0068-user-data-in-r2-and-live-sync,"The owner's server list and settings are encrypted objects read from the CDN, with live sync through servers","directory, scale, sync, roadmap",draft

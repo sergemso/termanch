@@ -151,10 +151,18 @@ Class: implement · Needs: C.1, C.2, S.4 · Check: `cd packages/client && npx --
 Do: `announce` writes `r/<id>.json` to R2; client `lookup` reads the CDN URL and retries with `?v=<seq>` on failed connect; D1 stays for claims until verified in production; migrate with rollback.
 Done-when: lookups produce zero Worker requests in Cloudflare analytics over a test day.
 
-### C.4 Owner-keyed server list — [ ]
-Class: implement · Needs: C.2 · Check: `cd packages/client && npx --yes pnpm@9 test`
-Do: D1 table (github id → server ids and names, no secrets); the OAuth exchange response includes it; client caches 1 h and writes on add/remove/rename; merges with localStorage on first login.
-Done-when: a server added in one browser appears in another after login with no extra reads.
+### C.4 Owner-keyed server list and settings (0068) — [ ]
+Class: implement · Needs: C.2, C.1, C.6 · Check: `cd packages/client && npx --yes pnpm@9 test`
+Do: per-user encrypted object (list plus settings) read from the public domain with `no-cache`, written by a Worker with a conditional put; HKDF per-user secret issued with the device certificate; changes relayed to the owner's other connected devices through the servers' data channel; local outbox when a write fails; merge with localStorage on first login. Depends on the C.1 and C.6 verdicts for the storage layer.
+Done-when: a server added in one browser appears in an open second browser within seconds, and on a closed one at its next open, with no Worker request for reads.
+
+### C.6 Spike: a free write path without Workers and R2 writes — [ ]‖
+Class: explore · Needs: none · Check: `test -s docs/facts/0025-free-write-path-spike.md`
+Context: Decision 0068 is a draft; the owner asked whether announces, claim polling and user-data writes can leave Cloudflare Workers and R2 Class A entirely. Candidates: (1) an open relay network such as Nostr (signed, replaceable, encrypted events; subscriptions give live push and replace claim polling; several free public relays plus an optional own relay), with the Worker kept only for certificate issuance and key derivation; (2) our own directory on an always-free VM (Oracle or Google) behind the Cloudflare CDN; (3) sharding across several free serverless vendors; (4) the status quo of R2 and Workers.
+Do: 1. Prototype (1): a server publishing a signed, owner-encrypted record as a replaceable event to at least 3 public relays, a browser reading and subscribing, measuring reliability, event size limits, retention, rate limits and required proof-of-work over a week. 2. Check that records cannot be enumerated into a list of server IPs (encrypt the address fields to the owner). 3. Estimate the same fact-0022 table for each candidate. 4. Record the verdict, risks and a recommendation.
+Done-when: fact 0025 compares the candidates with measurements and recommends one; fact 0022 and decision 0068 are updated to match.
+
+---
 
 ### C.5 Request-budget alarm — [ ]
 Class: implement · Needs: C.3, C.4 · Check: `grep -q directory-request-budget docs/guardrails/INDEX.md`
