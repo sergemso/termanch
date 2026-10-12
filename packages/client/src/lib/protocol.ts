@@ -14,7 +14,7 @@ export type ServerMessage =
   | { type: 'challenge'; nonce: string; server_id: string }
   | { type: 'device_revoked'; device: string }
   | { type: 'uninstall_done'; mode: string }
-  | { type: 'auth_ok'; user: string; server_name: string; mode?: string }
+  | { type: 'auth_ok'; user: string; server_name: string; mode?: string; version?: string }
   | { type: 'sessions'; sessions: SessionInfo[] }
   | { type: 'session_attached'; session_id: string }
   | { type: 'output'; data: string }

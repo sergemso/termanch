@@ -35,7 +35,9 @@ COPY --from=builder /app/target/release/termanch-server /usr/local/bin/termanch-
 # The base image already has a non-root user `node` (uid 1000); its home is the persistent volume.
 USER node
 WORKDIR /home/node
+ARG TERMANCH_BUILD=dev
 ENV LANG=C.UTF-8 \
+    TERMANCH_BUILD=$TERMANCH_BUILD \
     TERMANCH_CONFIG_DIR=/home/node/.config/termanch \
     TERMANCH_HOST=127.0.0.1 \
     TERMANCH_PORT=8080
