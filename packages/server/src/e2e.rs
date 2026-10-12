@@ -62,8 +62,12 @@ async fn fixture() -> Fixture {
     let claim = auth.claim_token().unwrap().unwrap();
     let mut state = AppState {
         auth: auth.clone(),
-        sessions: Arc::new(SessionManager::new(Arc::new(crate::backend::TmuxBackend))),
+        sessions: Arc::new(SessionManager::new(
+            Arc::new(crate::backend::TmuxBackend::default()),
+            crate::backend::RunMode::Container,
+        )),
         server_name: "test-vps".into(),
+        mode: "container".into(),
         rtc_info: None,
     };
     let cert = rtc::load_or_create_cert(&dir).unwrap();

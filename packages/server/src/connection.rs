@@ -94,6 +94,7 @@ pub async fn run(mut link: Link, state: AppState) {
     let ok = ServerMessage::AuthOk {
         user: identity.login.clone(),
         server_name: state.server_name.clone(),
+        mode: state.mode.clone(),
     };
     if !send(&link, &ok).await {
         return;

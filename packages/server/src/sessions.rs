@@ -8,7 +8,7 @@ use termanch_core::protocol::{ClientMessage, ServerMessage};
 
 use std::sync::Arc;
 
-use crate::backend::SessionBackend;
+use crate::backend::{RunMode, SessionBackend};
 use crate::link::{Link, LinkTx};
 use crate::pty::Attachment;
 
@@ -20,11 +20,12 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 #[derive(Clone)]
 pub struct SessionManager {
     backend: Arc<dyn SessionBackend>,
+    mode: RunMode,
 }
 
 impl SessionManager {
-    pub fn new(backend: Arc<dyn SessionBackend>) -> Self {
-        Self { backend }
+    pub fn new(backend: Arc<dyn SessionBackend>, mode: RunMode) -> Self {
+        Self { backend, mode }
     }
 
     /// Serves one authenticated connection until it ends or goes silent.
@@ -45,6 +46,10 @@ impl SessionManager {
                     let Some(text) = msg else { break };
                     idle.as_mut().reset(tokio::time::Instant::now() + IDLE_TIMEOUT);
                     let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) else { continue };
+                    if let (true, ClientMessage::Attach { session_id }) = (self.mode.is_host(), &client_msg) {
+                        // Who got a shell on the host and as whom; never what they typed.
+                        info!(target: "audit", event = "host_session", github_id = identity.id, login = %identity.login, run_as = %self.mode.label(), session = %session_id);
+                    }
                     if let Err(e) = self.handle(client_msg, auth, &mut attachment, &mut cols, &mut rows, &link.tx).await {
                         if !send(&link.tx, &ServerMessage::Error { message: e.to_string() }).await { break; }
                     }

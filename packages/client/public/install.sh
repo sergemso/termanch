@@ -4,6 +4,10 @@
 #   curl -fsSL https://app.termanch.vivantel.dev/install.sh | sh -s -- <claim secret> <client origin>
 #   curl -fsSL https://app.termanch.vivantel.dev/install.sh | sh -s -- - <client origin>     (shows a QR instead)
 #
+# An optional last word picks where sessions run (DECISION-0058). Without it they run in the isolated
+# container. `host-user` runs them on this host as a dedicated unprivileged user `termanch`; `host` runs
+# them on this host as root. Both give the owner's browser a shell on the host itself.
+#
 # It installs Docker if missing, picks a free UDP port, starts the server and hands it the claim
 # secret. It asks nothing and needs nothing afterwards: the server appears in Termanch by itself.
 # Safe to run again: a new secret re-claims the server (root on this host already allows that).
@@ -11,6 +15,7 @@ set -eu
 
 SECRET="${1:--}"
 ORIGIN="${2:-${TERMANCH_CLIENT_URL:-https://app.termanch.vivantel.dev}}"
+MODE="${3:-container}"
 IMAGE="${TERMANCH_IMAGE:-ghcr.io/sergemso/termanch:latest}"
 NAME="${TERMANCH_CONTAINER:-termanch}"
 ROOT="${TERMANCH_DATA:-/opt/termanch}"
@@ -23,6 +28,10 @@ case "$ORIGIN" in
   *) die "the client address must start with https://" ;;
 esac
 ORIGIN="${ORIGIN%/}"
+case "$MODE" in
+  container|host|host-user) ;;
+  *) die "unknown mode \"$MODE\" (use host-user, host, or leave it out)" ;;
+esac
 if [ "$SECRET" != "-" ]; then
   case "$SECRET" in
     *[!A-Za-z0-9_-]*) die "the claim secret has unexpected characters" ;;
@@ -35,7 +44,7 @@ if [ "$(id -u)" -ne 0 ]; then
   command -v sudo >/dev/null 2>&1 || die "run this as root (or install sudo)"
   exec sudo env TERMANCH_IMAGE="$IMAGE" TERMANCH_CONTAINER="$NAME" TERMANCH_DATA="$ROOT" \
     TERMANCH_SKIP_FIREWALL="${TERMANCH_SKIP_FIREWALL:-}" \
-    sh -c "$(curl -fsSL "$ORIGIN/install.sh")" termanch-install "$SECRET" "$ORIGIN"
+    sh -c "$(curl -fsSL "$ORIGIN/install.sh")" termanch-install "$SECRET" "$ORIGIN" "$MODE"
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -75,10 +84,37 @@ if [ -z "${TERMANCH_SKIP_FIREWALL:-}" ]; then
   fi
 fi
 
+RUN_ARGS=""
+case "$MODE" in
+  container) ;;
+  host|host-user)
+    # The host's own tmux runs the sessions, so it has to exist there.
+    if ! command -v tmux >/dev/null 2>&1; then
+      say "Installing tmux on this host..."
+      if command -v apt-get >/dev/null 2>&1; then apt-get install -y -qq tmux >/dev/null 2>&1
+      elif command -v dnf >/dev/null 2>&1; then dnf install -y -q tmux >/dev/null 2>&1
+      elif command -v yum >/dev/null 2>&1; then yum install -y -q tmux >/dev/null 2>&1
+      elif command -v apk >/dev/null 2>&1; then apk add -q tmux >/dev/null 2>&1
+      fi
+      command -v tmux >/dev/null 2>&1 || die "could not install tmux on this host; install it and run this command again"
+    fi
+    RUN_USER=root
+    if [ "$MODE" = "host-user" ]; then
+      RUN_USER=termanch
+      id termanch >/dev/null 2>&1 || useradd -m -s /bin/bash termanch >/dev/null 2>&1 || adduser -D -s /bin/sh termanch >/dev/null 2>&1 \
+        || die "could not create the user termanch"
+    fi
+    say "Host mode: sessions will run on this machine as $RUN_USER."
+    # nsenter into PID 1 needs root in the container and the host's PID namespace.
+    RUN_ARGS="--user 0 --pid=host --privileged -e TERMANCH_RUN=host -e TERMANCH_RUN_USER=$RUN_USER"
+    ;;
+esac
+
 chown -R 1000:1000 "$ROOT/home"
 docker pull -q "$IMAGE" >/dev/null 2>&1 || docker image inspect "$IMAGE" >/dev/null 2>&1 || die "could not download $IMAGE"
 docker rm -f "$NAME" >/dev/null 2>&1 || true
-docker run -d --name "$NAME" --restart unless-stopped \
+# shellcheck disable=SC2086 # RUN_ARGS is a list of flags built above
+docker run -d --name "$NAME" --restart unless-stopped $RUN_ARGS \
   -p "$PORT:$PORT/udp" \
   -e "TERMANCH_UDP_PORT=$PORT" -e "TERMANCH_CLIENT_URL=$ORIGIN" \
   -v "$ROOT/home:/home/node" \
