@@ -71,7 +71,7 @@
     flex: 1;
     min-height: 0;
     /* Under black-translucent the page draws behind the status bar, so every screen keeps clear of it. */
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    padding: var(--safe-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
     box-sizing: border-box;
   }
   .shell.pinned {
@@ -89,7 +89,7 @@
   }
   .debug {
     position: absolute;
-    top: 0;
+    top: var(--safe-top);
     right: 0;
     z-index: 2000;
     margin: 0;

@@ -262,6 +262,12 @@ try {
     });
     const page = await ctx.newPage();
     const errors = [];
+    // Pretend the status bar, Dynamic Island and microphone indicator take 47 px at the top.
+    await ctx.addInitScript(() => document.addEventListener('DOMContentLoaded', () => {
+      const style = document.createElement('style');
+      style.textContent = ':root { --safe-top: 47px; }';
+      document.head.appendChild(style);
+    }));
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     await page.goto(`http://127.0.0.1:${appPort}/`);
@@ -311,6 +317,11 @@ try {
         console.log('page errors:', errors, '\n', (await page.locator('body').innerText()).slice(0, 400));
         throw e;
       });
+      // The toast must clear the status bar area, and the title must not trigger double-tap zoom.
+      const toastTop = await page.evaluate(() => document.querySelector('.toast')?.getBoundingClientRect().top ?? null);
+      if (toastTop !== null && toastTop < 47) fail(`the toast is under the status bar: top ${toastTop}`);
+      const taps = await page.evaluate(() => [getComputedStyle(document.querySelector('h1')).touchAction, getComputedStyle(document.body).touchAction]);
+      if (taps.some((t) => t !== 'manipulation')) fail(`double-tap zoom is not disabled: ${taps}`);
       // Connecting lands in a live terminal: the hidden input has focus without any tap.
       await page.waitForFunction(() => document.activeElement?.classList.contains('xterm-helper-textarea'), null, { timeout: 5000 });
       // Connecting lands in a session by itself: the top bar names it instead of saying "Sessions".
@@ -328,6 +339,8 @@ try {
           localStorage.setItem('termanch_debug', '1');
           window.dispatchEvent(new Event('termanch-debug'));
         });
+        const debugTop = await page.evaluate(() => document.querySelector('.debug')?.getBoundingClientRect().top ?? null);
+        if (debugTop === null || debugTop < 47) fail(`the debug overlay is under the status bar: top ${debugTop}`);
         await page.locator('.xterm-helper-textarea').focus();
         await page.keyboard.type('hi');
         await page.waitForFunction(() => /keydown key="h"/.test(document.querySelector('.log pre')?.textContent ?? ''), null, { timeout: 5000 });
@@ -383,6 +396,27 @@ try {
         });
         await page.keyboard.press('Enter');
         await waitFor(() => /^чем$/m.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: utf8, encoding: 'utf8' })), 'the swiped Cyrillic word in the shell output', 8000);
+        // The hidden input mirrors the word being typed (iOS builds its suggestions from it), never stale text.
+        await page.keyboard.press('Control+u');
+        await page.evaluate(() => { document.querySelector('.xterm-helper-textarea').value = 'утромпа'; });
+        await page.keyboard.type('па');
+        const mirrored = await page.evaluate(() => document.querySelector('.xterm-helper-textarea').value);
+        if (mirrored !== 'па') fail(`the hidden input holds ${JSON.stringify(mirrored)} instead of the typed word`);
+        await page.keyboard.press('Backspace');
+        if ((await page.evaluate(() => document.querySelector('.xterm-helper-textarea').value)) !== 'п') fail('Backspace did not shorten the mirrored word');
+        await page.keyboard.type(' x');
+        if ((await page.evaluate(() => document.querySelector('.xterm-helper-textarea').value)) !== 'x') fail('a space did not start a new word');
+        // iOS now answers a tapped suggestion with the missing tail (captured: "па" + "спорт"); it is typed as it comes.
+        await page.keyboard.press('Control+u');
+        await page.keyboard.type('echo па');
+        await page.evaluate(() => {
+          const area = document.querySelector('.xterm-helper-textarea');
+          area.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: 'спорт', bubbles: true, cancelable: true, composed: true }));
+          area.value = 'паспорт';
+          area.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: 'спорт', bubbles: true, composed: true }));
+        });
+        await page.keyboard.press('Enter');
+        await waitFor(() => /^паспорт$/m.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: utf8, encoding: 'utf8' })), 'the suggestion tail completing the typed word', 8000);
         // A suggestion that completes the typed word ("у" -> "утро") arrives as new text; the typed part must go first.
         await page.keyboard.press('Control+u');
         await page.keyboard.type('echo у');

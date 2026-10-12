@@ -38,7 +38,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 12px;
+    padding: calc(var(--safe-top) + 12px) 12px 12px;
     background: rgba(0, 0, 0, 0.6);
   }
   .card {
