@@ -295,6 +295,23 @@ try {
       [mint(deviceKey, 1, 'alice'), { server_url: '', server_id: serverId, server_name: 'e2e-server', registered_at: Date.now(), record }],
     );
     await page.reload();
+    // Add Server: where sessions run. The container is the default; the host modes show a warning and need consent.
+    await page.getByRole('button', { name: 'Add Server' }).first().click();
+    const cmd = () => page.locator('pre.command').first().textContent();
+    if (!/sh -s -- \S{43} http\S+$/.test((await cmd()) ?? '')) fail(`the default command is not the container install: ${await cmd()}`);
+    await page.getByRole('radio', { name: /On the machine itself/ }).check();
+    if (await page.locator('pre.command').count()) fail('a host-mode command was shown before consent');
+    if (!(await page.getByText('This gives your browser a shell on your server').isVisible())) fail('the host-mode warning is missing');
+    await page.getByRole('checkbox').check();
+    if (!/ host-user$/.test((await cmd()) ?? '')) fail(`the dedicated-user command is wrong: ${await cmd()}`);
+    await page.getByRole('radio', { name: /As root/ }).check();
+    if (await page.locator('pre.command').count()) fail('choosing root did not ask for consent again');
+    await page.getByRole('checkbox').check();
+    if (!/ host$/.test((await cmd()) ?? '')) fail(`the root command is wrong: ${await cmd()}`);
+    await page.getByRole('radio', { name: /In an isolated container/ }).check();
+    if (/ host(-user)?$/.test((await cmd()) ?? '')) fail('going back to the container kept a host word');
+    await page.getByRole('button', { name: '✕' }).click();
+
     // Report a problem: shows scrubbed diagnostics and opens a prefilled issue on the project's repository.
     await page.evaluate(() => {
       window.__opened = [];

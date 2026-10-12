@@ -6,8 +6,21 @@ import { pending, type DirRecord } from './directory';
 /** Secrets are 43 url-safe characters (32 random bytes). */
 const SECRET = /^[A-Za-z0-9_-]{43}$/;
 
-export function installCommand(origin: string, secret: string): string {
-  return `curl -fsSL ${origin}/install.sh | sh -s -- ${secret} ${origin}`;
+/**
+ * Where sessions run (DECISION-0058, 0075). The installer takes it as a last word: none for the isolated container,
+ * `host-user` for this machine as a dedicated unprivileged user, `host` for this machine as root.
+ */
+export type RunChoice = 'container' | 'host-user' | 'host';
+
+const modeWord = (mode: RunChoice) => (mode === 'container' ? '' : ` ${mode}`);
+
+export function installCommand(origin: string, secret: string, mode: RunChoice = 'container'): string {
+  return `curl -fsSL ${origin}/install.sh | sh -s -- ${secret} ${origin}${modeWord(mode)}`;
+}
+
+/** The command for the QR flow: the installer shows a QR instead of taking a secret (`-`). */
+export function scanCommand(origin: string, mode: RunChoice = 'container'): string {
+  return mode === 'container' ? `curl -fsSL ${origin}/install.sh | sh` : `curl -fsSL ${origin}/install.sh | sh -s -- - ${origin}${modeWord(mode)}`;
 }
 
 /** The text the installer's QR encodes: opening it in any camera app starts Add Server in the client. */

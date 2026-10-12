@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { installCommand, claimLink, parseClaim, parseServerLink, pollDelay, waitForServer, ClaimTimeout, CLAIM_WINDOW_MS, type WaitDeps } from './onboard';
+import { installCommand, scanCommand, claimLink, parseClaim, parseServerLink, pollDelay, waitForServer, ClaimTimeout, CLAIM_WINDOW_MS, type WaitDeps } from './onboard';
 import type { DirRecord } from './directory';
 
 const S = 'A'.repeat(43);
@@ -84,5 +84,21 @@ describe('parseServerLink', () => {
     expect(parseServerLink(`https://app.example.dev/#claim=${id}`)).toBeNull();
     expect(parseServerLink('#server=short')).toBeNull();
     expect(parseServerLink('hello')).toBeNull();
+  });
+});
+
+describe('run choice in the install commands', () => {
+  const O = 'https://app.example.dev';
+  it('adds the mode word only for the host modes', () => {
+    expect(installCommand(O, S)).toBe(`curl -fsSL ${O}/install.sh | sh -s -- ${S} ${O}`);
+    expect(installCommand(O, S, 'container')).toBe(installCommand(O, S));
+    expect(installCommand(O, S, 'host-user')).toBe(`curl -fsSL ${O}/install.sh | sh -s -- ${S} ${O} host-user`);
+    expect(installCommand(O, S, 'host')).toBe(`curl -fsSL ${O}/install.sh | sh -s -- ${S} ${O} host`);
+  });
+
+  it('keeps the QR command short for the container and passes - for the host modes', () => {
+    expect(scanCommand(O)).toBe(`curl -fsSL ${O}/install.sh | sh`);
+    expect(scanCommand(O, 'host-user')).toBe(`curl -fsSL ${O}/install.sh | sh -s -- - ${O} host-user`);
+    expect(scanCommand(O, 'host')).toBe(`curl -fsSL ${O}/install.sh | sh -s -- - ${O} host`);
   });
 });
