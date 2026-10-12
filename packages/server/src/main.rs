@@ -21,6 +21,7 @@ mod connection;
 mod directory;
 #[cfg(test)]
 mod e2e;
+mod journal;
 mod link;
 mod locale;
 mod netutil;
@@ -120,6 +121,42 @@ struct Args {
     #[arg(long, default_value = "false")]
     qr: bool,
 
+    /// Directory of the change journal (root-only); see decision 0067.
+    #[arg(
+        long,
+        env = "TERMANCH_JOURNAL_DIR",
+        default_value = "/var/lib/termanch-root"
+    )]
+    journal_dir: PathBuf,
+
+    /// One-shot, for the installer: record a change of this kind (file_created, file_replaced, user_created,
+    /// package_installed, unit_installed, firewall_rule_added) before applying it. Fields: --journal-field K=V.
+    #[arg(long)]
+    journal_record: Option<String>,
+
+    #[arg(long = "journal-field", value_parser = parse_field)]
+    journal_fields: Vec<(String, String)>,
+
+    /// One-shot: list the changes that have not been reverted.
+    #[arg(long, default_value = "false")]
+    journal_list: bool,
+
+    /// One-shot: undo the journaled changes, newest first. Modified files are reported, not removed.
+    #[arg(long, default_value = "false")]
+    revert: bool,
+
+    /// With --revert: only this kind of change.
+    #[arg(long)]
+    only: Option<String>,
+
+    /// With --revert: show what would be undone and change nothing.
+    #[arg(long, default_value = "false")]
+    dry_run: bool,
+
+    /// With --revert: also delete the home directory of a user we created (the owner's explicit choice).
+    #[arg(long, default_value = "false")]
+    delete_home: bool,
+
     /// Print the registration link for this (unclaimed) server and exit.
     #[arg(long, default_value = "false")]
     register: bool,
@@ -143,6 +180,54 @@ pub fn version() -> String {
         env!("CARGO_PKG_VERSION"),
         build.chars().take(7).collect::<String>()
     )
+}
+
+fn parse_field(s: &str) -> Result<(String, String), String> {
+    s.split_once('=')
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .ok_or_else(|| "expected KEY=VALUE".to_string())
+}
+
+/// The journal commands run as the installer or an operator, never as the server.
+fn run_journal_command(args: &Args) -> anyhow::Result<bool> {
+    if let Some(kind) = &args.journal_record {
+        let journal = journal::Journal::open(&args.journal_dir)?;
+        let id = journal.record(journal::Change::from_fields(kind, &args.journal_fields)?)?;
+        println!("recorded change {id} ({kind})");
+        return Ok(true);
+    }
+    if args.journal_list {
+        for (id, change) in journal::Journal::open(&args.journal_dir)?.pending()? {
+            println!("{id} {}", serde_json::to_string(&change)?);
+        }
+        return Ok(true);
+    }
+    if args.revert {
+        let journal = journal::Journal::open(&args.journal_dir)?;
+        let opts = journal::RevertOptions {
+            only: args.only.clone(),
+            dry_run: args.dry_run,
+            delete_home: args.delete_home,
+        };
+        let report = journal.revert(&mut journal::RealOps, &opts)?;
+        let verb = if args.dry_run {
+            "would revert"
+        } else {
+            "reverted"
+        };
+        println!("{verb}: {:?}", report.reverted);
+        for (id, why) in &report.skipped {
+            println!("skipped {id}: {why}");
+        }
+        for (id, why) in &report.failed {
+            println!("failed {id}: {why}");
+        }
+        if !report.failed.is_empty() {
+            std::process::exit(1);
+        }
+        return Ok(true);
+    }
+    Ok(false)
 }
 
 fn default_config_dir() -> PathBuf {
@@ -218,6 +303,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
+    if run_journal_command(&args)? {
+        return Ok(());
+    }
     // An uninstalled server that Docker restarted stays idle instead of coming back as a new unclaimed
     // server; the installer's --claim removes the marker, which ends the idle wait so Docker restarts it.
     if args.claim.is_none() && !args.register && uninstall::is_uninstalled(&args.config_dir) {
