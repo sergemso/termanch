@@ -18,6 +18,8 @@
   let connection: Connection | null = null;
   let connState: ConnState = 'closed';
   let connDetail = '';
+  let narrow = false;
+  let drawerOpen = false;
   let showAddServer = false;
   let addPrefill: string | null = null;
   let toast: { message: string; type: 'success' | 'error' } | null = null;
@@ -155,6 +157,7 @@
   }
 
   function attach(id: string) {
+    drawerOpen = false;
     activeSessionId = id;
     connection?.send({ type: 'attach', session_id: id });
   }
@@ -192,6 +195,34 @@
     connection = null;
   }
 
+  function leaveServer() {
+    connection?.close();
+    connection = null;
+    selectedServer = null;
+    sessions = [];
+    activeSessionId = null;
+    drawerOpen = false;
+  }
+
+  onMount(() => {
+    // The soft keyboard shrinks the visual viewport but not the layout one; follow it so the key row stays visible.
+    const vv = window.visualViewport;
+    const fit = () => {
+      document.documentElement.style.setProperty('--app-height', `${vv?.height ?? window.innerHeight}px`);
+      if (vv && vv.offsetTop) window.scrollTo(0, 0);
+    };
+    const mq = window.matchMedia('(max-width: 720px)');
+    const media = () => (narrow = mq.matches);
+    fit();
+    media();
+    vv?.addEventListener('resize', fit);
+    mq.addEventListener('change', media);
+    return () => {
+      vv?.removeEventListener('resize', fit);
+      mq.removeEventListener('change', media);
+    };
+  });
+
   onMount(async () => {
     // A claim link (#claim=...), from a QR opened in the camera app, is kept across the GitHub login redirect.
     const claim = parseClaim(window.location.hash);
@@ -215,7 +246,7 @@
   });
 </script>
 
-<div class="app">
+<div class="app" style="display: flex; flex-direction: column; flex: 1; min-height: 0; {selectedServer ? 'height: var(--app-height, 100dvh); overflow: hidden;' : ''}">
   {#if !user}
     <div class="auth-screen">
       <div class="card" style="max-width: 400px; margin: auto; margin-top: 10vh;">
@@ -230,7 +261,7 @@
       </div>
     </div>
   {:else}
-    <header style="display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--bg-secondary);">
+    <header style="display: flex; justify-content: space-between; align-items: center; padding: {narrow ? '8px 12px' : '16px 24px'}; border-bottom: 1px solid var(--border); background: var(--bg-secondary);">
       <h1 style="font-size: 1.25rem;">Termanch</h1>
       <div style="display: flex; align-items: center; gap: 16px;">
         <span style="color: var(--fg-muted);">@{user}</span>
@@ -238,12 +269,16 @@
       </div>
     </header>
 
-    <main style="flex: 1; display: flex; flex-direction: column;">
+    <main style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
       {#if !selectedServer}
         <ServerList {servers} onselect={connectToServer} onadd={() => { addPrefill = null; showAddServer = true; }} onremove={(i) => saveServers(servers.filter((_, n) => n !== i))} />
       {:else}
-        <div style="display: flex; flex: 1; overflow: hidden;">
-          <aside style="width: 280px; border-right: 1px solid var(--border); background: var(--bg-secondary); padding: 16px; overflow-y: auto;">
+        <div style="display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative;">
+          {#if narrow && drawerOpen}
+            <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.5); z-index: 25;" on:click={() => (drawerOpen = false)}></div>
+          {/if}
+          <aside style="{narrow ? 'position: absolute; top: 0; bottom: 0; left: 0; z-index: 30; width: min(85vw, 320px); transform: translateX(' + (drawerOpen ? '0' : '-105%') + '); transition: transform 0.15s;' : 'width: 280px;'} border-right: 1px solid var(--border); background: var(--bg-secondary); padding: 16px; overflow-y: auto;">
+            <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem; margin-bottom: 12px;" on:click={leaveServer}>← Servers</button>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
               <h3 style="font-size: 0.875rem; text-transform: uppercase; color: var(--fg-muted);">Sessions · {connState}</h3>
               <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem;" on:click={() => connection?.send({ type: 'list_sessions' })}>Refresh</button>
@@ -260,7 +295,7 @@
             {/if}
             <ul style="list-style: none;">
               {#each sessions as session}
-                <li style="padding: 8px 12px; margin-bottom: 4px; border-radius: 6px; cursor: pointer; background: {activeSessionId === session.id ? 'var(--accent)' : 'transparent'}; color: {activeSessionId === session.id ? 'var(--bg)' : 'var(--fg)'};" on:click={() => attach(session.id)}>
+                <li style="padding: 12px; margin-bottom: 4px; border-radius: 6px; cursor: pointer; background: {activeSessionId === session.id ? 'var(--accent)' : 'transparent'}; color: {activeSessionId === session.id ? 'var(--bg)' : 'var(--fg)'};" on:click={() => attach(session.id)}>
                   <div style="font-weight: 500;">{session.name}</div>
                   <div style="font-size: 0.75rem; color: var(--fg-muted);">{session.id.slice(0, 12)}</div>
                   {#if session.agent}
@@ -274,7 +309,14 @@
             </ul>
           </aside>
 
-          {#if connection}<Terminal {connection} {activeSessionId} />{/if}
+          <div style="flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;">
+            {#if narrow}
+              <div style="padding: 6px 8px; background: var(--bg-secondary); border-bottom: 1px solid var(--border);">
+                <button class="secondary" aria-label="Sessions" style="padding: 6px 10px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" on:click={() => (drawerOpen = !drawerOpen)}>☰ {sessions.find((x) => x.id === activeSessionId)?.name ?? 'Sessions'}</button>
+              </div>
+            {/if}
+            {#if connection}<Terminal {connection} {activeSessionId} {connState} />{/if}
+          </div>
         </div>
       {/if}
     </main>
