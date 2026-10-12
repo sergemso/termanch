@@ -32,7 +32,7 @@
 
 <style>
   .backdrop {
-    position: fixed;
+    position: absolute;
     inset: 0;
     z-index: 1500;
     display: flex;
