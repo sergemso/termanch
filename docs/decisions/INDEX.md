@@ -77,3 +77,6 @@
 0072-remote-uninstall,"Remove server can uninstall the server in two stages, with host cleanup opt-in","deployment, security, client, protocol",active
 0073-usage-tiers-on-device,"Usage tiers and a thank-you badge are computed on the device and never leave it","client, mobile, privacy",active
 0074-problem-reports-via-github-issues,"Problems are reported by the user through a prefilled GitHub issue","client, privacy, repo",active
+0075-native-host-mode,"Native host mode runs the server without Docker, as a systemd service","deployment, server, security",active
+0076-native-releases-and-updater,"Native releases carry a signed manifest and a root-owned updater applies them with rollback","build, security, deployment",active
+0077-root-actions-by-request-file,"An unprivileged server asks for root actions through a request file, never through sudo","security, deployment, protocol",active
