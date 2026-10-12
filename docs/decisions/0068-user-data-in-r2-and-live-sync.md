@@ -19,4 +19,4 @@ tags: [directory, scale, sync, roadmap]
 
 ## Why
 
-It removes list reads from Workers, the D1 single point of failure for user data and the staleness of a cached list, within the free tiers. Amends 0060. Open: R2 may need a payment method (see 0022), and a free write path without Workers and R2 Class A is being investigated (plan step C.6).
+It removes list reads from Workers, the D1 single point of failure for user data and the staleness of a cached list, within the free tiers. Amends 0060. Open: R2 may need a payment method (see 0022 and 0024). The spikes are done: fact 0024 verifies the R2 and CDN behaviour and conditional writes; fact 0025 compares an open relay network, an own VM, sharding and R2 with Workers, and recommends relays with R2 as the fallback. The choice is the owner's, so this stays a draft.
