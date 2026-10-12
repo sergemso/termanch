@@ -15,6 +15,7 @@ tags: [directory, scale, networking, roadmap]
 - Workers handle only announces (R2 write), OAuth and the owner's server list.
 - Servers announce on change (IP, port, fingerprint, claim) plus a 7-day keepalive. "Online" is learned from the connection attempt, not from the directory.
 - The owner's list (server ids and names, no secrets) is keyed by GitHub id, returned in the OAuth exchange response and cached 1 h in the browser.
+- The list stays in the directory, not in the user's GitHub: gists need the broad `gist` scope (all gists, read and write) and keep a powerful token in the browser, which 0062 avoids. Decided 2026-10-12; a gist backup is not planned.
 - A spike verifies R2 free limits and CDN caching on the custom domain before migration; D1 stays until it passes.
 
 ## Why

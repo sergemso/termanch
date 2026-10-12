@@ -6,13 +6,13 @@ Repo facts for a cold start: Rust server `packages/server` (tmux/PTY via `Sessio
 
 ## Phase 0: finish v1
 
-### 0.1 Close the real end-to-end check (#15, #16) — [~]
+### 0.1 Close the real end-to-end check (#15, #16) — [x]
 Class: debug · Needs: none · Check: `gh issue view 15 --json state -q .state | grep -q CLOSED && gh issue view 16 --json state -q .state | grep -q CLOSED`
 Context: Login works (fixed in #37). Server added and connected; typing and the drop/restore test are not yet confirmed by the owner. Server list identity fix is PR #38.
 Do: 1. Merge #38. 2. With the owner, type in a terminal, drop the network for 10 s, confirm re-attach with screen replay. 3. Fix findings, close #15 and #16.
 Done-when: both issues closed with the evidence in a comment.
 
-### 0.2 Browser end-to-end test and resource gates in CI (#21) — [ ]
+### 0.2 Browser end-to-end test and resource gates in CI (#21) — [x]
 Class: implement · Needs: 0.1 · Check: `gh workflow list | grep -qi e2e`
 Context: Harness is not in the repo; build a vite bundle of Connection+waitForServer, run Chromium (`playwright-core`, update the lockfile with `npx pnpm@9`) with `--disable-web-security` against the real binary with `TERMANCH_DEV_INFO=on` and `TERMANCH_GITHUB_API` pointing at a stand-in. Gates: server RSS under 512 MB under load, image size reported and capped.
 Do: add the e2e job and gates to `.github/workflows`; keep it under the free CI minutes.
@@ -110,7 +110,7 @@ Context: `packages/client/functions/api/directory/_lib.ts` has `NEW_IDS_PER_SRC_
 Do: 1. Cloudflare rate-limiting rule for announce (document and apply with the API token). 2. Hashcash proof for a new `server_id`, produced by the server, verified in `parseAnnounce`. 3. Client `connectToServer` falls back to the cached record when the directory returns 429/5xx. 4. Message on fresh install when the directory is down.
 Done-when: unproven new ids are rejected; with the directory forced to 503 an existing server still connects.
 
-### S.5 Web baseline: CSP and SECURITY.md (0066) — [ ]‖
+### S.5 Web baseline: CSP and SECURITY.md (0066) — [x]‖
 Class: implement · Needs: none · Check: `test -f packages/client/public/_headers && test -f SECURITY.md`
 Context: Fact 0023 notes the hosted client's headers were not checked.
 Do: 1. Check current headers with `curl -I`. 2. Add `_headers` (strict CSP without inline script, frame-ancestors none, HSTS, nosniff, referrer policy); fix any inline script the build emits. 3. `SECURITY.md` with the advisory channel and 90-day window. 4. Verify the app still works (login, add server, terminal).
