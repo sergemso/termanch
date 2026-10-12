@@ -57,13 +57,13 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
+    /* Under black-translucent the page draws behind the status bar, so every screen keeps clear of it. */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+    box-sizing: border-box;
   }
   .shell.pinned {
     position: fixed;
     overflow: hidden;
-    /* Under black-translucent the page also draws behind the status bar and home indicator. */
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
-    box-sizing: border-box;
   }
   /* With the keyboard open its own area replaces the home-indicator inset. */
   .shell.pinned:not(.keyboard) {
