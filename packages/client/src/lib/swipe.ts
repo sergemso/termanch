@@ -20,16 +20,38 @@ export function replacementData(e: Pick<InputEvent, 'inputType' | 'data' | 'isCo
   return data || null;
 }
 
+// Key names the platform defines ("Enter", "ArrowLeft", "Dead", "Unidentified", "F12"); anything else longer than
+// one character is not a key.
+const NAMED_KEY = /^(?:[A-Z][A-Za-z]+|F\d{1,2})$/;
+
 /**
- * Listens on the terminal's hidden input and turns a keyboard's "replace the word you just typed" into
- * keystrokes (see above). `send` receives the bytes to type. Returns the function that removes the listener.
- * Add other keyboards' quirks as further cases in this one place.
+ * The iOS Russian keyboard reports a swiped *word* as the key of a keydown (`key="чем"`, fact 0027). xterm takes
+ * any keydown as "handled" and then ignores the `insertText` that carries the word, so the word is lost. A
+ * keydown like that must not reach xterm; its input event then types the word, as it does for Latin swipes.
  */
-export function attachReplacement(area: HTMLTextAreaElement, send: (keys: string) => void): () => void {
+export function isWordKey(key: string): boolean {
+  return [...key].length > 1 && !NAMED_KEY.test(key);
+}
+
+/**
+ * Makes swipe typing work on the terminal's hidden input: drops word-valued keydowns before xterm sees them, and
+ * turns "replace the word you just typed" into keystrokes (see above). `send` receives the bytes to type.
+ * Returns the function that removes the listeners. Add other keyboards' quirks as further cases here.
+ */
+export function attachSwipeSupport(area: HTMLTextAreaElement, send: (keys: string) => void): () => void {
+  // xterm listens on the textarea in the capture phase, so an ancestor is the only place to run first.
+  const host: EventTarget = area.parentElement ?? area;
+  const onKeyDown = (e: Event) => {
+    if (e.target === area && isWordKey((e as KeyboardEvent).key)) e.stopPropagation();
+  };
   const onBeforeInput = (e: Event) => {
     const data = replacementData(e as InputEvent);
     if (data !== null) send(replacementKeys(area.value, area.selectionStart, area.selectionEnd, data));
   };
+  host.addEventListener('keydown', onKeyDown, true);
   area.addEventListener('beforeinput', onBeforeInput, true);
-  return () => area.removeEventListener('beforeinput', onBeforeInput, true);
+  return () => {
+    host.removeEventListener('keydown', onKeyDown, true);
+    area.removeEventListener('beforeinput', onBeforeInput, true);
+  };
 }

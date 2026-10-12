@@ -367,6 +367,20 @@ try {
         await page.keyboard.press('Enter');
         const utf8 = { ...process.env, TMUX_TMPDIR: home, LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' };
         await waitFor(() => /^привет$/m.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: utf8, encoding: 'utf8' })), 'Cyrillic text in the shell output', 10000);
+        // Russian iOS keyboard: a swiped word arrives as keydown key="чем" followed by insertText (captured on an iPhone).
+        // xterm drops such a word unless the keydown is kept from it.
+        await page.keyboard.press('Control+u');
+        await page.keyboard.type('echo ');
+        await page.evaluate(() => {
+          const area = document.querySelector('.xterm-helper-textarea');
+          area.dispatchEvent(new KeyboardEvent('keydown', { key: 'чем', bubbles: true, cancelable: true }));
+          area.value = 'чем';
+          area.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: 'чем', bubbles: true, cancelable: true, composed: true }));
+          area.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: 'чем', bubbles: true, composed: true })); // browsers' own events are composed
+          area.dispatchEvent(new KeyboardEvent('keyup', { key: 'чем', bubbles: true }));
+        });
+        await page.keyboard.press('Enter');
+        await waitFor(() => /^чем$/m.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: utf8, encoding: 'utf8' })), 'the swiped Cyrillic word in the shell output', 8000);
         // The terminal bell (what `printf '\a'` and agents ring) becomes a beep once audio was unlocked by a tap.
         await page.keyboard.press('Control+u');
         await page.keyboard.type("printf '\\a'");

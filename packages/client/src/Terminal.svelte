@@ -11,7 +11,7 @@
   import { beep, bellEnabled, installAudioUnlock, setBellEnabled, unlockAudio } from './lib/bell';
   import { copyText } from './lib/clipboard';
   import { attachInputLogger } from './lib/inputlog';
-  import { attachReplacement } from './lib/swipe';
+  import { attachSwipeSupport } from './lib/swipe';
   import { DEBUG_KEY, debugEnabled } from './lib/viewport';
   import { KeyboardMode } from './lib/terminal/keyboardMode';
   import { attachReturnKeyGuard } from './lib/terminal/inputGuards';
@@ -204,7 +204,7 @@
     cleanups.push(installAudioUnlock());
     if (term.textarea) {
       cleanups.push(attachInputLogger(term.textarea));
-      cleanups.push(attachReplacement(term.textarea, sendInput)); // fact 0027
+      cleanups.push(attachSwipeSupport(term.textarea, sendInput)); // fact 0027
       cleanups.push(attachReturnKeyGuard(term.textarea, () => !disposed && term?.focus()));
     }
     window.addEventListener('termanch-debug', syncDebug);
