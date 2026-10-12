@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { installCommand, claimLink, parseClaim, pollDelay, waitForServer, ClaimTimeout, CLAIM_WINDOW_MS, type WaitDeps } from './onboard';
+import { installCommand, claimLink, parseClaim, parseServerLink, pollDelay, waitForServer, ClaimTimeout, CLAIM_WINDOW_MS, type WaitDeps } from './onboard';
 import type { DirRecord } from './directory';
 
 const S = 'A'.repeat(43);
@@ -71,5 +71,18 @@ describe('waitForServer', () => {
     const ac = new AbortController();
     ac.abort();
     await expect(waitForServer('o', S, ac.signal, deps([rec]))).rejects.toThrow('aborted');
+  });
+});
+
+describe('parseServerLink', () => {
+  const id = 'A'.repeat(43);
+  it('reads the id from a link or a fragment', () => {
+    expect(parseServerLink(`https://app.example.dev/#server=${id}`)).toBe(id);
+    expect(parseServerLink(`#server=${id}`)).toBe(id);
+  });
+  it('rejects claim links, short ids and junk', () => {
+    expect(parseServerLink(`https://app.example.dev/#claim=${id}`)).toBeNull();
+    expect(parseServerLink('#server=short')).toBeNull();
+    expect(parseServerLink('hello')).toBeNull();
   });
 });

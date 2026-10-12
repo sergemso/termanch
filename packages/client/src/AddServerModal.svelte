@@ -2,7 +2,7 @@
   import { onDestroy, onMount } from 'svelte';
   import type { ServerListItem } from './lib/protocol';
   import { randomClaimSecret } from './lib/directory';
-  import { installCommand, parseClaim, waitForServer, ClaimTimeout } from './lib/onboard';
+  import { installCommand, parseClaim, parseServerLink, waitForServer, ClaimTimeout } from './lib/onboard';
   import { decodeQrFile, startCameraScan } from './lib/scan';
   import { wsUrl } from './lib/servers';
 
@@ -11,6 +11,8 @@
   export let prefillSecret: string | null = null;
   export let onclose: () => void;
   export let onadd: (server: ServerListItem) => void;
+  /** A scanned or pasted re-add link for a server that is already registered. */
+  export let onserver: (serverId: string) => void;
 
   type Tab = 'paste' | 'scan' | 'url';
   let tab: Tab = prefillSecret ? 'paste' : 'paste';
@@ -63,9 +65,15 @@
   }
 
   function gotText(text: string) {
+    const known = parseServerLink(text);
+    if (known) {
+      stopScan();
+      onserver(known);
+      return;
+    }
     const s = parseClaim(text);
     if (!s) {
-      error = 'That QR is not a Termanch registration code.';
+      error = 'That QR is not a Termanch code.';
       return;
     }
     stopScan();

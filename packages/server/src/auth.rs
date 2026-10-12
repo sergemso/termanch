@@ -272,6 +272,12 @@ pub fn claim_link(client_url: &str, claim: &str) -> String {
     format!("{}/#claim={}", client_url.trim_end_matches('/'), claim)
 }
 
+/// Link that adds an already-registered server to the owner's browser. The server id is a public key, so
+/// the link carries no secret; connecting still requires the owner's GitHub login.
+pub fn server_link(client_url: &str, server_id: &str) -> String {
+    format!("{}/#server={}", client_url.trim_end_matches('/'), server_id)
+}
+
 /// The same link as a terminal QR code: modules drawn light-on-dark for dark terminals; the client's
 /// decoder tries both polarities.
 pub fn claim_qr(link: &str) -> Option<String> {
@@ -413,6 +419,14 @@ mod tests {
         assert_eq!(
             claim_link("https://app.example.dev/", "tok"),
             "https://app.example.dev/#claim=tok"
+        );
+    }
+
+    #[test]
+    fn the_server_link_carries_only_the_public_id() {
+        assert_eq!(
+            server_link("https://app.example.dev/", "abc"),
+            "https://app.example.dev/#server=abc"
         );
     }
 

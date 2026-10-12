@@ -153,7 +153,19 @@ fn build_backend(args: &Args) -> anyhow::Result<Arc<dyn SessionBackend>> {
 fn print_registration(args: &Args, auth: &AuthState) -> anyhow::Result<()> {
     use std::io::IsTerminal;
     if let Some(owner) = auth.owner() {
-        println!("This server is already registered to @{}.", owner.login);
+        println!("This server is registered to @{}.", owner.login);
+        // A browser that forgot the server (removed it, or a new device) can add it again by id: no secret needed.
+        let id = directory::ServerKey::load_or_create(&args.config_dir)?.server_id();
+        let link = auth::server_link(&args.client_url, &id);
+        if args.qr || std::io::stdout().is_terminal() {
+            if let Some(qr) = auth::claim_qr(&link) {
+                println!("{qr}");
+            }
+        }
+        println!(
+            "To add it to a browser signed in as @{}, scan the code or open:\n\n  {link}\n",
+            owner.login
+        );
         return Ok(());
     }
     let claim = auth

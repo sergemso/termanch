@@ -95,11 +95,7 @@ done
 if [ "$SECRET" = "-" ]; then
   OUT="$(docker exec "$NAME" termanch-server --register --qr)"
   case "$OUT" in
-    *"already registered"*)
-      say "$OUT"
-      say "To add it to another browser, or after removing it from the app, open Add Server > Paste a command"
-      say "in Termanch and run the command shown there: it starts a fresh registration for this server."
-      ;;
+    *"is registered to"*) say "$OUT" ;;
     *)
       say "Scan this with Termanch (Add Server > Scan a QR), or open the link:"
       say "$OUT"

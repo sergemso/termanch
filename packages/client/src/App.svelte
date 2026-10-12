@@ -5,7 +5,7 @@
   import AddServerModal from './AddServerModal.svelte';
   import Toast from './Toast.svelte';
   import type { ServerMessage, SessionInfo, ServerListItem } from './lib/protocol';
-  import { parseClaim } from './lib/onboard';
+  import { parseClaim, parseServerLink } from './lib/onboard';
   import { Connection, type ConnState } from './lib/connection';
   import { lookup, type DirRecord } from './lib/directory';
 
@@ -100,6 +100,22 @@
     } catch (e) {
       showToast('Authentication failed', 'error');
       return false;
+    }
+  }
+
+  /** Re-adds a registered server by its public id: the record is signed by that key, so nothing secret is needed. */
+  async function addServerById(id: string) {
+    try {
+      const record = await lookup(location.origin, id);
+      if (!record) {
+        showToast('That server is not in the directory yet. Is it running?', 'error');
+        return;
+      }
+      const server: ServerListItem = { server_id: id, server_name: 'my-vps', server_url: '', record, registered_at: Date.now() };
+      addServer(server);
+      connectToServer(server);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Could not add the server', 'error');
     }
   }
 
@@ -231,12 +247,25 @@
       window.history.replaceState({}, '', window.location.pathname);
     }
 
+    // A re-add link (#server=...) from the installer or a QR, kept across the GitHub login redirect.
+    const serverId = parseServerLink(window.location.hash);
+    if (serverId) {
+      sessionStorage.setItem('termanch_pending_server', serverId);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
     let authed = false;
     if (window.location.pathname === '/callback') authed = await handleOAuthCallback();
     else authed = checkAuth();
     if (!authed) return;
 
     loadServers();
+    const pendingServer = sessionStorage.getItem('termanch_pending_server');
+    if (pendingServer) {
+      sessionStorage.removeItem('termanch_pending_server');
+      void addServerById(pendingServer);
+      return;
+    }
     const pending = sessionStorage.getItem('termanch_pending_claim');
     if (pending) {
       sessionStorage.removeItem('termanch_pending_claim');
@@ -323,7 +352,7 @@
   {/if}
 
   {#if showAddServer}
-    <AddServerModal origin={location.origin} prefillSecret={addPrefill} onclose={() => showAddServer = false} onadd={(server) => { addServer(server); showAddServer = false; connectToServer(server); }} />
+    <AddServerModal origin={location.origin} prefillSecret={addPrefill} onserver={(id) => { showAddServer = false; void addServerById(id); }} onclose={() => showAddServer = false} onadd={(server) => { addServer(server); showAddServer = false; connectToServer(server); }} />
   {/if}
 
   {#if toast}
