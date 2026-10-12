@@ -127,6 +127,40 @@ try {
   await waitFor(() => e2e(relayed, () => window.__e2e.fatal.includes('not the one you added')), 'pinned id enforced');
   console.log('ok  the challenge must name the server the client pinned');
 
+  // 2c. Soft keyboard: with a faked visualViewport (what iOS reports), the key row must stay inside the
+  // visible area both when the viewport only shrinks (Android) and when Safari also pans it (iPhone).
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true });
+    await ctx.addInitScript(() => {
+      const vv = Object.assign(new EventTarget(), { height: innerHeight, width: innerWidth, offsetTop: 0, offsetLeft: 0, scale: 1 });
+      Object.defineProperty(window, 'visualViewport', { value: vv });
+      window.__vv = (patch, ev) => { Object.assign(vv, patch); vv.dispatchEvent(new Event(ev)); };
+    });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => fail(`page error: ${e.message}`));
+    await page.goto(`http://127.0.0.1:${webPort}/shell.html`);
+    const keyRowInView = () =>
+      page.evaluate(() => {
+        const r = document.querySelector('[role=toolbar]').getBoundingClientRect();
+        const vv = window.visualViewport;
+        return { top: r.top, bottom: r.bottom, headerTop: document.querySelector('header').getBoundingClientRect().top, viewTop: vv.offsetTop, viewBottom: vv.offsetTop + vv.height };
+      });
+    // Flush with the keyboard (no gap below, nothing cut off), and the header still at the top of the view.
+    const inside = (m) => Math.abs(m.bottom - m.viewBottom) <= 1 && m.top >= m.viewTop - 0.5 && Math.abs(m.headerTop - m.viewTop) <= 1;
+    const closed = await keyRowInView();
+    if (!inside(closed)) fail(`key row outside the view with no keyboard: ${JSON.stringify(closed)}`);
+    await page.evaluate(() => window.__vv({ height: 800 - 336 }, 'resize'));
+    const shrunk = await keyRowInView();
+    if (!inside(shrunk)) fail(`key row hidden when the viewport shrinks: ${JSON.stringify(shrunk)}`);
+    await page.evaluate(() => window.__vv({ height: 800 - 336 - 44, offsetTop: 180 }, 'scroll'));
+    const panned = await keyRowInView();
+    if (!inside(panned)) fail(`key row hidden when Safari pans the viewport: ${JSON.stringify(panned)}`);
+    await page.evaluate(() => window.__vv({ height: 800, offsetTop: 0 }, 'resize'));
+    if (!inside(await keyRowInView())) fail('key row not restored after the keyboard closed');
+    await ctx.close();
+    console.log('ok  the key row stays visible when the keyboard opens, shrinks the view or pans it');
+  }
+
   // 3. Create a session, type, see the output.
   await e2e(alice, () => window.__e2e.send({ type: 'new_session', name: 's1' }));
   await waitFor(() => e2e(alice, () => (window.__e2e.send({ type: 'list_sessions' }), window.__e2e.sessions.length > 0)), 'session listed');
