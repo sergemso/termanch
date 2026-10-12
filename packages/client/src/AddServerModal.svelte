@@ -44,8 +44,20 @@
     }
   }
 
-  async function copy() {
-    await navigator.clipboard.writeText(command);
+  $: scanCommand = `curl -fsSL ${origin}/install.sh | sh`;
+
+  /** A tap selects the whole command, so it can also be copied by hand on browsers without clipboard access. */
+  function selectAll(e: MouseEvent) {
+    const sel = window.getSelection();
+    if (!sel) return;
+    const range = document.createRange();
+    range.selectNodeContents(e.currentTarget as Node);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  async function copy(text: string) {
+    await navigator.clipboard.writeText(text);
     copied = true;
     setTimeout(() => (copied = false), 2000);
   }
@@ -131,10 +143,12 @@
 
     {#if tab === 'paste'}
       <p style="color: var(--fg-muted); margin-bottom: 8px;">Run this once on your VPS (any Linux with root access). It installs and starts everything, and the server appears here by itself.</p>
-      <div style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 0.75rem; word-break: break-all; margin-bottom: 8px;">{command}</div>
-      <button on:click={copy} style="width: 100%; margin-bottom: 12px;">{copied ? 'Copied' : 'Copy command'}</button>
+      <pre class="command" on:click={selectAll}>{command}</pre>
+      <button on:click={() => copy(command)} style="width: 100%; margin-bottom: 12px;">{copied ? 'Copied' : 'Copy command'}</button>
     {:else if tab === 'scan'}
-      <p style="color: var(--fg-muted); margin-bottom: 8px;">On the VPS run <code>curl -fsSL {origin}/install.sh | sh</code>. It shows a QR code. Scan it here, or take a screenshot of it and choose the screenshot. Delete the screenshot afterwards.</p>
+      <p style="color: var(--fg-muted); margin-bottom: 8px;">On a new VPS run this. It shows a QR code. Scan it here, or take a screenshot of it and choose the screenshot. Delete the screenshot afterwards.</p>
+      <pre class="command" on:click={selectAll}>{scanCommand}</pre>
+      <button class="secondary" on:click={() => copy(scanCommand)} style="width: 100%; margin-bottom: 12px;">{copied ? 'Copied' : 'Copy command'}</button>
       <video bind:this={video} muted playsinline style="width: 100%; border-radius: 8px; background: #000; margin-bottom: 8px; display: {scanning ? 'block' : 'none'};"></video>
       <div style="display: flex; gap: 8px; margin-bottom: 12px;">
         {#if scanning}
@@ -164,3 +178,7 @@
     </details>
   </div>
 </div>
+
+<style>
+  .command { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: monospace; font-size: 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; cursor: copy; margin: 0 0 8px; }
+</style>
