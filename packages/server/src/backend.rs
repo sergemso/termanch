@@ -117,6 +117,23 @@ impl Runner {
         Attachment::spawn(&program, &args, cols, rows)
     }
 
+    /// Startup self-check for the native mode: this process must run as the chosen user and tmux must exist.
+    pub async fn check_native(&self, want_root: bool) -> Result<()> {
+        let out = self.run("id", &["-u".to_string()]).await?;
+        let uid = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if want_root != (uid == "0") {
+            return Err(anyhow!(
+                "the service runs as uid {uid}, not as the {} you chose; check User= in the systemd unit",
+                if want_root { "root user" } else { "dedicated user" }
+            ));
+        }
+        let tmux = self.run("tmux", &["-V".to_string()]).await;
+        if !tmux.map(|o| o.status.success()).unwrap_or(false) {
+            return Err(anyhow!("tmux is not installed on this machine"));
+        }
+        Ok(())
+    }
+
     /// Startup self-check for host mode: the prefix must work, run as the chosen user, and find tmux.
     pub async fn check_host(&self, want_root: bool) -> Result<()> {
         let out = self.run("id", &["-u".to_string()]).await.map_err(|e| {
@@ -155,6 +172,10 @@ pub enum RunMode {
     Host {
         user: String,
     },
+    /// The server itself runs on the host as `user` (decision 0075): commands run as they are, with no `nsenter`.
+    Native {
+        user: String,
+    },
 }
 
 impl RunMode {
@@ -165,8 +186,14 @@ impl RunMode {
             "host" => Ok(Self::Host {
                 user: user.to_string(),
             }),
+            "native" if user.is_empty() => {
+                Err(anyhow!("TERMANCH_RUN_USER must name a user or root"))
+            }
+            "native" => Ok(Self::Native {
+                user: user.to_string(),
+            }),
             other => Err(anyhow!(
-                "unknown TERMANCH_RUN `{other}` (container or host)"
+                "unknown TERMANCH_RUN `{other}` (container, host or native)"
             )),
         }
     }
@@ -175,18 +202,20 @@ impl RunMode {
     pub fn label(&self) -> String {
         match self {
             Self::Container => "container".into(),
-            Self::Host { user } => format!("host:{user}"),
+            // The app shows the same badge for both ways of running on the host.
+            Self::Host { user } | Self::Native { user } => format!("host:{user}"),
         }
     }
 
     pub fn is_host(&self) -> bool {
-        matches!(self, Self::Host { .. })
+        matches!(self, Self::Host { .. } | Self::Native { .. })
     }
 
     pub fn runner(&self) -> Runner {
         match self {
             Self::Container => Runner::default(),
             Self::Host { user } => Runner::host(user),
+            Self::Native { .. } => Runner::default(),
         }
     }
 
@@ -194,6 +223,7 @@ impl RunMode {
         match self {
             Self::Container => Ok(()),
             Self::Host { user } => self.runner().check_host(user == "root").await,
+            Self::Native { user } => Runner::default().check_native(user == "root").await,
         }
     }
 }
@@ -382,6 +412,22 @@ mod tests {
         assert!(!valid_name("=x"));
         assert!(!valid_name("a;rm"));
         assert!(!valid_name(&"a".repeat(65)));
+    }
+
+    #[test]
+    fn the_native_mode_runs_commands_as_they_are_and_shows_the_host_badge() {
+        let native = RunMode::parse("native", "termanch").unwrap();
+        assert_eq!(native.label(), "host:termanch");
+        assert!(native.is_host());
+        let (prog, argv) = native
+            .runner()
+            .wrap(true, "tmux", &["new-session".to_string()]);
+        assert_eq!(
+            (prog.as_str(), argv),
+            ("tmux", vec!["new-session".to_string()]),
+            "no nsenter, no wrapper"
+        );
+        assert!(RunMode::parse("native", "").is_err());
     }
 
     #[test]

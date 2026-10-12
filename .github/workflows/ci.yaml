@@ -209,3 +209,47 @@ jobs:
         env:
           TERMANCH_BIN: ${{ github.workspace }}/bin/termanch-server
         run: node e2e/run.mjs
+
+  # The native installer (decision 0075) run for real: a machine with systemd, a release signed with a throwaway
+  # key, then install, install again, a refused tampered release, and a revert that restores the machine.
+  installer:
+    name: Native installer (${{ matrix.image }}, ${{ matrix.mode }})
+    needs: static
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['jrei/systemd-debian:12', 'jrei/systemd-ubuntu:24.04']
+        mode: [host-user, host]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: termanch-server-musl-x86_64
+          path: release
+
+      - name: Make a signed test release
+        run: |
+          mv release/termanch-server release/termanch-server-x86_64-linux
+          cp release/termanch-server-x86_64-linux release/termanch-server-aarch64-linux  # listed in the manifest; this test runs x86_64
+          python3 .github/scripts/make_manifest.py 0.1.0 release release/manifest.json
+          ssh-keygen -q -t ed25519 -N '' -C test -f key
+          ssh-keygen -Y sign -n termanch-release -f key release/manifest.json
+          echo "t1 $(cut -d' ' -f1,2 key.pub)" > keys.txt
+
+      - name: Start a machine with systemd
+        run: |
+          docker run -d --name machine --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            -v "$PWD/release:/release" -v "$PWD/packages/client/public/install.sh:/install.sh:ro" \
+            -v "$PWD/keys.txt:/keys.txt:ro" -v "$PWD/.github/scripts/test-native-install.sh:/test.sh:ro" \
+            ${{ matrix.image }}
+          sleep 8
+          docker exec machine sh -c 'apt-get update -qq && apt-get install -y -qq curl openssh-client ca-certificates iproute2 >/dev/null'
+
+      - name: Install, install again, refuse a tampered release, revert
+        run: docker exec machine sh /test.sh ${{ matrix.mode }}
+
+      - name: Service log (on failure)
+        if: failure()
+        run: docker exec machine journalctl -u termanch --no-pager | tail -50

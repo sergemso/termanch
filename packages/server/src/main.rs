@@ -81,7 +81,8 @@ struct Args {
     #[arg(long, env = "TERMANCH_BACKEND_ATTACH")]
     backend_attach: Option<String>,
 
-    /// Where sessions run: `container` (default, isolated) or `host` (needs --pid=host --privileged).
+    /// Where sessions run: `container` (default, isolated), `native` (the server runs on the host as a
+    /// systemd service, decision 0075) or `host` (the retired privileged-container mode, needs --pid=host --privileged).
     #[arg(long, env = "TERMANCH_RUN", default_value = "container")]
     run: String,
 

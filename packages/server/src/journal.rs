@@ -26,6 +26,9 @@ pub enum Change {
         backup: String,
         sha256: String,
     },
+    /// A directory we created; reverted only when it is empty (its contents are the owner's or the state a
+    /// dedicated uninstall step removes first).
+    DirCreated { path: String },
     /// A user account we created.
     UserCreated { name: String, home: String },
     /// A package we installed with the host's package manager.
@@ -41,6 +44,7 @@ impl Change {
         match self {
             Change::FileCreated { .. } => "file_created",
             Change::FileReplaced { .. } => "file_replaced",
+            Change::DirCreated { .. } => "dir_created",
             Change::UserCreated { .. } => "user_created",
             Change::PackageInstalled { .. } => "package_installed",
             Change::UnitInstalled { .. } => "unit_installed",
@@ -61,19 +65,21 @@ impl Change {
         Ok(match kind {
             "file_created" => {
                 let path = get("path")?;
+                // `sha256=` lets the installer record a file before it is put in place (it knows the hash).
                 Change::FileCreated {
-                    sha256: hash_file(Path::new(&path))?,
+                    sha256: file_hash_field(&get("sha256").ok(), &path)?,
                     path,
                 }
             }
             "file_replaced" => {
                 let path = get("path")?;
                 Change::FileReplaced {
-                    sha256: hash_file(Path::new(&path))?,
+                    sha256: file_hash_field(&get("sha256").ok(), &path)?,
                     backup: get("backup")?,
                     path,
                 }
             }
+            "dir_created" => Change::DirCreated { path: get("path")? },
             "user_created" => Change::UserCreated {
                 name: get("name")?,
                 home: get("home")?,
@@ -102,6 +108,16 @@ enum Record {
     Reverted { reverted: u64, ts: u64 },
 }
 
+fn file_hash_field(given: &Option<String>, path: &str) -> Result<String> {
+    match given {
+        Some(h) if h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit()) => {
+            Ok(h.to_ascii_lowercase())
+        }
+        Some(_) => bail!("sha256 must be 64 hex digits"),
+        None => hash_file(Path::new(path)),
+    }
+}
+
 pub fn hash_file(path: &Path) -> Result<String> {
     Ok(hex(&Sha256::digest(std::fs::read(path)?)))
 }
@@ -124,6 +140,8 @@ pub trait Ops {
     fn remove_file(&mut self, path: &Path) -> Result<()>;
     fn restore_file(&mut self, backup: &Path, path: &Path) -> Result<()>;
     /// `delete_home` is the owner's explicit choice (decision 0072); a plain revert keeps the home directory.
+    /// Removes an empty directory; `Ok(false)` when it still has contents.
+    fn remove_empty_dir(&mut self, path: &Path) -> Result<bool>;
     fn delete_user(&mut self, name: &str, delete_home: bool) -> Result<()>;
     fn remove_package(&mut self, manager: &str, name: &str) -> Result<()>;
     fn remove_unit(&mut self, name: &str, path: &Path) -> Result<()>;
@@ -290,6 +308,19 @@ fn apply_revert(ops: &mut dyn Ops, change: &Change, opts: &RevertOptions) -> Res
                 }
             }
         }
+        Change::DirCreated { path } => {
+            check_path(path)?;
+            if dry || !Path::new(path).exists() {
+                return Ok(Outcome::Done);
+            }
+            if ops.remove_empty_dir(Path::new(path))? {
+                Ok(Outcome::Done)
+            } else {
+                Ok(Outcome::Skip(format!(
+                    "{path} is not empty, so it was left in place"
+                )))
+            }
+        }
         Change::UserCreated { name, .. } => {
             check_name(name)?;
             if !dry {
@@ -380,7 +411,19 @@ impl Ops for RealOps {
         Ok(std::fs::rename(backup, path)?)
     }
 
+    fn remove_empty_dir(&mut self, path: &Path) -> Result<bool> {
+        match std::fs::remove_dir(path) {
+            Ok(()) => Ok(true),
+            Err(e) if e.kind() == std::io::ErrorKind::DirectoryNotEmpty => Ok(false),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     fn delete_user(&mut self, name: &str, delete_home: bool) -> Result<()> {
+        // Recorded before the account was made: when creating it failed there is nothing to remove.
+        if run("id", &["-u", "--", name]).is_err() {
+            return Ok(());
+        }
         let mut args = vec!["--", name];
         if delete_home {
             args.insert(0, "-r");
@@ -460,6 +503,10 @@ mod tests {
             self.calls
                 .push(format!("restore {} {}", backup.display(), path.display()));
             Ok(std::fs::rename(backup, path)?)
+        }
+        fn remove_empty_dir(&mut self, path: &Path) -> Result<bool> {
+            self.calls.push(format!("rmdir {}", path.display()));
+            Ok(std::fs::remove_dir(path).is_ok())
         }
         fn delete_user(&mut self, name: &str, delete_home: bool) -> Result<()> {
             self.calls
@@ -726,6 +773,49 @@ mod tests {
         }
         assert!(Change::from_fields("user_created", &[]).is_err());
         assert!(Change::from_fields("rm_rf", &[]).is_err());
+    }
+
+    #[test]
+    fn a_directory_is_removed_only_when_empty_and_a_given_hash_is_used() {
+        let (j, dir) = journal();
+        let state = dir.join("state");
+        std::fs::create_dir(&state).unwrap();
+        j.record(Change::DirCreated {
+            path: state.display().to_string(),
+        })
+        .unwrap();
+        std::fs::write(state.join("server_key"), "secret").unwrap();
+        let mut ops = Fake::default();
+        let report = j.revert(&mut ops, &RevertOptions::default()).unwrap();
+        assert!(
+            report.reverted.is_empty() && report.skipped.len() == 1,
+            "{report:?}"
+        );
+        assert!(
+            state.join("server_key").exists(),
+            "the contents are never deleted by a journal revert"
+        );
+        std::fs::remove_file(state.join("server_key")).unwrap();
+        let report = j.revert(&mut ops, &RevertOptions::default()).unwrap();
+        assert_eq!(report.reverted, vec![1]);
+        assert!(!state.exists());
+
+        let given = "ab".repeat(32);
+        let fields = vec![
+            (
+                "path".to_string(),
+                "/usr/local/bin/not-there-yet".to_string(),
+            ),
+            ("sha256".to_string(), given.clone()),
+        ];
+        assert!(
+            matches!(Change::from_fields("file_created", &fields).unwrap(), Change::FileCreated { sha256, .. } if sha256 == given)
+        );
+        let bad = vec![
+            ("path".to_string(), "/x".to_string()),
+            ("sha256".to_string(), "nope".to_string()),
+        ];
+        assert!(Change::from_fields("file_created", &bad).is_err());
     }
 
     #[test]
