@@ -14,7 +14,8 @@
   import { attachSwipeSupport } from './lib/swipe';
   import { DEBUG_KEY, debugEnabled } from './lib/viewport';
   import { KeyboardMode } from './lib/terminal/keyboardMode';
-  import { attachReturnKeyGuard } from './lib/terminal/inputGuards';
+  import { setEnterKeyHint } from './lib/terminal/inputGuards';
+  import { WordTracker } from './lib/terminal/wordTracker';
   import { PinchZoom } from './lib/terminal/pinch';
   import { FONT_FAMILY, THEME } from './lib/terminal/theme';
   import { TouchSelection, type Selection } from './lib/terminal/touchSelection';
@@ -49,6 +50,7 @@
 
   // --- controllers: each owns one concern and is tested on its own (src/lib/terminal) -------------------
   const pinch = new PinchZoom();
+  const words = new WordTracker();
   const keyboard = new KeyboardMode({
     field: () => term?.textarea ?? null,
     isFocused: () => document.activeElement === term?.textarea,
@@ -97,7 +99,14 @@
   function typed(data: string) {
     const { out, used } = applyMods(data, mods);
     if (used) mods = { ctrl: false, alt: false };
+    words.feed(out);
     sendInput(out);
+  }
+
+  /** Key-row keys: sent as they are, but the word being typed must know about them. */
+  function sendKey(data: string) {
+    words.feed(data);
+    sendInput(data);
   }
 
   async function paste() {
@@ -204,8 +213,13 @@
     cleanups.push(installAudioUnlock());
     if (term.textarea) {
       cleanups.push(attachInputLogger(term.textarea));
-      cleanups.push(attachSwipeSupport(term.textarea, sendInput)); // fact 0027
-      cleanups.push(attachReturnKeyGuard(term.textarea, () => !disposed && term?.focus()));
+      cleanups.push(attachSwipeSupport(term.textarea, sendInput, words)); // fact 0027
+      setEnterKeyHint(term.textarea);
+      // Hiding the keyboard (OK, or its own hide key) must not leave the terminal inactive.
+      const onBlur = (e: FocusEvent) => !disposed && keyboard.onBlur({ to: e.relatedTarget });
+      term.textarea.addEventListener('blur', onBlur);
+      const field = term.textarea;
+      cleanups.push(() => field.removeEventListener('blur', onBlur));
     }
     window.addEventListener('termanch-debug', syncDebug);
     cleanups.push(() => window.removeEventListener('termanch-debug', syncDebug));
@@ -270,8 +284,8 @@
       {@const a = (sel, touch.handlePosition('a'))}
       {@const b = (sel, touch.handlePosition('b'))}
       <div class="selbar">
-        <button type="button" on:click={copySelection}>Copy</button>
-        <button type="button" class="secondary" on:click={() => touch.clear()}>Done</button>
+        <button type="button" on:mousedown|preventDefault on:click={copySelection}>Copy</button>
+        <button type="button" class="secondary" on:mousedown|preventDefault on:click={() => touch.clear()}>Done</button>
       </div>
       {#if a}<button type="button" class="handle" aria-label="Selection start" style="left: {a.x}px; top: {a.y}px;" on:pointerdown={(e) => grabHandle('a', e)} on:pointermove={onPointerMove} on:pointerup={onPointerUp}></button>{/if}
       {#if b}<button type="button" class="handle" aria-label="Selection end" style="left: {b.x}px; top: {b.y}px;" on:pointerdown={(e) => grabHandle('b', e)} on:pointermove={onPointerMove} on:pointerup={onPointerUp}></button>{/if}
@@ -287,7 +301,7 @@
     <button class="font" aria-label="Smaller text" on:pointerdown|preventDefault={() => setFont(fontSize - 1)}>A−</button>
     <button class="font" aria-label="Larger text" on:pointerdown|preventDefault={() => setFont(fontSize + 1)}>A+</button>
   </div>
-  <KeyRow bind:mods onkey={sendInput} onpaste={paste} oncopy={copy} onselect={openSelect} {fnOpen} onfn={() => keyboard.toggleFn()} />
+  <KeyRow bind:mods onkey={sendKey} onpaste={paste} oncopy={copy} onselect={openSelect} {fnOpen} onfn={() => keyboard.toggleFn()} />
   {#if fnOpen}<FnKeyboard bind:mods onkey={typed} onback={() => keyboard.closeFn()} />{/if}
   {#if selectText !== null}<SelectView text={selectText} onclose={() => { selectText = null; term?.focus(); }} />{/if}
 </div>

@@ -1,3 +1,5 @@
+import type { WordTracker } from './terminal/wordTracker';
+
 // iOS swipe typing and autocorrect (plan X.1/X.2, fact 0027): the keyboard inserts a whole word with
 // `insertText`, which xterm forwards. When the user then picks another suggestion, iOS fires
 // `beforeinput` with `inputType: "insertReplacementText"`, the old word still selected in xterm's hidden
@@ -38,15 +40,26 @@ export function isWordKey(key: string): boolean {
  * turns "replace the word you just typed" into keystrokes (see above). `send` receives the bytes to type.
  * Returns the function that removes the listeners. Add other keyboards' quirks as further cases here.
  */
-export function attachSwipeSupport(area: HTMLTextAreaElement, send: (keys: string) => void): () => void {
+export function attachSwipeSupport(area: HTMLTextAreaElement, send: (keys: string) => void, words: WordTracker): () => void {
   // xterm listens on the textarea in the capture phase, so an ancestor is the only place to run first.
   const host: EventTarget = area.parentElement ?? area;
   const onKeyDown = (e: Event) => {
     if (e.target === area && isWordKey((e as KeyboardEvent).key)) e.stopPropagation();
   };
+  const out = (keys: string) => {
+    words.feed(keys);
+    send(keys);
+  };
   const onBeforeInput = (e: Event) => {
-    const data = replacementData(e as InputEvent);
-    if (data !== null) send(replacementKeys(area.value, area.selectionStart, area.selectionEnd, data));
+    const ev = e as InputEvent;
+    const data = replacementData(ev);
+    if (data !== null) return out(replacementKeys(area.value, area.selectionStart, area.selectionEnd, data));
+    // A tapped suggestion that completes the typed word arrives as plain new text; delete the typed part first.
+    // xterm types the text itself right after this event.
+    if (ev.inputType === 'insertText' && !ev.isComposing && ev.data) {
+      const n = words.completionPrefix(ev.data);
+      if (n > 0) out('\x7f'.repeat(n));
+    }
   };
   host.addEventListener('keydown', onKeyDown, true);
   area.addEventListener('beforeinput', onBeforeInput, true);

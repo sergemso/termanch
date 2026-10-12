@@ -10,6 +10,11 @@ export interface InputField {
   focus(): void;
 }
 
+export interface BlurInfo {
+  /** The element that gets focus instead, if any (another input, a dialog). */
+  to: unknown;
+}
+
 export interface KeyboardDeps {
   field: () => InputField | null;
   /** Whether the field is the focused element. */
@@ -17,29 +22,63 @@ export interface KeyboardDeps {
   /** Whether a system keyboard is on screen (the visual viewport shrank by a keyboard's height). */
   isSystemKeyboardUp: () => boolean;
   onFnChange: (open: boolean) => void;
+  /** Runs `fn` after the current event; replaced in tests. */
+  schedule?: (fn: () => void) => void;
 }
 
 export class KeyboardMode {
   fnOpen = false;
+  /** Set while this controller moves focus itself, so its own blur is not mistaken for the user's. */
+  private busy = false;
 
-  constructor(private deps: KeyboardDeps) {}
+  private schedule: (fn: () => void) => void;
+
+  constructor(private deps: KeyboardDeps) {
+    this.schedule = deps.schedule ?? ((fn) => void setTimeout(fn, 0));
+  }
 
   /** Brings the system keyboard up (also when the field still has focus but the keyboard was hidden). */
   showSystem(): void {
     const f = this.deps.field();
     if (!f) return;
-    f.setAttribute('inputmode', 'text');
-    f.blur();
-    f.focus();
+    this.refocus(f, 'text');
   }
 
   openFn(): void {
     const f = this.deps.field();
     if (!f) return;
     this.set(true);
+    this.refocus(f, 'none');
+  }
+
+  /**
+   * The field lost focus. When the user hid the keyboard (OK or the keyboard's own hide key) nothing else took the
+   * focus, so keep the terminal active: focus it again with `inputmode="none"`, which shows no keyboard. A tap on
+   * the terminal or the keyboard button brings the keyboard back.
+   */
+  onBlur(info: BlurInfo): void {
+    if (this.busy || info.to) return; // our own move, or focus went to something else on purpose
+    const f = this.deps.field();
+    if (!f) return;
     f.setAttribute('inputmode', 'none');
-    f.blur();
-    f.focus();
+    this.schedule(() => this.guard(() => f.focus()));
+  }
+
+  private refocus(f: InputField, mode: 'text' | 'none'): void {
+    this.guard(() => {
+      f.setAttribute('inputmode', mode);
+      f.blur();
+      f.focus();
+    });
+  }
+
+  private guard(fn: () => void): void {
+    this.busy = true;
+    try {
+      fn();
+    } finally {
+      this.busy = false;
+    }
   }
 
   closeFn(): void {

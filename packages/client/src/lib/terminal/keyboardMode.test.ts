@@ -14,6 +14,7 @@ function setup(opts: { up?: boolean; focused?: boolean } = {}) {
     isFocused: () => opts.focused ?? true,
     isSystemKeyboardUp: () => opts.up ?? false,
     onFnChange: (o) => fn.push(o),
+    schedule: (f) => f(),
   });
   return { kb, calls, fn };
 }
@@ -60,5 +61,31 @@ describe('KeyboardMode', () => {
     kb.openFn();
     kb.toggleSystem();
     expect(fn).toEqual([true, false]);
+  });
+
+  it('keeps the terminal active, without a keyboard, when the user hides the keyboard', () => {
+    const { kb, calls } = setup();
+    kb.onBlur({ to: null });
+    expect(calls).toEqual(['inputmode=none', 'focus']);
+  });
+
+  it('does not take focus back from another input or from its own focus moves', () => {
+    const other = setup();
+    other.kb.onBlur({ to: {} });
+    expect(other.calls).toEqual([]);
+    // showSystem blurs the field itself; that blur must not trigger the keep-active path
+    let kbRef: KeyboardMode;
+    const calls: string[] = [];
+    const field = {
+      setAttribute: (n: string, v: string) => calls.push(`${n}=${v}`),
+      blur: () => {
+        calls.push('blur');
+        kbRef.onBlur({ to: null });
+      },
+      focus: () => calls.push('focus'),
+    };
+    kbRef = new KeyboardMode({ field: () => field, isFocused: () => true, isSystemKeyboardUp: () => false, onFnChange: () => {}, schedule: (f) => f() });
+    kbRef.showSystem();
+    expect(calls).toEqual(['inputmode=text', 'blur', 'focus']);
   });
 });

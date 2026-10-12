@@ -338,6 +338,8 @@ try {
         const copied = await page.evaluate(() => navigator.clipboard.readText());
         if (!/keydown key="h"/.test(copied)) fail(`Copy did not copy the log: ${copied.slice(0, 80)}`);
         await page.locator('.log').getByRole('button', { name: 'Clear', exact: true }).click();
+        // Using the panel's buttons must not take focus from the terminal.
+        if (!(await page.evaluate(() => document.activeElement?.classList.contains('xterm-helper-textarea')))) fail('Copy/Clear took focus from the terminal');
         await page.waitForFunction(() => /input events \(0\)/.test(document.querySelector('.log .bar')?.textContent ?? ''), null, { timeout: 3000 });
         // iOS swipe typing: picking another suggestion fires insertReplacementText with the old word selected
         // (sequence captured on an iPhone, fact 0027). The terminal must end up with the replacement.
@@ -381,6 +383,24 @@ try {
         });
         await page.keyboard.press('Enter');
         await waitFor(() => /^чем$/m.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: utf8, encoding: 'utf8' })), 'the swiped Cyrillic word in the shell output', 8000);
+        // A suggestion that completes the typed word ("у" -> "утро") arrives as new text; the typed part must go first.
+        await page.keyboard.press('Control+u');
+        await page.keyboard.type('echo у');
+        await page.evaluate(() => {
+          const area = document.querySelector('.xterm-helper-textarea');
+          area.value = '';
+          area.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: 'утро', bubbles: true, cancelable: true, composed: true }));
+          area.value = 'утро';
+          area.dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: 'утро', bubbles: true, composed: true }));
+        });
+        await page.keyboard.press('Enter');
+        await waitFor(() => /^утро$/m.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: utf8, encoding: 'utf8' })), 'the completed word without the typed letter', 8000);
+        if (/^уутро$/m.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: utf8, encoding: 'utf8' }))) fail('the typed letter stayed in front of the suggestion');
+        // Hiding the keyboard leaves the terminal active (focused, no keyboard); a tap brings the keyboard back.
+        await page.evaluate(() => document.querySelector('.xterm-helper-textarea').blur());
+        await page.waitForFunction(() => document.activeElement?.classList.contains('xterm-helper-textarea') && document.activeElement.getAttribute('inputmode') === 'none', null, { timeout: 3000 }).catch(() => fail('the terminal went inactive when the keyboard was hidden'));
+        await page.locator('.screen').click({ position: { x: 40, y: 40 } });
+        await page.waitForFunction(() => document.activeElement?.getAttribute('inputmode') === 'text', null, { timeout: 3000 }).catch(() => fail('a tap did not bring the keyboard back'));
         // The terminal bell (what `printf '\a'` and agents ring) becomes a beep once audio was unlocked by a tap.
         await page.keyboard.press('Control+u');
         await page.keyboard.type("printf '\\a'");

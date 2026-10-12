@@ -14,8 +14,9 @@
 <div class="log">
   <div class="bar">
     <span>input events ({$inputLog.length}) {status}</span>
-    <button type="button" on:click={copy}>Copy</button>
-    <button type="button" on:click={() => inputLog.set([])}>Clear</button>
+    <!-- mousedown is cancelled so the tap does not take focus (and the keyboard) away from the terminal -->
+    <button type="button" on:mousedown|preventDefault on:click={copy}>Copy</button>
+    <button type="button" on:mousedown|preventDefault on:click={() => inputLog.set([])}>Clear</button>
   </div>
   <pre>{$inputLog.slice(-8).join('\n')}</pre>
 </div>
