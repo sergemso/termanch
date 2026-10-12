@@ -21,15 +21,18 @@ mod connection;
 mod directory;
 #[cfg(test)]
 mod e2e;
+mod helper;
 mod journal;
 mod link;
 mod locale;
 mod netutil;
 mod pty;
 mod release;
+mod requests;
 mod rtc;
 mod sessions;
 mod uninstall;
+mod updater;
 mod websocket;
 
 use auth::AuthState;
@@ -169,6 +172,19 @@ struct Args {
 
     #[arg(long)]
     release_arch: Option<String>,
+
+    /// One-shot, run as root by the systemd units the installer creates: `update` checks for a new signed release and
+    /// applies it (rolling back if the service does not come up); `requests` handles what the server asked for.
+    #[arg(long)]
+    root_helper: Option<String>,
+
+    /// Where the unprivileged server leaves requests for the root helper.
+    #[arg(
+        long,
+        env = "TERMANCH_REQUESTS_DIR",
+        default_value = "/var/lib/termanch/requests"
+    )]
+    requests_dir: PathBuf,
 
     /// Print the registration link for this (unclaimed) server and exit.
     #[arg(long, default_value = "false")]
@@ -350,6 +366,19 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     if run_journal_command(&args)? {
         return Ok(());
+    }
+    if let Some(action) = &args.root_helper {
+        let setup = helper::Setup {
+            root_dir: args.journal_dir.clone(),
+            requests_dir: args.requests_dir.clone(),
+        };
+        match helper::run(action, &setup).await {
+            Ok(status) => std::process::exit(status),
+            Err(e) => {
+                eprintln!("root helper: {e}");
+                std::process::exit(1);
+            }
+        }
     }
     if let Err(e) = run_release_command(&args) {
         eprintln!("release check failed: {e}");

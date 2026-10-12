@@ -1,6 +1,6 @@
 [package]
 name = "termanch-server"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [dependencies]
@@ -27,6 +27,7 @@ hmac = { workspace = true }
 qrcode = { version = "0.14", default-features = false }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 p256 = { version = "0.13", features = ["ecdsa", "std"] }
+libc = "0.2"
 
 [dev-dependencies]
 tokio-tungstenite = "0.21"

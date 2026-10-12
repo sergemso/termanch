@@ -46,7 +46,7 @@ npm install -g @anthropic-ai/claude-code @openai/codex
 
 **On the machine itself** (no Docker). The server is a single static binary run as a systemd service, and sessions run directly on your VPS, where your repositories and agent tools already are. You choose between a dedicated unprivileged user `termanch` (created for you, recommended) and `root`. This gives your browser a shell on the server itself, so the app shows a warning and asks you to confirm. Requirements: systemd, `curl`, `ssh-keygen` (package `openssh-client`), x86_64 or aarch64; `tmux` is installed if missing.
 
-Before anything is installed the installer checks the release: its manifest must carry a valid signature by the project's release key, and the binary must match the signed SHA-256 (see `SECURITY.md`). It lists every change it will make, records each one in a journal in `/var/lib/termanch-root` before making it, and can undo them.
+The installer also sets up a daily update check that runs as root, separately from the server (which can stay an unprivileged user). Before anything is installed, and before every update, the release is checked: its manifest must carry a valid signature by the project's release key, and the binary must match the signed SHA-256 (see `SECURITY.md`). It lists every change it will make, records each one in a journal in `/var/lib/termanch-root` before making it, and can undo them.
 
 ### Updating and removing
 
@@ -65,7 +65,9 @@ On the machine itself:
 sudo termanch-server --revert --dry-run
 # remove (stop the service and delete its state first; your repositories and the termanch user's home are never touched):
 sudo systemctl stop termanch && sudo rm -rf /var/lib/termanch && sudo termanch-server --revert
-# update (until automatic updates arrive): run the install command again with TERMANCH_FORCE=1 in front of `sh`
+# updates: a root-owned timer checks for a new signed release every day and applies it; if the new server does not
+# come up healthy it puts the old one back. Check now: sudo termanch-server --root-helper update
+# (older installs get the timer by running the install command again)
 ```
 
 ## Security model

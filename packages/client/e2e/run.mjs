@@ -346,7 +346,7 @@ try {
       await page.getByRole('button', { name: 'Sessions' }).click();
       const heights = await page.evaluate(() => [...document.querySelectorAll('aside button.icon')].map((b) => Math.round(b.getBoundingClientRect().height)));
       if (heights.length !== 2 || heights[0] !== heights[1]) fail(`Refresh and New differ in size: ${heights}`);
-      if (!(await page.getByText(/server 0\.1\.0\+/).count())) fail('the sidebar does not show the server version');
+      if (!(await page.getByText(/server 0\.1\.\d+\+/).count())) fail('the sidebar does not show the server version');
       await page.getByText('s1', { exact: true }).first().click();
       await page.locator('.xterm').waitFor({ timeout: 5000 });
       if (lap === 3) {
