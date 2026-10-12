@@ -26,6 +26,7 @@ mod link;
 mod locale;
 mod netutil;
 mod pty;
+mod release;
 mod rtc;
 mod sessions;
 mod uninstall;
@@ -157,6 +158,17 @@ struct Args {
     #[arg(long, default_value = "false")]
     delete_home: bool,
 
+    /// One-shot: verify a signed release manifest (path) against the embedded release keys and print its fields
+    /// as key=value lines. Needs --release-sig; add --release-arch to print that architecture's download.
+    #[arg(long)]
+    verify_release: Option<PathBuf>,
+
+    #[arg(long)]
+    release_sig: Option<PathBuf>,
+
+    #[arg(long)]
+    release_arch: Option<String>,
+
     /// Print the registration link for this (unclaimed) server and exit.
     #[arg(long, default_value = "false")]
     register: bool,
@@ -228,6 +240,38 @@ fn run_journal_command(args: &Args) -> anyhow::Result<bool> {
         return Ok(true);
     }
     Ok(false)
+}
+
+/// `--verify-release`: for the installer's second check and the updater; exit status 1 means do not trust it.
+fn run_release_command(args: &Args) -> anyhow::Result<bool> {
+    let Some(manifest_path) = &args.verify_release else {
+        return Ok(false);
+    };
+    let sig_path = args
+        .release_sig
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("--verify-release needs --release-sig"))?;
+    let keys = release::ReleaseKeys::from_env()?;
+    anyhow::ensure!(
+        !keys.is_empty(),
+        "no release keys configured (TERMANCH_RELEASE_KEYS)"
+    );
+    let (manifest, kid) = release::Manifest::verify(
+        &std::fs::read(manifest_path)?,
+        &std::fs::read_to_string(sig_path)?,
+        &keys,
+        release::URL_PREFIX,
+    )?;
+    println!("kid={kid}");
+    println!("version={}", manifest.version);
+    println!("freeze={}", manifest.freeze);
+    println!("newer={}", manifest.is_newer_than(&version())?);
+    if let Some(arch) = &args.release_arch {
+        let b = manifest.binary(arch)?;
+        println!("url={}", b.url);
+        println!("sha256={}", b.sha256);
+    }
+    Ok(true)
 }
 
 fn default_config_dir() -> PathBuf {
@@ -304,6 +348,13 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
     if run_journal_command(&args)? {
+        return Ok(());
+    }
+    if let Err(e) = run_release_command(&args) {
+        eprintln!("release check failed: {e}");
+        std::process::exit(1);
+    }
+    if args.verify_release.is_some() {
         return Ok(());
     }
     // An uninstalled server that Docker restarted stays idle instead of coming back as a new unclaimed
