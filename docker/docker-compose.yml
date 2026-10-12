@@ -8,6 +8,6 @@ services:
       - "4443:4443/udp"          # the WebRTC port; any free UDP port works if you change both numbers
     environment:
       - TERMANCH_UDP_PORT=4443
-      - TERMANCH_CLIENT_URL=${TERMANCH_CLIENT_URL:-https://app.termanch.dev}
+      - TERMANCH_CLIENT_URL=${TERMANCH_CLIENT_URL:-https://app.termanch.vivantel.dev}
     volumes:
       - ./home:/home/node        # sessions, agents' files, owner and keys (chown 1000:1000)

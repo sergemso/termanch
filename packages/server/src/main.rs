@@ -52,7 +52,7 @@ struct Args {
     #[arg(
         long,
         env = "TERMANCH_CLIENT_URL",
-        default_value = "https://app.termanch.dev"
+        default_value = "https://app.termanch.vivantel.dev"
     )]
     client_url: String,
 

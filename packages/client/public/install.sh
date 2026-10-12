@@ -1,8 +1,8 @@
 #!/bin/sh
 # Termanch installer. Served by the client at /install.sh.
 #
-#   curl -fsSL https://app.termanch.dev/install.sh | sh -s -- <claim secret> <client origin>
-#   curl -fsSL https://app.termanch.dev/install.sh | sh -s -- - <client origin>     (shows a QR instead)
+#   curl -fsSL https://app.termanch.vivantel.dev/install.sh | sh -s -- <claim secret> <client origin>
+#   curl -fsSL https://app.termanch.vivantel.dev/install.sh | sh -s -- - <client origin>     (shows a QR instead)
 #
 # It installs Docker if missing, picks a free UDP port, starts the server and hands it the claim
 # secret. It asks nothing and needs nothing afterwards: the server appears in Termanch by itself.
@@ -10,7 +10,7 @@
 set -eu
 
 SECRET="${1:--}"
-ORIGIN="${2:-${TERMANCH_CLIENT_URL:-https://app.termanch.dev}}"
+ORIGIN="${2:-${TERMANCH_CLIENT_URL:-https://app.termanch.vivantel.dev}}"
 IMAGE="${TERMANCH_IMAGE:-ghcr.io/sergemso/termanch:latest}"
 NAME="${TERMANCH_CONTAINER:-termanch}"
 ROOT="${TERMANCH_DATA:-/opt/termanch}"
