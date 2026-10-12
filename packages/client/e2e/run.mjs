@@ -157,6 +157,18 @@ try {
     if (!inside(panned)) fail(`key row hidden when Safari pans the viewport: ${JSON.stringify(panned)}`);
     await page.evaluate(() => window.__vv({ height: 800, offsetTop: 0 }, 'resize'));
     if (!inside(await keyRowInView())) fail('key row not restored after the keyboard closed');
+    // Toggle keys must return to their normal colour after a tap on a touch screen (no sticky :hover).
+    const ctrl = page.getByRole('button', { name: 'Ctrl' });
+    const bg = () => ctrl.evaluate((el) => getComputedStyle(el).backgroundColor);
+    const normal = await bg();
+    await ctrl.tap();
+    await sleep(400); // the colour change is a 150 ms transition
+    const on = await bg();
+    await ctrl.tap();
+    await sleep(400);
+    const off = await bg();
+    if (on === normal) fail('Ctrl does not show it is on');
+    if (off !== normal) fail(`Ctrl stays highlighted after being toggled off: ${off} instead of ${normal}`);
     await ctx.close();
     console.log('ok  the key row stays visible when the keyboard opens, shrinks the view or pans it');
   }

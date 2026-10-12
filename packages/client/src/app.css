@@ -46,8 +46,11 @@ button {
   transition: background 0.15s;
 }
 
-button:hover:not(:disabled) {
-  background: var(--accent-hover);
+/* Touch screens keep :hover after a tap, which left toggled keys stuck light blue. */
+@media (hover: hover) {
+  button:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
 }
 
 button:disabled {
@@ -61,8 +64,10 @@ button.secondary {
   border: 1px solid var(--border);
 }
 
-button.secondary:hover:not(:disabled) {
-  background: var(--border);
+@media (hover: hover) {
+  button.secondary:hover:not(:disabled) {
+    background: var(--border);
+  }
 }
 
 input, select {
