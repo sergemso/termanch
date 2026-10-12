@@ -20,7 +20,7 @@ Done-when: each claim has a verdict and a source; the mobile steps below cite it
 
 ---
 
-### 1.2 Green baseline and doc reconciliation — [ ]
+### 1.2 Green baseline and doc reconciliation — [x]
 Issue: #14
 Class: implement · Needs: none · Check: `cargo test --workspace && pnpm -r build`
 Context: Plan v1 and the shipped code diverged; README/BOOTSTRAP/0013 disagree on who hosts the client.
@@ -32,7 +32,8 @@ Done-when: CI is green on master; no doc describes deferred designs as current.
 
 ---
 
-### 2.1 Single-owner server binding — [ ]
+### 2.1 Single-owner server binding — [~]
+Status: code merged (#33); the real login and Add Server check passed on 2026-10-12; close #15 after the owner confirms in step 0.1 of `termanch-v2-environment-and-ux.md`.
 Issue: #15
 Class: implement · Needs: 1.2 · Check: `cargo test -p termanch-server`
 Context: DECISION-0053. Today any valid GitHub token passes auth (packages/server/src/auth.rs).
@@ -45,7 +46,8 @@ Done-when: a second GitHub account cannot attach; tests pass.
 
 ---
 
-### 2.2 Reconnect and screen replay — [ ]
+### 2.2 Reconnect and screen replay — [~]
+Status: code merged (#33); the drop-and-restore check is pending in step 0.1 of `termanch-v2-environment-and-ux.md`.
 Issue: #16
 Class: implement · Needs: 1.2 · Check: `cargo test -p termanch-server && pnpm --filter termanch-client test`
 Context: The "Mosh-level" promise on top of a session backend (DECISION-0051, 0054). Resume = re-attach: tmux and similar multiplexers repaint the screen on attach, so the server keeps no replay buffer.
@@ -57,7 +59,8 @@ Done-when: device test passes; the e2e test (drop socket, reconnect, same screen
 
 ---
 
-### 3.1 Mobile terminal UX — [ ]
+### 3.1 Mobile terminal UX — [>]
+Moved to `docs/plans/termanch-v2-environment-and-ux.md` step A.1.
 Issue: #17
 Class: implement · Needs: 1.1, 2.2 · Check: `pnpm --filter termanch-client build && pnpm --filter termanch-client test`
 Context: Mobile is the target; the MVP is desktop Chrome only.
@@ -70,7 +73,8 @@ Done-when: a user can run `ls`, `vim`-style Esc/Ctrl combos and scroll on a phon
 
 ---
 
-### 3.2 Installable PWA — [ ]
+### 3.2 Installable PWA — [>]
+Moved to `docs/plans/termanch-v2-environment-and-ux.md` step A.2.
 Issue: #18
 Class: implement · Needs: 1.1, 3.1 · Check: `pnpm --filter termanch-client build && ls packages/client/dist/manifest.webmanifest`
 Context: Installed PWA is required for iOS Web Push and gives a fast cold start.
@@ -81,7 +85,8 @@ Done-when: installable on iOS and Android; cold start from cache works offline-s
 
 ---
 
-### 4.1 Agent detection and notifications — [ ]
+### 4.1 Agent detection and notifications — [>]
+Moved to `docs/plans/termanch-v2-environment-and-ux.md` step B.7.
 Issue: #19
 Class: implement · Needs: 2.2 · Check: `cargo test -p termanch-server`
 Context: Goal "manage AI coding agents". MVP has toasts for spawn/complete/error; detection method is only "manual codex in tmux".
@@ -94,7 +99,8 @@ Done-when: running `claude` or `codex` in a tmux pane shows spawn and completion
 
 ---
 
-### 5.1 Container and one-command deploy — [ ]
+### 5.1 Container and one-command deploy — [~]
+Status: installer and CI image done (8.5); self-hosted client docs and the size/RSS gates remain (see v2 step 0.2).
 Issue: #20
 Class: implement · Needs: 2.1, 4.1, 8.5 · Check: `docker compose -f docker/docker-compose.yml config`
 Context: Hosted-mode bar is ≤2 user actions after the VPS exists (bootstrap-simplicity, scoped by 0052).
@@ -107,7 +113,8 @@ Done-when: fresh 512MB VPS reaches a working terminal following the README only;
 
 ---
 
-### 6.1 End-to-end test and resource gates — [ ]
+### 6.1 End-to-end test and resource gates — [>]
+Moved to `docs/plans/termanch-v2-environment-and-ux.md` step 0.2.
 Issue: #21
 Class: review · Needs: 5.1 · Check: `pnpm --filter termanch-client test:e2e`
 Context: Nothing in the MVP proves the Definition of Done or the 512MB/1 vCPU limit.
@@ -119,7 +126,8 @@ Done-when: gates enforced in CI.
 
 ---
 
-### 7.1 Verify herdr and other backend CLIs — [ ]
+### 7.1 Verify herdr and other backend CLIs — [>]
+Moved to `docs/plans/termanch-v2-environment-and-ux.md` step B.1.
 Issue: #22
 Class: explore · Needs: 2.2 · Check: `test -s docs/facts/0017-backend-clis.md`
 Context: The user wants tmux, herdr or an own alternative (DECISION-0054). The `command` backend needs three CLI invocations per tool; herdr's are unverified (it advertises a CLI and local socket API; sources disagree on repo and license).

@@ -22,5 +22,7 @@
 | 0019 | Server Onboarding Options and VPS Provider Capabilities | onboarding, deployment, providers, ux | active |
 | 0020 | Free Relay Service Limits for Terminal Traffic | networking, limits, relay | active |
 | 0021 | WebRTC Direct Prototype Results | transport, webrtc, networking, prototype | active |
+| 0022 | Directory free-tier capacity | directory, scale, cloudflare | active |
+| 0023 | Threat model | security, threat-model | active |
 
 <!-- bootstrap-generated: true -->

@@ -5,7 +5,7 @@
       "source": "vivantel/go-getter",
       "sourceType": "github",
       "skillPath": "skills/attribute/SKILL.md",
-      "computedHash": "58130cefd1bdd992e434188deb8450ed16c07c7d56e4bcf2af4db27274a39595"
+      "computedHash": "60552adcd1736947310ed28084b909e3da15f76371f1f2da95147eb6bfa3e35f"
     },
     "bootstrap": {
       "source": "vivantel/go-getter",
@@ -41,13 +41,13 @@
       "source": "vivantel/go-getter",
       "sourceType": "github",
       "skillPath": "skills/conform/SKILL.md",
-      "computedHash": "8a7ec8309ef9c87259aad4ade0bc47ed46014044f0a65247c64120e56e014b73"
+      "computedHash": "ecbf66e8cc4487033ac699829d0bb403be1e9a252b08fe840c3c7b5d53b93824"
     },
     "go-getter-init": {
       "source": "vivantel/go-getter",
       "sourceType": "github",
       "skillPath": "skills/go-getter-init/SKILL.md",
-      "computedHash": "92de686bf9041436aa81a081e7d4899c31622f8f10af2da4e3b2f8a0a514f3ff"
+      "computedHash": "fe75e7787d0af2faa6f384d2a37b50c32719cb43c4025761837b46fd189462c8"
     },
     "lint": {
       "source": "vivantel/go-getter",
@@ -89,7 +89,7 @@
       "source": "vivantel/go-getter",
       "sourceType": "github",
       "skillPath": "skills/uninstall/SKILL.md",
-      "computedHash": "9c8a0d63093acafb0b8cf824f220f9a0d61c6b7bf46c6f36b4c1c039d7e5c5f2"
+      "computedHash": "e9c69a3e747f76d00cec0124cd7cd59d033c039738e4ae6cf97eb526ffa8174c"
     }
   }
 }
