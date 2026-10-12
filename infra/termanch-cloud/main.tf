@@ -52,11 +52,8 @@ resource "cloudflare_pages_project" "client" {
   name       = local.pages_project_name
   production_branch = "master"
 
-  build_config {
-    build_command = "pnpm --filter termanch-client build"
-    destination_dir = "packages/client/dist"
-    root_dir = "/"
-  }
+  # No build_config and no source: the client is built on GitHub (deploy-pages.yaml) and uploaded directly.
+  # Cloudflare never builds this project. Do not connect it to Git in the dashboard.
 
   deployment_configs {
   }
@@ -73,16 +70,6 @@ resource "cloudflare_pages_domain" "app" {
 resource "cloudflare_record" "app" {
   zone_id = data.cloudflare_zone.main.id
   name    = "app${local.dns_name_prefix}"
-  type    = "CNAME"
-  content = local.pages_subdomain
-  proxied = true
-  ttl     = 1
-}
-
-# DNS record for API subdomain (if needed for OAuth callback proxy)
-resource "cloudflare_record" "api" {
-  zone_id = data.cloudflare_zone.main.id
-  name    = "api${local.dns_name_prefix}"
   type    = "CNAME"
   content = local.pages_subdomain
   proxied = true
