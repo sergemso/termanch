@@ -121,7 +121,9 @@ impl ServerClient {
         _pty_tx: &mpsc::UnboundedSender<Vec<u8>>,
     ) -> Result<()> {
         match msg {
-            ServerMessage::AuthOk { user, server_name } => {
+            ServerMessage::AuthOk {
+                user, server_name, ..
+            } => {
                 info!("Authenticated as {} on {}", user, server_name);
                 let msg = ClientMessage::ListSessions;
                 ws_tx

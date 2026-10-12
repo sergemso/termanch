@@ -29,7 +29,7 @@ mod sessions;
 mod websocket;
 
 use auth::AuthState;
-use backend::{CommandBackend, SessionBackend, TmuxBackend};
+use backend::{CommandBackend, RunMode, SessionBackend, TmuxBackend};
 use sessions::SessionManager;
 use websocket::handle_websocket;
 
@@ -77,6 +77,14 @@ struct Args {
     #[arg(long, env = "TERMANCH_BACKEND_ATTACH")]
     backend_attach: Option<String>,
 
+    /// Where sessions run: `container` (default, isolated) or `host` (needs --pid=host --privileged).
+    #[arg(long, env = "TERMANCH_RUN", default_value = "container")]
+    run: String,
+
+    /// For `host`: the user sessions run as, `root` or a dedicated unprivileged user.
+    #[arg(long, env = "TERMANCH_RUN_USER", default_value = "termanch")]
+    run_user: String,
+
     /// UDP port of the WebRTC-direct transport (open it in the firewall).
     #[arg(long, env = "TERMANCH_UDP_PORT", default_value = "4443")]
     udp_port: u16,
@@ -120,6 +128,8 @@ pub struct AppState {
     pub auth: Arc<AuthState>,
     pub sessions: Arc<SessionManager>,
     pub server_name: String,
+    /// `container` or `host:<user>`, shown to the owner.
+    pub mode: String,
     pub rtc_info: Option<rtc::RtcInfo>,
 }
 
@@ -130,19 +140,20 @@ fn default_config_dir() -> PathBuf {
         .join(".config/termanch")
 }
 
-fn build_backend(args: &Args) -> anyhow::Result<Arc<dyn SessionBackend>> {
+fn build_backend(args: &Args, mode: &RunMode) -> anyhow::Result<Arc<dyn SessionBackend>> {
     match args.backend.as_str() {
-        "tmux" => Ok(Arc::new(TmuxBackend)),
+        "tmux" => Ok(Arc::new(TmuxBackend::new(mode.runner()))),
         "command" => {
             let need = |v: &Option<String>, name: &str| {
                 v.clone()
                     .ok_or_else(|| anyhow::anyhow!("TERMANCH_BACKEND=command needs {name}"))
             };
-            Ok(Arc::new(CommandBackend::new(
+            Ok(Arc::new(CommandBackend::with_runner(
                 &args.backend_name,
                 &need(&args.backend_list, "TERMANCH_BACKEND_LIST")?,
                 &need(&args.backend_create, "TERMANCH_BACKEND_CREATE")?,
                 &need(&args.backend_attach, "TERMANCH_BACKEND_ATTACH")?,
+                mode.runner(),
             )?))
         }
         other => Err(anyhow::anyhow!(
@@ -226,12 +237,20 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let backend = build_backend(&args)?;
+    let mode = RunMode::parse(&args.run, &args.run_user)?;
+    mode.self_check()
+        .await
+        .map_err(|e| anyhow::anyhow!("TERMANCH_RUN={}: {e}", mode.label()))?;
+    if mode.is_host() {
+        info!(target: "audit", event = "host_mode_enabled", user = %mode.label());
+    }
+    let backend = build_backend(&args, &mode)?;
     info!("Session backend: {}", backend.name());
     let mut state = AppState {
         auth,
-        sessions: Arc::new(SessionManager::new(backend)),
+        sessions: Arc::new(SessionManager::new(backend, mode.clone())),
         server_name: args.server_name.clone(),
+        mode: mode.label(),
         rtc_info: None,
     };
 

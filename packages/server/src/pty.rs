@@ -116,7 +116,7 @@ mod tests {
             eprintln!("tmux not installed; skipping");
             return;
         }
-        let backend = TmuxBackend;
+        let backend = TmuxBackend::default();
         let name = format!("tt{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
         backend.create(&name).await.unwrap();
 

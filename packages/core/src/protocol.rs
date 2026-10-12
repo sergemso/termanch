@@ -49,6 +49,9 @@ pub enum ServerMessage {
     AuthOk {
         user: String,
         server_name: String,
+        /// `container` or `host:<user>`; absent from older servers.
+        #[serde(default)]
+        mode: String,
     },
     Sessions {
         sessions: Vec<SessionInfo>,
@@ -107,6 +110,7 @@ mod tests {
         let v = serde_json::to_value(ServerMessage::AuthOk {
             user: "u".into(),
             server_name: "s".into(),
+            mode: "container".into(),
         })
         .unwrap();
         assert_eq!(v["type"], "auth_ok");

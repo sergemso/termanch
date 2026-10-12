@@ -12,7 +12,7 @@ export type ClientMessage =
 export type ServerMessage =
   | { type: 'challenge'; nonce: string; server_id: string }
   | { type: 'device_revoked'; device: string }
-  | { type: 'auth_ok'; user: string; server_name: string }
+  | { type: 'auth_ok'; user: string; server_name: string; mode?: string }
   | { type: 'sessions'; sessions: SessionInfo[] }
   | { type: 'session_attached'; session_id: string }
   | { type: 'output'; data: string }

@@ -46,7 +46,7 @@ Context: See v1 step 7.1. herdr 0.9.x ships release binaries `herdr-linux-{x86_6
 Do: as v1 7.1. Note whether herdr fits the command backend or needs an adapter on its socket API.
 Done-when: each tool has a verdict and a tested snippet or a written reason.
 
-### B.2 Run modes on the server and installer (0058) — [ ]
+### B.2 Run modes on the server and installer (0058) — [x] (host-user path verified by unit tests only; the dedicated user was not created on the dev VPS)
 Class: implement · Needs: 0.1, S.1 · Check: `cargo test -p termanch-server`
 Context: Container mode is today's behaviour. Host mode runs the container with `--pid=host --privileged` and prefixes session commands with `nsenter -t 1 -m -u -i -n -p`; owner picks root or a dedicated `termanch` user at install. Guardrail `host-mode-explicit-consent` applies.
 Do: 1. `TERMANCH_RUN=container|host` plus `TERMANCH_RUN_USER`, with the dedicated user pre-selected and root an explicit choice; startup self-check with a clear error. 2. `install.sh` accepts `host` and `host-user`, creates the user, passes flags. 3. Audit entry when a host session opens; mode in the server info message. 4. Test on a second container on a free port, leaving the running one alone.
