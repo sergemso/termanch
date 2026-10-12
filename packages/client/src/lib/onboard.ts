@@ -23,6 +23,12 @@ export function parseClaim(text: string): string | null {
   return SECRET.test(t) ? t : null;
 }
 
+/** The server id from a re-add link (`#server=...`), as printed by the installer for an already-registered server. */
+export function parseServerLink(text: string): string | null {
+  const m = /[#&?]server=([A-Za-z0-9_-]{43})(?![A-Za-z0-9_-])/.exec(text.trim());
+  return m ? m[1] : null;
+}
+
 /** 2 s, 4 s, 8 s, then every 10 s: quick when the server is fast, cheap on the directory when it is not. */
 export function pollDelay(attempt: number): number {
   return Math.min(2000 * 2 ** attempt, 10_000);
