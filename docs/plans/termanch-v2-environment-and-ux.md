@@ -134,7 +134,7 @@ Done-when: the procedure exists and each scenario has a recorded rehearsal.
 
 ## Phase C: directory scale (0060, fact 0022)
 
-### C.1 Spike: R2 + CDN limits — [ ]‖
+### C.1 Spike: R2 + CDN limits — [x]‖
 Class: explore · Needs: none · Check: `test -s docs/facts/0024-r2-cdn-spike.md`
 Context: Free limits in fact 0022 are unverified. Zone `vivantel.dev` is on Cloudflare; the Cloudflare token is in the repo `.env` (never print it).
 Do: create a public R2 bucket on a custom domain (e.g. `dir.termanch.vivantel.dev`), set a Cache Rule (1 h edge TTL), measure that repeated GETs do not invoke any Worker or class B operation, confirm free-tier numbers from Cloudflare docs, record the verdict and update fact 0022.
@@ -156,7 +156,7 @@ Class: implement · Needs: C.2, C.1, C.6 · Check: `cd packages/client && npx --
 Do: per-user encrypted object (list plus settings) read from the public domain with `no-cache`, written by a Worker with a conditional put; HKDF per-user secret issued with the device certificate; changes relayed to the owner's other connected devices through the servers' data channel; local outbox when a write fails; merge with localStorage on first login. Depends on the C.1 and C.6 verdicts for the storage layer.
 Done-when: a server added in one browser appears in an open second browser within seconds, and on a closed one at its next open, with no Worker request for reads.
 
-### C.6 Spike: a free write path without Workers and R2 writes — [ ]‖
+### C.6 Spike: a free write path without Workers and R2 writes — [x]‖
 Class: explore · Needs: none · Check: `test -s docs/facts/0025-free-write-path-spike.md`
 Context: Decision 0068 is a draft; the owner asked whether announces, claim polling and user-data writes can leave Cloudflare Workers and R2 Class A entirely. Candidates: (1) an open relay network such as Nostr (signed, replaceable, encrypted events; subscriptions give live push and replace claim polling; several free public relays plus an optional own relay), with the Worker kept only for certificate issuance and key derivation; (2) our own directory on an always-free VM (Oracle or Google) behind the Cloudflare CDN; (3) sharding across several free serverless vendors; (4) the status quo of R2 and Workers.
 Do: 1. Prototype (1): a server publishing a signed, owner-encrypted record as a replaceable event to at least 3 public relays, a browser reading and subscribing, measuring reliability, event size limits, retention, rate limits and required proof-of-work over a week. 2. Check that records cannot be enumerated into a list of server IPs (encrypt the address fields to the owner). 3. Estimate the same fact-0022 table for each candidate. 4. Record the verdict, risks and a recommendation.

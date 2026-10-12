@@ -24,5 +24,7 @@
 | 0021 | WebRTC Direct Prototype Results | transport, webrtc, networking, prototype | active |
 | 0022 | Free-tier capacity model | directory, scale, cloudflare, capacity | active |
 | 0023 | Threat model | security, threat-model | active |
+| 0024 | R2 and CDN spike results | directory, scale, cloudflare, r2, spike | active |
+| 0025 | Free write path spike results | directory, scale, nostr, spike | active |
 
 <!-- bootstrap-generated: true -->
