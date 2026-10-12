@@ -1,0 +1,67 @@
+# Termanch Plan: problem reports, usage tiers, iOS swipe typing, remote uninstall
+
+Decisions: 0072 (remote uninstall), 0073 (usage tiers on device), 0074 (problem reports via GitHub issues). Guardrails: `remote-uninstall-is-deliberate-and-scoped`, `usage-stays-on-device`, `diagnostics-never-include-secrets`. Related: 0058 run modes, 0062 device certificates, 0067 change journal, v2 plan step S.7 (journal) and S.2 (passkeys), v3 UI plan `termanch-v3-ui.md`. A fresh session needs only this file, those artifacts and the repo.
+
+Cold start: Svelte 5 client in `packages/client` (`src/App.svelte`, `Terminal.svelte`, `KeyRow.svelte`, `ServerList.svelte`, `src/lib/`), Cloudflare Pages Functions in `packages/client/functions/api/{oauth,directory}`, Rust server `packages/server` (`auth.rs`, `cert.rs`, `connection.rs`, `sessions.rs`, `backend.rs` with `Runner` for host mode, `directory.rs`), wire types in `packages/core/src/protocol.rs` mirrored in `packages/client/src/lib/protocol.ts`, installer `packages/client/public/install.sh`. Use `npx --yes pnpm@9`. Browser e2e: `pnpm e2e:build` then `CHROME_PATH=... node e2e/run.mjs` in `packages/client` (needs `cargo build --release -p termanch-server`). The owner tests on an iPhone; the hosted app is https://app.termanch.vivantel.dev, deployed from master. Land each step as one squashed PR with green CI; merge only on the owner's "merge". The owner's own `termanch` container on the dev VPS must not be touched by tests.
+
+## Problem reports (0074)
+
+### R.1 Report a problem button and issue template — [ ]‖
+Class: implement · Needs: none · Check: `cd packages/client && npx --yes pnpm@9 test && test -f ../../.github/ISSUE_TEMPLATE/problem.yml`
+Context: There is no error memory in the client and no issue template (`.github/` has only `workflows/`). The repository is `sergemso/termanch`. Guardrail `diagnostics-never-include-secrets`. `App.svelte` already has a global error handler (`report`) and a `svelte:boundary` failure screen. A GitHub new-issue URL is limited to about 8 KB.
+Do: 1. Create `src/lib/report.ts`: a ring buffer of the last 10 errors (message, first stack frame, time) fed by the global handlers; `buildReport()` returning app version (bundle name), user agent summary, viewport numbers (`viewportBox`), connection state and the errors; a scrubber that removes certificates (`xxx.yyy` base64url pairs), claim secrets, tokens, IPv4/IPv6 addresses and `:port` pairs, and never reads terminal content or session names. 2. Add `.github/ISSUE_TEMPLATE/problem.yml` (GitHub issue form with a `diagnostics` textarea and a what-happened field) and `config.yml` pointing to it. 3. `reportUrl(report)` builds `https://github.com/sergemso/termanch/issues/new?template=problem.yml&diagnostics=...`; over 7000 characters it copies the text to the clipboard and opens the URL with a short paste note. 4. Add a Report a problem entry in the header and on the failure screen of `svelte:boundary`. 5. Tests with realistic samples (a real-looking certificate, claim secret, IPs, ports) proving the scrubber removes them, and the long-text clipboard path.
+Done-when: unit tests pass including the scrubber samples; the template file exists; the button opens a prefilled issue URL in the e2e (assert the URL host and path, do not submit).
+
+## Usage tiers (0073)
+
+### T.1 On-device usage meter — [ ]‖
+Class: implement · Needs: none · Check: `cd packages/client && npx --yes pnpm@9 test`
+Context: Decision 0073 and guardrail `usage-stays-on-device`. Thresholds in weekly foreground hours with an attached session: copper 1, silver 5, gold 15, platinum 30; the badge shows the last completed ISO week and progress for the current one. Storage is the browser's own (`localStorage` key `termanch_usage`), 8 weeks kept.
+Do: 1. Create `src/lib/usage.ts`: `addForeground(ms, now)` into an ISO-week bucket, `tierOf(hours)`, `summary(now)` (last completed week tier, current week hours and progress to the next tier, last 8 weeks). 2. A ticker in `App.svelte` that counts only while `document.visibilityState === 'visible'` and a session is attached (`activeSessionId` set and connected), in steps of at most 5 s so a suspended tab does not add time. 3. Pure functions for week boundaries (ISO weeks, Monday start, user's local time) with tests around year ends. 4. Nothing is sent anywhere.
+Done-when: unit tests cover tier boundaries (0.99 h, 1 h, 5 h, 15 h, 30 h), week rollover, year boundary and the hidden-tab rule; a grep shows no network call in `usage.ts`.
+
+### T.2 Badge, stats sheet and Say thanks — [ ]
+Class: implement · Needs: T.1 · Check: `cd packages/client && npx --yes pnpm@9 test && test -f ../../.github/FUNDING.yml`
+Context: Decision 0073. If the v3 UI plan's U.1 (shadcn components) is done, use its Sheet; otherwise a plain modal. GitHub Sponsors must be enabled by the owner for `sergemso` (an owner action; the button works as a plain profile link until then).
+Do: 1. Header badge showing the tier (copper, silver, gold, platinum; nothing below copper). 2. Tapping it opens stats: hours this week, a small bar list of the last 8 weeks, tier and progress. 3. Say thanks button linking to `https://github.com/sponsors/sergemso`. 4. Add `.github/FUNDING.yml` with `github: sergemso`. 5. No prompts or toasts about tiers anywhere.
+Done-when: tests render the badge for each tier and the stats list; `FUNDING.yml` exists; the browser e2e shows the badge after seeding `termanch_usage` in localStorage.
+
+## iOS swipe typing
+
+### X.1 Capture what iOS fires on a swipe correction — [ ]
+Class: explore · Needs: none · Check: `test -s docs/facts/0027-ios-swipe-typing-events.md`
+Context: On the owner's iPhone, swipe-typing "pleased" is auto-corrected to "phrased", and tapping another suggestion types a space instead of replacing the word. xterm.js 5.3 already sets `autocorrect=off`, `autocapitalize=off`, `spellcheck=false` on its hidden `.xterm-helper-textarea` (`src/Terminal.svelte` sets it to `opacity: 0`) and empties the textarea after each input. Hypothesis, unconfirmed: iOS has nothing to replace in the emptied textarea. The debug overlay switch (five taps on the title, `termanch_debug`) already exists.
+Do: 1. Behind the debug switch only, attach listeners for `beforeinput` (log `inputType`, `data`, `getTargetRanges()`), `input`, `compositionstart/update/end`, `keydown` and `selectionchange` on the helper textarea, logging also `value` and the selection; show the last 40 lines in the debug overlay with a Copy button. 2. Ask the owner to run: swipe a word, pick the first suggestion; swipe a word, pick a different suggestion; type a word and accept autocorrect; with the key row open and closed; paste the logs. 3. Write `docs/facts/0027-ios-swipe-typing-events.md` with the observed sequences and whether `insertReplacementText` or composition events appear, and a verdict: rollback feasible or compose line needed.
+Done-when: fact 0027 exists with the captured sequences and the verdict, and the logger ships behind the debug switch.
+
+### X.2 Make swipe-typing corrections work in the terminal — [ ]
+Class: implement · Needs: X.1 · Check: `cd packages/client && npx --yes pnpm@9 test`
+Context: Chosen by the verdict in fact 0027. Option rollback: keep the swiped word in the helper textarea until a space, Enter or other key, and when iOS reports a replacement send backspaces (0x7f times the previous word length) plus the replacement; the shadow buffer must reset on any non-text key or cursor movement. Option compose line: a text line above the key row where swiping and corrections work natively, sent with Enter or a Send button.
+Do: 1. Implement the option the fact recommends, in `src/Terminal.svelte` (rollback) or a new `ComposeLine.svelte` (compose line). 2. Unit-test the shadow-buffer logic (replace, reset on key, Unicode length) with synthetic event sequences taken from fact 0027. 3. Owner verifies on the iPhone with the procedure `docs/skills/mobile-ui-device-check.md`.
+Done-when: unit tests pass with the captured sequences and the owner confirms on the iPhone that picking a different suggestion replaces the word.
+
+## Remote uninstall (0072)
+
+### D.1 Certificate issue time and the uninstall message — [ ]
+Class: implement · Needs: none · Check: `cargo test -p termanch-server -p termanch-core && cd packages/client && npx --yes pnpm@9 test`
+Context: Decision 0072. The device certificate payload (`packages/client/functions/api/oauth/exchange.ts`, `packages/server/src/cert.rs`) has `exp` only; freshness needs `iat`. `ClientMessage` in `packages/core/src/protocol.rs` (mirror `packages/client/src/lib/protocol.ts`). Handlers live in `packages/server/src/sessions.rs`; `AuthState` in `auth.rs`. Container mode has no host access.
+Do: 1. Add `iat` (unix seconds) to the certificate payload in the function and `Payload`/`DeviceCert` in `cert.rs` (optional on read so existing certificates still verify; a missing `iat` counts as not fresh). 2. Add `ClientMessage::Uninstall { confirm_name, delete_user, remove_tmux, kill_sessions }` and `ServerMessage::UninstallStarted { stage, mode }`/`UninstallDone`. 3. In the server, accept it only from the owner with `confirm_name == server_name` and a certificate whose `iat` is at most 1 hour old, else reply with a clear error (`Sign in again to uninstall`). 4. Stage 1 body in a new `uninstall.rs`: wipe the config dir contents (keys, owner, claim), audit each step without content, then exit the process after the reply. Do not delete the host user or packages here (that is D.3). 5. Tests: wrong name, stale `iat`, non-owner, success wipes the files in a temp config dir.
+Done-when: all four failure paths return their errors; a successful uninstall empties the temp config dir; certificates with and without `iat` verify.
+
+### D.2 Directory deregistration — [ ]‖
+Class: implement · Needs: none · Check: `cd packages/client && npx --yes pnpm@9 test`
+Context: Records are stored in D1 and written by `functions/api/directory/announce.ts`; there is no delete endpoint (only an idle expiry of 30 days in `_lib.ts`). The record is signed by the server's Ed25519 key (`directory.rs`).
+Do: 1. Add `POST /api/directory/remove { server_id, ts, sig }` verifying a signature by the server key over `termanch-remove-v1\n<server_id>\n<ts>` (ts within 5 minutes), deleting the record and its pending claim rows, with the same abuse limits as `announce`. 2. Add the signing and call to the server (`directory.rs`), invoked by the uninstall flow before the wipe. 3. Tests for a valid removal, a bad signature, a stale timestamp and a replay.
+Done-when: unit tests prove the four cases; a removed server id returns no record from `lookup`.
+
+### D.3 Host-mode cleanup and self-removal — [ ]
+Class: implement · Needs: D.1, D.2 · Check: `cargo test -p termanch-server uninstall`
+Context: Do not start before step S.7 of `docs/plans/termanch-v2-environment-and-ux.md` is done: it creates the change journal and `--revert` that this step reads. Host mode (decision 0058) runs commands through `Runner` (`backend.rs`) with `nsenter`; guardrail `remote-uninstall-is-deliberate-and-scoped`.
+Do: 1. In host mode, after stage 1, revert the journaled changes, then apply the opt-in flags: `kill_sessions` (tmux kill-server for the run user), `delete_user` (userdel -r of the dedicated user only if the journal says the installer created it), `remove_tmux` (only if journaled as installed by us). 2. Remove the server's own container and image on the host with a detached command started through the `Runner` in its own systemd scope after the reply is sent, and delete `/opt/termanch` data per the journal. 3. In container mode do none of this and reply with `stage: command` so the app shows the copy-paste command. 4. Test in a second container on a free port (leaving the owner's running one alone): host mode removes the container and image; unticked flags leave the user and tmux untouched.
+Done-when: the test container is gone after uninstall, `termanch` user and tmux remain when unticked and are removed when ticked, and every step has an audit entry.
+
+### D.4 Remove server flow in the app — [ ]
+Class: implement · Needs: D.1, D.3 · Check: `cd packages/client && npx --yes pnpm@9 test`
+Context: `ServerList.svelte` removal currently asks a native confirm and only forgets the server in this browser. The mode of each server arrives in `auth_ok.mode` (`container` or `host:<user>`). Container-mode uninstall must show one command: `docker rm -f termanch && docker rmi ghcr.io/sergemso/termanch && sudo rm -rf /opt/termanch` (use the container name and data path the installer used).
+Do: 1. Replace the confirm with a Remove server sheet: Forget in this browser (default), or Uninstall the server. Uninstall shows what will happen per the server's mode, the three opt-in checkboxes in host mode (off by default), a typed server name field, and requires a fresh login: if the certificate is older than 1 hour, show Sign in again first. 2. Send `uninstall`, show progress per stage, and on completion forget the server locally. 3. In container mode show the copy-paste command with a Copy button after stage 1. 4. Tests for the sheet states, the typed-name gate, the stale-certificate prompt and the command text; browser e2e uninstalls a test server and checks the config dir is empty.
+Done-when: unit tests pass; the e2e uninstall leaves an empty config dir and the app returns to the server list without the server.

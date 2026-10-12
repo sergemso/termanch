@@ -40,3 +40,6 @@ host-changes-are-journaled,"Host changes are journaled and revertible","safety, 
 soft-keyboard-never-hides-input,"The soft keyboard never hides the key row or terminal input","client, mobile, ios",active
 kill-session-needs-confirmation,"Killing a session needs confirmation","client, protocol",active
 connections-warn-never-drop,"Connections are limited by warning, never by dropping","client, mobile, performance",active
+remote-uninstall-is-deliberate-and-scoped,"Remote uninstall is owner-only, confirmed, fresh and scoped","security, deployment, client",active
+usage-stays-on-device,"Usage and tier data stay on the device","client, privacy",active
+diagnostics-never-include-secrets,"Problem reports never include secrets, session content or addresses","security, privacy, client",active

@@ -74,3 +74,6 @@
 0069-ui-foundation-tailwind-shadcn,"The client UI is built with Tailwind v4 and shadcn-svelte","client, build, mobile",active
 0070-session-navigation-and-connections,"Sessions of all servers are navigated in one place over simultaneous connections","client, mobile, protocol",active
 0071-context-aware-key-row,"The key row adapts to the detected multiplexer, with a sticky Prefix key","client, terminal, mobile, protocol",active
+0072-remote-uninstall,"Remove server can uninstall the server in two stages, with host cleanup opt-in","deployment, security, client, protocol",active
+0073-usage-tiers-on-device,"Usage tiers and a thank-you badge are computed on the device and never leave it","client, mobile, privacy",active
+0074-problem-reports-via-github-issues,"Problems are reported by the user through a prefilled GitHub issue","client, privacy, repo",active
