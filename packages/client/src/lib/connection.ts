@@ -57,6 +57,9 @@ export class Connection {
   private everReady = false;
   private stopped = false;
   private opening = false;
+  private pingSentAt = 0;
+  /** Last measured round trip in ms (heartbeat ping to pong), for the status bar. */
+  rtt: number | null = null;
 
   constructor(private opts: ConnectionOptions) {
     document.addEventListener('visibilitychange', this.wake);
@@ -94,7 +97,7 @@ export class Connection {
   private wake = () => {
     if (this.stopped || document.visibilityState === 'hidden') return;
     if (this.transport && this.authed) {
-      this.send({ type: 'ping' }); // the heartbeat will drop it if it went stale while hidden
+      this.ping(); // the heartbeat will drop it if it went stale while hidden
       this.armPongTimeout();
     } else if (!this.opening) {
       this.reconnectNow();
@@ -168,14 +171,21 @@ export class Connection {
       this.opts.onFatal(msg.message);
       return;
     }
-    if (msg.type !== 'pong') this.listeners.forEach((fn) => fn(msg));
+    if (msg.type === 'pong') {
+      if (this.pingSentAt) this.rtt = Math.round(performance.now() - this.pingSentAt);
+    } else {
+      this.listeners.forEach((fn) => fn(msg));
+    }
   }
 
   private startHeartbeat() {
-    this.pingTimer = setInterval(() => {
-      this.send({ type: 'ping' });
-      this.armPongTimeout();
-    }, PING_EVERY_MS);
+    this.pingTimer = setInterval(() => this.ping(), PING_EVERY_MS);
+  }
+
+  private ping() {
+    this.pingSentAt = performance.now();
+    this.send({ type: 'ping' });
+    this.armPongTimeout();
   }
 
   private armPongTimeout() {

@@ -115,3 +115,21 @@ a:hover {
 
 .toast.success { border-left: 4px solid var(--success); }
 .toast.error { border-left: 4px solid var(--danger); }
+/* iOS zooms the page when a field under 16px gets focus. */
+@media (max-width: 720px) {
+  input, select {
+    font-size: 16px;
+  }
+  /* Top, not bottom: the bottom edge belongs to the terminal key row. */
+  .toast {
+    top: 8px;
+    bottom: auto;
+    left: 8px;
+    right: 8px;
+    padding: 10px 14px;
+    font-size: 0.8rem;
+    overflow-wrap: anywhere;
+    max-height: 30vh;
+    overflow: hidden;
+  }
+}
