@@ -38,3 +38,31 @@ describe('font sizing', () => {
     expect(pinchFont(14, 0.5)).toBe(9);
   });
 });
+
+import { FN_KEYS, SYMBOLS, bufferText } from './keys';
+
+describe('Fn panel', () => {
+  it('sends the xterm sequences for navigation and function keys', () => {
+    const k = Object.fromEntries(FN_KEYS);
+    expect(k.PgUp).toBe('\x1b[5~');
+    expect(k.PgDn).toBe('\x1b[6~');
+    expect(k.Del).toBe('\x1b[3~');
+    expect(k.F1).toBe('\x1bOP');
+    expect(k.F5).toBe('\x1b[15~');
+    expect(k.F12).toBe('\x1b[24~');
+    expect(new Set(FN_KEYS.map(([, s]) => s)).size).toBe(FN_KEYS.length);
+  });
+
+  it('offers the symbols a phone keyboard hides', () => {
+    for (const c of ['{', '}', '\\', '`', '<', '>']) expect(SYMBOLS).toContain(c);
+  });
+});
+
+describe('bufferText', () => {
+  it('keeps the last lines, trims right edges and trailing blanks', () => {
+    const lines = ['a  ', 'b', '', 'c   ', '', ''];
+    expect(bufferText((i) => lines[i], lines.length)).toBe('a\nb\n\nc');
+    expect(bufferText((i) => lines[i], lines.length, 2)).toBe('');
+    expect(bufferText((i) => lines[i], lines.length, 4)).toBe('\nc');
+  });
+});

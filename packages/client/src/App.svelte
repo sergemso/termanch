@@ -421,8 +421,14 @@
             <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem; margin-bottom: 12px;" on:click={leaveServer}>← Servers</button>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
               <h3 style="font-size: 0.875rem; text-transform: uppercase; color: var(--fg-muted);">Sessions · {connState}</h3>
-              <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem;" on:click={() => connection?.send({ type: 'list_sessions' })}>Refresh</button>
-              <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem;" on:click={newSession}>+ New</button>
+              <button class="secondary icon" on:click={() => connection?.send({ type: 'list_sessions' })}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
+                Refresh
+              </button>
+              <button class="secondary icon" on:click={newSession}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                New
+              </button>
             </div>
             {#if connState !== 'connected'}
               <!-- Own row, wrapped: a long diagnostic inside the flex header squeezed it into a tall narrow column. -->

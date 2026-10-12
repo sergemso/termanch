@@ -26,6 +26,9 @@ impl Attachment {
         let mut cmd = CommandBuilder::new(program);
         cmd.args(args);
         cmd.env("TERM", "xterm-256color");
+        for (k, v) in crate::locale::utf8_env() {
+            cmd.env(k, v);
+        }
         let child = pair.slave.spawn_command(cmd)?;
         drop(pair.slave);
 
