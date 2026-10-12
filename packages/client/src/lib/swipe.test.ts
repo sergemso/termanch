@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { replacementData, replacementKeys } from './swipe';
+import { isWordKey, replacementData, replacementKeys } from './swipe';
 
 describe('replacementKeys', () => {
   it('replays the sequence captured on an iPhone: "hello" swiped, "he\'ll" chosen', () => {
@@ -25,5 +25,19 @@ describe('replacementData', () => {
     expect(replacementData({ ...base, inputType: 'insertText' })).toBeNull();
     expect(replacementData({ ...base, isComposing: true })).toBeNull();
     expect(replacementData({ ...base, data: null })).toBeNull();
+  });
+});
+
+describe('isWordKey', () => {
+  it('recognises a swiped word reported as the key (captured on the Russian iOS keyboard)', () => {
+    expect(isWordKey('чем')).toBe(true);
+    expect(isWordKey('Чем')).toBe(true);
+    expect(isWordKey('hello')).toBe(true);
+  });
+
+  it('leaves real keys alone', () => {
+    for (const key of ['з', 'a', ' ', '😀', 'Enter', 'Backspace', 'ArrowLeft', 'Tab', 'Dead', 'Unidentified', 'Process', 'Shift', 'F1', 'F12']) {
+      expect(isWordKey(key), key).toBe(false);
+    }
   });
 });
