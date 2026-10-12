@@ -27,6 +27,7 @@ bootstrap-generated: true
 | monorepo | Repository structure, workspaces |
 | network | Transport, protocols, binding |
 | performance | Latency, throughput, memory, CPU |
+| privacy | What user data is collected, kept or sent |
 | protocol | Wire format, handshake, sync |
 | pwa | Progressive Web App features |
 | rendering | Terminal display, WebGL, xterm.js |

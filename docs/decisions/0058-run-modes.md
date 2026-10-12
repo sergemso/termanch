@@ -19,3 +19,5 @@ tags: [deployment, security, sessions, roadmap]
 ## Why
 
 A container shell cannot reach the host's repos, agent CLIs or files, which defeats managing real coding agents. Root on the host is already what claiming a server implies (0053), so host mode adds convenience, not a new trust boundary; the unprivileged user gives owners who want less blast radius a choice. See [[host-mode-explicit-consent]].
+
+**Update 2026-10-12:** the privileged-container implementation of host mode (`--pid=host --privileged`, `nsenter`) is retired by [[0075-native-host-mode]]; the consent, user-choice and audit rules above stay in force for the native mode.

@@ -71,3 +71,12 @@
 0066-web-baseline-and-privacy,"The hosted client ships a strict CSP, a disclosure policy, a privacy notice and data deletion","security, privacy, web, roadmap",active
 0067-change-journal-and-revert,"Every host change is journaled, previewed and revertible","safety, deployment, roadmap",active
 0068-user-data-in-r2-and-live-sync,"The owner's server list and settings are encrypted objects read from the CDN, with live sync through servers","directory, scale, sync, roadmap",draft
+0069-ui-foundation-tailwind-shadcn,"The client UI is built with Tailwind v4 and shadcn-svelte","client, build, mobile",active
+0070-session-navigation-and-connections,"Sessions of all servers are navigated in one place over simultaneous connections","client, mobile, protocol",active
+0071-context-aware-key-row,"The key row adapts to the detected multiplexer, with a sticky Prefix key","client, terminal, mobile, protocol",active
+0072-remote-uninstall,"Remove server can uninstall the server in two stages, with host cleanup opt-in","deployment, security, client, protocol",active
+0073-usage-tiers-on-device,"Usage tiers and a thank-you badge are computed on the device and never leave it","client, mobile, privacy",active
+0074-problem-reports-via-github-issues,"Problems are reported by the user through a prefilled GitHub issue","client, privacy, repo",active
+0075-native-host-mode,"Native host mode runs the server without Docker, as a systemd service","deployment, server, security",active
+0076-native-releases-and-updater,"Native releases carry a signed manifest and a root-owned updater applies them with rollback","build, security, deployment",active
+0077-root-actions-by-request-file,"An unprivileged server asks for root actions through a request file, never through sudo","security, deployment, protocol",active

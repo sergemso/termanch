@@ -54,7 +54,7 @@ Done-when: host mode shows the host's `/etc/hostname` and processes; container m
 
 ### B.3 Add Server mode choice and server settings — [ ]
 Class: implement · Needs: B.2, A.1 · Check: `cd packages/client && npx --yes pnpm@9 test`
-Context: `AddServerModal.svelte` builds the command through `lib/onboard.ts installCommand`.
+Context: `AddServerModal.svelte` builds the command through `lib/onboard.ts installCommand`. Do this after step U.1 of docs/plans/termanch-v3-ui.md (the UI foundation) so the screen is written once. Host mode is native since decision 0075 (no Docker); the install words `host` and `host-user` are unchanged.
 Do: mode radio with the host warning, root/user choice, mode badge on server card and session header, a Server settings screen (name, mode, remove, re-claim).
 Done-when: the generated command and QR carry the choice; badge visible.
 
@@ -121,7 +121,7 @@ Class: implement · Needs: S.5, C.4 · Check: `cd packages/client && npx --yes p
 Do: privacy page in the client; authenticated `POST /api/me/delete` removing the owner list and the records of that owner's servers; tests; retention (30 days idle) stated.
 Done-when: after deletion, lookups of that owner's servers return 404 and the list is empty.
 
-### S.7 Change journal, dry-run and revert (0067) — [ ]
+### S.7 Change journal, dry-run and revert (0067) — [>] moved to docs/plans/termanch-v5-native-host-mode.md as step N.3
 Class: implement · Needs: B.2 · Check: `cargo test -p termanch-server`
 Context: Guardrail `host-changes-are-journaled`.
 Do: journal in the config dir; every installer and profile change writes an entry before applying; `--dry-run` list; `termanch-server --revert`; image rollback after a failed health check; short terms page.
