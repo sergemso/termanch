@@ -306,6 +306,7 @@ try {
       await page.getByRole('button', { name: 'Sessions' }).click();
       const heights = await page.evaluate(() => [...document.querySelectorAll('aside button.icon')].map((b) => Math.round(b.getBoundingClientRect().height)));
       if (heights.length !== 2 || heights[0] !== heights[1]) fail(`Refresh and New differ in size: ${heights}`);
+      if (!(await page.getByText(/server 0\.1\.0\+/).count())) fail('the sidebar does not show the server version');
       await page.getByText('s1', { exact: true }).first().click();
       await page.locator('.xterm').waitFor({ timeout: 5000 });
       if (lap === 3) {
@@ -354,13 +355,58 @@ try {
         await page.keyboard.press('Enter');
         const utf8 = { ...process.env, TMUX_TMPDIR: home, LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' };
         await waitFor(() => /^привет$/m.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: utf8, encoding: 'utf8' })), 'Cyrillic text in the shell output', 10000);
-        // Fn panel: navigation keys and symbols appear and go away.
+        // Fn: a keyboard grid takes the system keyboard's place (and sends keys), ABC brings the system keyboard back.
+        await page.keyboard.press('Control+u');
+        await page.keyboard.type('echo ');
         await page.getByRole('button', { name: 'Fn', exact: true }).click();
-        await page.getByRole('button', { name: 'PgUp', exact: true }).waitFor({ timeout: 3000 });
-        await page.getByRole('button', { name: '{', exact: true }).waitFor({ timeout: 3000 });
-        await page.getByRole('button', { name: 'Fn', exact: true }).click();
-        if (await page.getByRole('button', { name: 'PgUp', exact: true }).count()) fail('the Fn panel did not close');
+        const fnKb = page.getByRole('group', { name: 'Function keyboard' });
+        await fnKb.waitFor({ timeout: 3000 });
+        const fnBox = await fnKb.boundingBox();
+        if (!fnBox || fnBox.height < 200) fail(`the Fn keyboard is too small to replace the system keyboard: ${fnBox?.height}`);
+        if ((await page.locator('.xterm-helper-textarea').getAttribute('inputmode')) !== 'none') fail('the system keyboard is not suppressed while Fn is open');
+        await fnKb.getByRole('button', { name: 'Symbols', exact: true }).click();
+        await fnKb.getByRole('button', { name: '{', exact: true }).click();
+        await waitFor(() => /echo \{/.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: utf8, encoding: 'utf8' })), 'the symbol typed from the Fn keyboard', 8000);
+        await fnKb.getByRole('button', { name: 'Back to the system keyboard' }).click();
+        if (await page.getByRole('group', { name: 'Function keyboard' }).count()) fail('the Fn keyboard did not close');
+        if ((await page.locator('.xterm-helper-textarea').getAttribute('inputmode')) !== 'text') fail('the system keyboard was not restored');
+        // After the keyboard was hidden (focus lost), a tap on the terminal makes it active again.
+        await page.evaluate(() => document.querySelector('.xterm-helper-textarea').blur());
+        await page.locator('.screen').click({ position: { x: 40, y: 40 } });
+        await page.waitForFunction(() => document.activeElement?.classList.contains('xterm-helper-textarea'), null, { timeout: 3000 });
+        // Long-press selects a word, the bar copies it.
+        await page.keyboard.press('Control+u');
+        await page.keyboard.type('clear; echo SELECTME');
+        await page.keyboard.press('Enter');
+        await waitFor(() => /^SELECTME$/m.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: utf8, encoding: 'utf8' })), 'SELECTME on the screen', 8000);
+        await sleep(400);
+        // Where SELECTME is on the screen, from tmux: its row, and the client's total rows (including the status line).
+        const tm = (...args) => execFileSync('tmux', args, { env: utf8, encoding: 'utf8' });
+        const row = tm('capture-pane', '-p', '-t', 's1').split('\n').findIndex((l) => l === 'SELECTME');
+        const total = Number(tm('list-clients', '-F', '#{client_height}').split('\n')[0]);
+        await page.evaluate(
+          ([row, total]) => {
+            const r = document.querySelector('.xterm-screen').getBoundingClientRect();
+            window.__press = { x: r.left + (r.width / 80) * 2 + 2, y: r.top + (r.height / total) * (row + 0.5) };
+          },
+          [row, total],
+        );
+        await page.evaluate(() => {
+          const el = document.querySelector('.screen');
+          const init = { pointerId: 7, pointerType: 'touch', isPrimary: true, bubbles: true, clientX: window.__press.x, clientY: window.__press.y };
+          el.dispatchEvent(new PointerEvent('pointerdown', init));
+          setTimeout(() => el.dispatchEvent(new PointerEvent('pointerup', init)), 700);
+        });
+        await page.locator('.selbar').waitFor({ timeout: 4000 });
+        if ((await page.locator('.handle').count()) !== 2) fail('the selection handles are missing');
+        await page.locator('.selbar').getByRole('button', { name: 'Copy', exact: true }).click();
+        const picked = await page.evaluate(() => navigator.clipboard.readText());
+        if (picked.trim() !== 'SELECTME') fail(`long-press copied ${JSON.stringify(picked)} instead of the word under the finger`);
+        await page.keyboard.press('Control+u');
         // Select: the screen text is available as selectable text.
+        await page.keyboard.type('echo привет');
+        await page.keyboard.press('Enter');
+        await sleep(500);
         await page.getByRole('button', { name: 'Select', exact: true }).click();
         await page.waitForFunction(() => /привет/.test(document.querySelector('[aria-label="Select text"] pre')?.textContent ?? ''), null, { timeout: 5000 });
         await page.getByRole('button', { name: 'Close', exact: true }).click();

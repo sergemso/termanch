@@ -42,6 +42,8 @@ export interface Env {
   inner: string;
   visual: string;
   connection: string;
+  /** `version` from the server's auth_ok, so a stale image is visible. */
+  server?: string;
   errors: ErrorNote[];
 }
 
@@ -53,6 +55,7 @@ export function buildReport(env: Env): string {
     `window: ${env.inner}`,
     `visual viewport: ${env.visual}`,
     `connection: ${env.connection}`,
+    `server: ${env.server ?? 'unknown'}`,
     'recent errors:',
     ...(env.errors.length ? env.errors.map((e) => `- ${new Date(e.at).toISOString()} ${e.text}`) : ['- none']),
   ];

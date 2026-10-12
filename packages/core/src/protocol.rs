@@ -67,6 +67,9 @@ pub enum ServerMessage {
         /// `container` or `host:<user>`; absent from older servers.
         #[serde(default)]
         mode: String,
+        /// Server version and build (`0.1.0+abc1234`); absent from older servers.
+        #[serde(default)]
+        version: String,
     },
     Sessions {
         sessions: Vec<SessionInfo>,
@@ -126,6 +129,7 @@ mod tests {
             user: "u".into(),
             server_name: "s".into(),
             mode: "container".into(),
+            version: "0.1.0+dev".into(),
         })
         .unwrap();
         assert_eq!(v["type"], "auth_ok");

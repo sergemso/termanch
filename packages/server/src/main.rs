@@ -135,6 +135,16 @@ pub struct AppState {
     pub rtc_info: Option<rtc::RtcInfo>,
 }
 
+/// `0.1.0+abc1234`: the crate version and, in the Docker image, the commit it was built from.
+pub fn version() -> String {
+    let build = std::env::var("TERMANCH_BUILD").unwrap_or_else(|_| "dev".into());
+    format!(
+        "{}+{}",
+        env!("CARGO_PKG_VERSION"),
+        build.chars().take(7).collect::<String>()
+    )
+}
+
 fn default_config_dir() -> PathBuf {
     std::env::var_os("HOME")
         .map(PathBuf::from)

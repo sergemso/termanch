@@ -29,6 +29,8 @@
   }
 
   let reportText: string | null = null;
+  /** Version of the connected server (`0.1.0+abc1234`), shown so a stale image is noticed. */
+  let serverVersion = '';
   function openReport() {
     const vv = window.visualViewport;
     reportText = buildReport({
@@ -37,6 +39,7 @@
       inner: `${window.innerWidth}x${window.innerHeight}`,
       visual: vv ? `${Math.round(vv.width)}x${Math.round(vv.height)} top ${Math.round(vv.offsetTop)}` : 'none',
       connection: selectedServer ? connState : 'no server selected',
+      server: serverVersion || undefined,
       errors: $recentErrors,
     });
   }
@@ -197,6 +200,7 @@
           server = rest;
           addServer({ ...rest, server_name: msg.server_name || rest.server_name });
         }
+        serverVersion = msg.version ?? '';
         showToast(isReconnect ? 'Reconnected' : `Connected to ${msg.server_name}`);
         connection?.send({ type: 'list_sessions' });
         // tmux kept the session alive; attaching again repaints it.
@@ -420,7 +424,7 @@
           <aside style="{narrow ? 'position: absolute; top: 0; bottom: 0; left: 0; z-index: 30; width: min(85vw, 320px); transform: translateX(' + (drawerOpen ? '0' : '-105%') + '); transition: transform 0.15s;' : 'width: 280px;'} border-right: 1px solid var(--border); background: var(--bg-secondary); padding: 16px; overflow-y: auto;">
             <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem; margin-bottom: 12px;" on:click={leaveServer}>← Servers</button>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-              <h3 style="font-size: 0.875rem; text-transform: uppercase; color: var(--fg-muted);">Sessions · {connState}</h3>
+              <h3 style="font-size: 0.875rem; text-transform: uppercase; color: var(--fg-muted);">Sessions · {connState}{#if serverVersion}<span style="display:block; text-transform:none; font-size:0.65rem; font-weight:400;">server {serverVersion}</span>{/if}</h3>
               <button class="secondary icon" on:click={() => connection?.send({ type: 'list_sessions' })}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
                 Refresh

@@ -56,6 +56,7 @@ jobs:
           context: .
           file: docker/Dockerfile
           platforms: linux/${{ matrix.arch }}
+          build-args: TERMANCH_BUILD=${{ github.sha }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ env.PUSH }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-cache:${{ matrix.arch }}
           cache-to: ${{ env.PUSH == 'true' && format('type=registry,ref={0}/{1}-cache:{2},mode=max', env.REGISTRY, env.IMAGE_NAME, matrix.arch) || '' }}

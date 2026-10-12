@@ -95,6 +95,7 @@ pub async fn run(mut link: Link, state: AppState) {
         user: identity.login.clone(),
         server_name: state.server_name.clone(),
         mode: state.mode.clone(),
+        version: crate::version(),
     };
     if !send(&link, &ok).await {
         return;
