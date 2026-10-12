@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { debugText, viewportBox } from './viewport';
+import { debugEnabled, debugText, tapCounter, viewportBox } from './viewport';
 
 const win = { innerHeight: 800, innerWidth: 390 };
 
@@ -30,5 +30,22 @@ describe('viewportBox', () => {
     expect(text).toContain('inner 390x800');
     expect(text).toContain('vv 390x460 top 120');
     expect(text).toContain('keyboard true');
+  });
+});
+
+describe('debug switch', () => {
+  it('is on for ?debug or the saved switch', () => {
+    expect(debugEnabled('?debug', null)).toBe(true);
+    expect(debugEnabled('', '1')).toBe(true);
+    expect(debugEnabled('', null)).toBe(false);
+    expect(debugEnabled('?x=1', '0')).toBe(false);
+  });
+
+  it('needs five taps inside three seconds', () => {
+    const tap = tapCounter();
+    expect([0, 500, 1000, 1500].map(tap)).toEqual([false, false, false, false]);
+    expect(tap(2000)).toBe(true);
+    const slow = tapCounter();
+    expect([0, 1000, 2000, 3500, 4500].map(slow)).toEqual([false, false, false, false, false]);
   });
 });

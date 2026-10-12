@@ -10,7 +10,18 @@
   import { lookup, type DirRecord } from './lib/directory';
   import { deviceKey, publicKeyB64, signChallenge, certExpiry } from './lib/device';
   import AppShell from './AppShell.svelte';
+  import { DEBUG_KEY, tapCounter } from './lib/viewport';
   import { canInstall, promptInstall, isIosBrowser } from './lib/pwa';
+
+  const titleTap = tapCounter();
+  /** Five quick taps on the title switch the viewport overlay on or off; an installed PWA has no address bar for ?debug. */
+  function titleTapped() {
+    if (!titleTap(Date.now())) return;
+    const on = localStorage.getItem(DEBUG_KEY) !== '1';
+    localStorage.setItem(DEBUG_KEY, on ? '1' : '0');
+    window.dispatchEvent(new Event('termanch-debug'));
+    showToast(on ? 'Debug overlay on' : 'Debug overlay off');
+  }
 
   let user: string | null = null;
   /** Device certificate from the hosted function; the GitHub token itself is never kept (DECISION-0062). */
@@ -317,7 +328,7 @@
     </div>
   {:else}
     <header style="display: flex; justify-content: space-between; align-items: center; padding: {narrow ? '8px 12px' : '16px 24px'}; border-bottom: 1px solid var(--border); background: var(--bg-secondary);">
-      <h1 style="font-size: 1.25rem;">Termanch</h1>
+      <h1 style="font-size: 1.25rem; user-select: none; -webkit-user-select: none;" on:click={titleTapped}>Termanch</h1>
       <div style="display: flex; align-items: center; gap: 16px;">
         {#if $canInstall}<button on:click={promptInstall} style="padding: 6px 12px;">Install app</button>{/if}
         <span style="color: var(--fg-muted);">@{user}</span>

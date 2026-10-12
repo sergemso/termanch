@@ -41,3 +41,23 @@ export function debugText(vv: ViewportSource | null | undefined, win: { innerHei
     `keyboard ${box.keyboard}`,
   ].join('\n');
 }
+
+export const DEBUG_KEY = 'termanch_debug';
+
+/** `?debug` in the address, or the switch saved by tapping the title five times (an installed PWA has no address bar). */
+export function debugEnabled(search: string, stored: string | null): boolean {
+  return new URLSearchParams(search).has('debug') || stored === '1';
+}
+
+/** Counts rapid taps; true on the one that reaches `needed` within `windowMs`. */
+export function tapCounter(needed = 5, windowMs = 3000) {
+  let times: number[] = [];
+  return (now: number): boolean => {
+    times = [...times.filter((t) => now - t <= windowMs), now];
+    if (times.length >= needed) {
+      times = [];
+      return true;
+    }
+    return false;
+  };
+}

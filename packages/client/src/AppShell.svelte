@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { debugText, viewportBox, type Box } from './lib/viewport';
+  import { DEBUG_KEY, debugEnabled, debugText, viewportBox, type Box } from './lib/viewport';
 
   /** In a session the shell is pinned to what is visible; elsewhere the page scrolls normally. */
   export let pinned = false;
 
-  const debug = new URLSearchParams(location.search).has('debug');
+  let debug = debugEnabled(location.search, localStorage.getItem(DEBUG_KEY));
   let box: Box = viewportBox(null, window);
   let overlay = '';
 
@@ -18,6 +18,11 @@
 
   onMount(() => {
     const vv = window.visualViewport;
+    const toggle = () => {
+      debug = debugEnabled(location.search, localStorage.getItem(DEBUG_KEY));
+      measure();
+    };
+    window.addEventListener('termanch-debug', toggle);
     measure();
     // iOS fires `scroll` (not `resize`) when it pans the visual viewport to show the focused field.
     vv?.addEventListener('resize', measure);
@@ -25,6 +30,7 @@
     window.addEventListener('resize', measure);
     window.addEventListener('orientationchange', measure);
     return () => {
+      window.removeEventListener('termanch-debug', toggle);
       vv?.removeEventListener('resize', measure);
       vv?.removeEventListener('scroll', measure);
       window.removeEventListener('resize', measure);

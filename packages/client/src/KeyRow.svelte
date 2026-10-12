@@ -71,4 +71,12 @@
     background: var(--accent);
     color: var(--bg);
   }
+  @media (hover: hover) {
+    .k:hover:not(:disabled):not(.on) {
+      background: var(--border);
+    }
+    .k.on:hover:not(:disabled) {
+      background: var(--accent);
+    }
+  }
 </style>
