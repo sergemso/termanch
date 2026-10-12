@@ -1,0 +1,749 @@
+//! Change journal (decision 0067, guardrail host-changes-are-journaled). Everything the installer, profile or
+//! updater changes on a machine is recorded here *before* it is applied, so that `--revert` can undo exactly
+//! that and nothing else. The journal lives in a root-owned directory, out of reach of the unprivileged server.
+//!
+//! The file is append-only JSON lines: a change record, or a `reverted` marker that points at one. Reverting
+//! twice therefore changes nothing, and a file that was modified after we wrote it is reported, never deleted.
+
+use std::path::{Path, PathBuf};
+
+use anyhow::{anyhow, bail, Result};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+
+use crate::auth::write_private;
+
+pub const FILE_NAME: &str = "journal.jsonl";
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Change {
+    /// A file we created; `sha256` is the hash of what we wrote.
+    FileCreated { path: String, sha256: String },
+    /// A file we replaced; the original was moved to `backup`.
+    FileReplaced {
+        path: String,
+        backup: String,
+        sha256: String,
+    },
+    /// A user account we created.
+    UserCreated { name: String, home: String },
+    /// A package we installed with the host's package manager.
+    PackageInstalled { manager: String, name: String },
+    /// A systemd unit file we installed.
+    UnitInstalled { name: String, path: String },
+    /// A firewall rule we added (`rule` like `4443/udp`).
+    FirewallRuleAdded { tool: String, rule: String },
+}
+
+impl Change {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Change::FileCreated { .. } => "file_created",
+            Change::FileReplaced { .. } => "file_replaced",
+            Change::UserCreated { .. } => "user_created",
+            Change::PackageInstalled { .. } => "package_installed",
+            Change::UnitInstalled { .. } => "unit_installed",
+            Change::FirewallRuleAdded { .. } => "firewall_rule_added",
+        }
+    }
+
+    /// Builds a change from the `--journal-record KIND --journal-field K=V` command line. File hashes are
+    /// computed here so the installer script does not have to.
+    pub fn from_fields(kind: &str, fields: &[(String, String)]) -> Result<Change> {
+        let get = |k: &str| -> Result<String> {
+            fields
+                .iter()
+                .find(|(n, _)| n == k)
+                .map(|(_, v)| v.clone())
+                .ok_or_else(|| anyhow!("{kind} needs {k}=..."))
+        };
+        Ok(match kind {
+            "file_created" => {
+                let path = get("path")?;
+                Change::FileCreated {
+                    sha256: hash_file(Path::new(&path))?,
+                    path,
+                }
+            }
+            "file_replaced" => {
+                let path = get("path")?;
+                Change::FileReplaced {
+                    sha256: hash_file(Path::new(&path))?,
+                    backup: get("backup")?,
+                    path,
+                }
+            }
+            "user_created" => Change::UserCreated {
+                name: get("name")?,
+                home: get("home")?,
+            },
+            "package_installed" => Change::PackageInstalled {
+                manager: get("manager")?,
+                name: get("name")?,
+            },
+            "unit_installed" => Change::UnitInstalled {
+                name: get("name")?,
+                path: get("path")?,
+            },
+            "firewall_rule_added" => Change::FirewallRuleAdded {
+                tool: get("tool")?,
+                rule: get("rule")?,
+            },
+            other => bail!("unknown change kind `{other}`"),
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+enum Record {
+    Change { id: u64, ts: u64, change: Change },
+    Reverted { reverted: u64, ts: u64 },
+}
+
+pub fn hash_file(path: &Path) -> Result<String> {
+    Ok(hex(&Sha256::digest(std::fs::read(path)?)))
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// What a revert does to the machine; the real implementation runs commands, tests use a recording fake.
+pub trait Ops {
+    /// Hash of the file now, or `None` when it does not exist.
+    fn file_hash(&self, path: &Path) -> Option<String>;
+    fn remove_file(&mut self, path: &Path) -> Result<()>;
+    fn restore_file(&mut self, backup: &Path, path: &Path) -> Result<()>;
+    /// `delete_home` is the owner's explicit choice (decision 0072); a plain revert keeps the home directory.
+    fn delete_user(&mut self, name: &str, delete_home: bool) -> Result<()>;
+    fn remove_package(&mut self, manager: &str, name: &str) -> Result<()>;
+    fn remove_unit(&mut self, name: &str, path: &Path) -> Result<()>;
+    fn remove_firewall_rule(&mut self, tool: &str, rule: &str) -> Result<()>;
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Report {
+    /// Ids that were (or, in a dry run, would be) reverted.
+    pub reverted: Vec<u64>,
+    /// Ids left alone on purpose, with the reason (for example "modified since it was installed").
+    pub skipped: Vec<(u64, String)>,
+    pub failed: Vec<(u64, String)>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct RevertOptions {
+    pub only: Option<String>,
+    pub dry_run: bool,
+    pub delete_home: bool,
+}
+
+pub struct Journal {
+    file: PathBuf,
+}
+
+impl Journal {
+    /// Opens (creating, root-only) the journal in `dir`.
+    pub fn open(dir: &Path) -> Result<Self> {
+        std::fs::create_dir_all(dir)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+        }
+        let file = dir.join(FILE_NAME);
+        if !file.exists() {
+            write_private(&file, b"")?;
+        }
+        Ok(Self { file })
+    }
+
+    fn records(&self) -> Result<Vec<Record>> {
+        let text = std::fs::read_to_string(&self.file)?;
+        // A torn or foreign line is ignored rather than blocking a revert.
+        Ok(text
+            .lines()
+            .filter_map(|l| serde_json::from_str(l).ok())
+            .collect())
+    }
+
+    fn append(&self, record: &Record) -> Result<()> {
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new().append(true).open(&self.file)?;
+        writeln!(f, "{}", serde_json::to_string(record)?)?;
+        f.sync_all()?;
+        Ok(())
+    }
+
+    /// Records a change; call it *before* applying the change.
+    pub fn record(&self, change: Change) -> Result<u64> {
+        let id = self
+            .records()?
+            .iter()
+            .filter(|r| matches!(r, Record::Change { .. }))
+            .count() as u64
+            + 1;
+        self.append(&Record::Change {
+            id,
+            ts: now(),
+            change,
+        })?;
+        Ok(id)
+    }
+
+    /// Changes not yet reverted, oldest first.
+    pub fn pending(&self) -> Result<Vec<(u64, Change)>> {
+        let records = self.records()?;
+        let done: std::collections::HashSet<u64> = records
+            .iter()
+            .filter_map(|r| {
+                if let Record::Reverted { reverted, .. } = r {
+                    Some(*reverted)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        Ok(records
+            .into_iter()
+            .filter_map(|r| match r {
+                Record::Change { id, change, .. } if !done.contains(&id) => Some((id, change)),
+                _ => None,
+            })
+            .collect())
+    }
+
+    /// Undoes the pending changes newest first. Anything that changed since we made it is skipped and reported.
+    pub fn revert(&self, ops: &mut dyn Ops, opts: &RevertOptions) -> Result<Report> {
+        let mut report = Report::default();
+        let mut pending = self.pending()?;
+        pending.reverse();
+        for (id, change) in pending {
+            if opts.only.as_deref().is_some_and(|k| k != change.kind()) {
+                continue;
+            }
+            match apply_revert(ops, &change, opts) {
+                Ok(Outcome::Done) => {
+                    report.reverted.push(id);
+                    if !opts.dry_run {
+                        self.append(&Record::Reverted {
+                            reverted: id,
+                            ts: now(),
+                        })?;
+                    }
+                }
+                Ok(Outcome::Skip(why)) => report.skipped.push((id, why)),
+                Err(e) => report.failed.push((id, e.to_string())),
+            }
+        }
+        Ok(report)
+    }
+}
+
+enum Outcome {
+    Done,
+    Skip(String),
+}
+
+fn apply_revert(ops: &mut dyn Ops, change: &Change, opts: &RevertOptions) -> Result<Outcome> {
+    let dry = opts.dry_run;
+    match change {
+        Change::FileCreated { path, sha256 } => {
+            check_path(path)?;
+            match ops.file_hash(Path::new(path)) {
+                None => Ok(Outcome::Done), // already gone
+                Some(h) if &h != sha256 => Ok(Outcome::Skip(format!(
+                    "{path} was modified since it was installed"
+                ))),
+                Some(_) => {
+                    if !dry {
+                        ops.remove_file(Path::new(path))?;
+                    }
+                    Ok(Outcome::Done)
+                }
+            }
+        }
+        Change::FileReplaced {
+            path,
+            backup,
+            sha256,
+        } => {
+            check_path(path)?;
+            check_path(backup)?;
+            match ops.file_hash(Path::new(path)) {
+                Some(h) if &h != sha256 => Ok(Outcome::Skip(format!(
+                    "{path} was modified since it was installed"
+                ))),
+                _ => {
+                    if !dry {
+                        ops.restore_file(Path::new(backup), Path::new(path))?;
+                    }
+                    Ok(Outcome::Done)
+                }
+            }
+        }
+        Change::UserCreated { name, .. } => {
+            check_name(name)?;
+            if !dry {
+                ops.delete_user(name, opts.delete_home)?;
+            }
+            Ok(Outcome::Done)
+        }
+        Change::PackageInstalled { manager, name } => {
+            check_name(name)?;
+            if !dry {
+                ops.remove_package(manager, name)?;
+            }
+            Ok(Outcome::Done)
+        }
+        Change::UnitInstalled { name, path } => {
+            check_name(name)?;
+            check_path(path)?;
+            if !dry {
+                ops.remove_unit(name, Path::new(path))?;
+            }
+            Ok(Outcome::Done)
+        }
+        Change::FirewallRuleAdded { tool, rule } => {
+            if !dry {
+                ops.remove_firewall_rule(tool, rule)?;
+            }
+            Ok(Outcome::Done)
+        }
+    }
+}
+
+/// Paths in a journal entry must be absolute and free of `..`; a corrupted entry must not reach outside.
+fn check_path(path: &str) -> Result<()> {
+    let p = Path::new(path);
+    if !p.is_absolute()
+        || p.components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        bail!("refusing the path `{path}` in the journal");
+    }
+    Ok(())
+}
+
+/// User, package and unit names: letters, digits and `_ - . + @` only, never starting with `-`.
+fn check_name(name: &str) -> Result<()> {
+    let ok = !name.is_empty()
+        && name.len() <= 64
+        && !name.starts_with('-')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "_-.+@".contains(c));
+    if ok {
+        Ok(())
+    } else {
+        bail!("refusing the name `{name}` in the journal")
+    }
+}
+
+/// The real machine: runs the host's own tools, with fixed argument lists and no shell.
+pub struct RealOps;
+
+fn run(program: &str, args: &[&str]) -> Result<()> {
+    let out = std::process::Command::new(program)
+        .args(args)
+        .output()
+        .map_err(|e| anyhow!("cannot run {program}: {e}"))?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        bail!(
+            "{program} {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        )
+    }
+}
+
+impl Ops for RealOps {
+    fn file_hash(&self, path: &Path) -> Option<String> {
+        hash_file(path).ok()
+    }
+
+    fn remove_file(&mut self, path: &Path) -> Result<()> {
+        Ok(std::fs::remove_file(path)?)
+    }
+
+    fn restore_file(&mut self, backup: &Path, path: &Path) -> Result<()> {
+        Ok(std::fs::rename(backup, path)?)
+    }
+
+    fn delete_user(&mut self, name: &str, delete_home: bool) -> Result<()> {
+        let mut args = vec!["--", name];
+        if delete_home {
+            args.insert(0, "-r");
+        }
+        run("userdel", &args)
+    }
+
+    fn remove_package(&mut self, manager: &str, name: &str) -> Result<()> {
+        match manager {
+            "apt" => run("apt-get", &["remove", "-y", "--", name]),
+            "dnf" => run("dnf", &["remove", "-y", "--", name]),
+            "yum" => run("yum", &["remove", "-y", "--", name]),
+            "apk" => run("apk", &["del", "--", name]),
+            "pacman" => run("pacman", &["-R", "--noconfirm", "--", name]),
+            other => bail!("unknown package manager `{other}`"),
+        }
+    }
+
+    fn remove_unit(&mut self, name: &str, path: &Path) -> Result<()> {
+        if !path.starts_with("/etc/systemd/system") {
+            bail!("refusing to remove a unit outside /etc/systemd/system");
+        }
+        let _ = run("systemctl", &["disable", "--now", "--", name]); // may already be stopped
+        if path.exists() {
+            std::fs::remove_file(path)?;
+        }
+        run("systemctl", &["daemon-reload"])
+    }
+
+    fn remove_firewall_rule(&mut self, tool: &str, rule: &str) -> Result<()> {
+        let valid = rule.split_once('/').is_some_and(|(port, proto)| {
+            port.parse::<u16>().is_ok() && matches!(proto, "udp" | "tcp")
+        });
+        if !valid {
+            bail!("refusing the firewall rule `{rule}` in the journal");
+        }
+        match tool {
+            "ufw" => run("ufw", &["delete", "allow", rule]),
+            "firewalld" => {
+                run(
+                    "firewall-cmd",
+                    &["--permanent", &format!("--remove-port={rule}")],
+                )?;
+                run("firewall-cmd", &["--reload"])
+            }
+            other => bail!("unknown firewall tool `{other}`"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp() -> PathBuf {
+        let d = std::env::temp_dir().join(format!("termanch-journal-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    /// Records calls; files are real so hashes work.
+    #[derive(Default)]
+    struct Fake {
+        calls: Vec<String>,
+        fail_on: Option<&'static str>,
+    }
+
+    impl Ops for Fake {
+        fn file_hash(&self, path: &Path) -> Option<String> {
+            hash_file(path).ok()
+        }
+        fn remove_file(&mut self, path: &Path) -> Result<()> {
+            self.calls.push(format!("rm {}", path.display()));
+            Ok(std::fs::remove_file(path)?)
+        }
+        fn restore_file(&mut self, backup: &Path, path: &Path) -> Result<()> {
+            self.calls
+                .push(format!("restore {} {}", backup.display(), path.display()));
+            Ok(std::fs::rename(backup, path)?)
+        }
+        fn delete_user(&mut self, name: &str, delete_home: bool) -> Result<()> {
+            self.calls
+                .push(format!("userdel {name} home={delete_home}"));
+            if self.fail_on == Some("user") {
+                bail!("userdel failed");
+            }
+            Ok(())
+        }
+        fn remove_package(&mut self, manager: &str, name: &str) -> Result<()> {
+            self.calls.push(format!("pkg {manager} {name}"));
+            Ok(())
+        }
+        fn remove_unit(&mut self, name: &str, _: &Path) -> Result<()> {
+            self.calls.push(format!("unit {name}"));
+            Ok(())
+        }
+        fn remove_firewall_rule(&mut self, tool: &str, rule: &str) -> Result<()> {
+            self.calls.push(format!("fw {tool} {rule}"));
+            Ok(())
+        }
+    }
+
+    fn journal() -> (Journal, PathBuf) {
+        let dir = temp();
+        (Journal::open(&dir.join("j")).unwrap(), dir)
+    }
+
+    #[test]
+    fn every_kind_is_recorded_and_reverted_newest_first() {
+        let (j, dir) = journal();
+        let created = dir.join("created.txt");
+        std::fs::write(&created, "ours").unwrap();
+        let replaced = dir.join("conf");
+        let backup = dir.join("conf.orig");
+        std::fs::write(&backup, "original").unwrap();
+        std::fs::write(&replaced, "new").unwrap();
+        j.record(Change::PackageInstalled {
+            manager: "apt".into(),
+            name: "tmux".into(),
+        })
+        .unwrap();
+        j.record(Change::UserCreated {
+            name: "termanch".into(),
+            home: "/home/termanch".into(),
+        })
+        .unwrap();
+        j.record(Change::FileCreated {
+            path: created.display().to_string(),
+            sha256: hash_file(&created).unwrap(),
+        })
+        .unwrap();
+        j.record(Change::FileReplaced {
+            path: replaced.display().to_string(),
+            backup: backup.display().to_string(),
+            sha256: hash_file(&replaced).unwrap(),
+        })
+        .unwrap();
+        j.record(Change::UnitInstalled {
+            name: "termanch.service".into(),
+            path: "/etc/systemd/system/termanch.service".into(),
+        })
+        .unwrap();
+        j.record(Change::FirewallRuleAdded {
+            tool: "ufw".into(),
+            rule: "4443/udp".into(),
+        })
+        .unwrap();
+
+        let mut ops = Fake::default();
+        let report = j.revert(&mut ops, &RevertOptions::default()).unwrap();
+        assert_eq!(report.reverted, vec![6, 5, 4, 3, 2, 1]);
+        assert!(report.skipped.is_empty() && report.failed.is_empty());
+        assert_eq!(ops.calls[0], "fw ufw 4443/udp");
+        assert_eq!(ops.calls.last().unwrap(), "pkg apt tmux");
+        assert!(!created.exists());
+        assert_eq!(std::fs::read_to_string(&replaced).unwrap(), "original");
+        assert!(
+            ops.calls
+                .contains(&"userdel termanch home=false".to_string()),
+            "the home directory is kept by default"
+        );
+    }
+
+    #[test]
+    fn reverting_twice_changes_nothing() {
+        let (j, dir) = journal();
+        let f = dir.join("a");
+        std::fs::write(&f, "x").unwrap();
+        j.record(Change::FileCreated {
+            path: f.display().to_string(),
+            sha256: hash_file(&f).unwrap(),
+        })
+        .unwrap();
+        let mut ops = Fake::default();
+        j.revert(&mut ops, &RevertOptions::default()).unwrap();
+        let mut again = Fake::default();
+        let report = j.revert(&mut again, &RevertOptions::default()).unwrap();
+        assert_eq!(report, Report::default());
+        assert!(again.calls.is_empty());
+        assert!(j.pending().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_modified_file_is_reported_not_deleted() {
+        let (j, dir) = journal();
+        let f = dir.join("conf");
+        std::fs::write(&f, "ours").unwrap();
+        j.record(Change::FileCreated {
+            path: f.display().to_string(),
+            sha256: hash_file(&f).unwrap(),
+        })
+        .unwrap();
+        std::fs::write(&f, "the owner edited this").unwrap();
+        let mut ops = Fake::default();
+        let report = j.revert(&mut ops, &RevertOptions::default()).unwrap();
+        assert!(report.reverted.is_empty());
+        assert_eq!(report.skipped.len(), 1);
+        assert!(report.skipped[0].1.contains("modified"));
+        assert!(f.exists());
+        assert_eq!(j.pending().unwrap().len(), 1, "it stays pending");
+    }
+
+    #[test]
+    fn a_dry_run_lists_without_touching_anything() {
+        let (j, dir) = journal();
+        let f = dir.join("a");
+        std::fs::write(&f, "x").unwrap();
+        j.record(Change::FileCreated {
+            path: f.display().to_string(),
+            sha256: hash_file(&f).unwrap(),
+        })
+        .unwrap();
+        j.record(Change::UserCreated {
+            name: "termanch".into(),
+            home: "/h".into(),
+        })
+        .unwrap();
+        let mut ops = Fake::default();
+        let report = j
+            .revert(
+                &mut ops,
+                &RevertOptions {
+                    dry_run: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(report.reverted, vec![2, 1]);
+        assert!(ops.calls.is_empty());
+        assert!(f.exists());
+        assert_eq!(j.pending().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn only_limits_a_revert_to_one_kind() {
+        let (j, _dir) = journal();
+        j.record(Change::PackageInstalled {
+            manager: "apt".into(),
+            name: "tmux".into(),
+        })
+        .unwrap();
+        j.record(Change::UserCreated {
+            name: "termanch".into(),
+            home: "/h".into(),
+        })
+        .unwrap();
+        let mut ops = Fake::default();
+        let report = j
+            .revert(
+                &mut ops,
+                &RevertOptions {
+                    only: Some("user_created".into()),
+                    delete_home: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(report.reverted, vec![2]);
+        assert_eq!(ops.calls, vec!["userdel termanch home=true"]);
+        assert_eq!(j.pending().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_failure_is_reported_and_the_rest_still_reverts() {
+        let (j, _dir) = journal();
+        j.record(Change::PackageInstalled {
+            manager: "apt".into(),
+            name: "tmux".into(),
+        })
+        .unwrap();
+        j.record(Change::UserCreated {
+            name: "termanch".into(),
+            home: "/h".into(),
+        })
+        .unwrap();
+        let mut ops = Fake {
+            fail_on: Some("user"),
+            ..Default::default()
+        };
+        let report = j.revert(&mut ops, &RevertOptions::default()).unwrap();
+        assert_eq!(report.reverted, vec![1]);
+        assert_eq!(report.failed.len(), 1);
+        assert_eq!(
+            j.pending().unwrap().len(),
+            1,
+            "the failed one is retried next time"
+        );
+    }
+
+    #[test]
+    fn corrupted_entries_cannot_reach_outside_or_inject_arguments() {
+        let (j, _dir) = journal();
+        j.record(Change::FileCreated {
+            path: "/etc/../etc/passwd".into(),
+            sha256: "0".into(),
+        })
+        .unwrap();
+        j.record(Change::UserCreated {
+            name: "--root".into(),
+            home: "/h".into(),
+        })
+        .unwrap();
+        j.record(Change::FileCreated {
+            path: "relative/path".into(),
+            sha256: "0".into(),
+        })
+        .unwrap();
+        let mut ops = Fake::default();
+        let report = j.revert(&mut ops, &RevertOptions::default()).unwrap();
+        assert_eq!(report.failed.len(), 3);
+        assert!(ops.calls.is_empty());
+    }
+
+    #[test]
+    fn a_torn_line_does_not_block_the_journal() {
+        let (j, _dir) = journal();
+        j.record(Change::PackageInstalled {
+            manager: "apt".into(),
+            name: "tmux".into(),
+        })
+        .unwrap();
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&j.file)
+            .unwrap();
+        write!(f, "{{\"id\":2,\"ts\":1,\"change\":{{\"kind\":\"user_cr").unwrap();
+        assert_eq!(j.pending().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn the_command_line_builds_changes_and_hashes_files() {
+        let dir = temp();
+        let f = dir.join("bin");
+        std::fs::write(&f, "binary").unwrap();
+        let fields = vec![("path".to_string(), f.display().to_string())];
+        match Change::from_fields("file_created", &fields).unwrap() {
+            Change::FileCreated { path, sha256 } => {
+                assert_eq!(path, f.display().to_string());
+                assert_eq!(sha256, hash_file(&f).unwrap());
+            }
+            other => panic!("{other:?}"),
+        }
+        assert!(Change::from_fields("user_created", &[]).is_err());
+        assert!(Change::from_fields("rm_rf", &[]).is_err());
+    }
+
+    #[test]
+    fn the_journal_directory_is_private() {
+        let dir = temp().join("j");
+        let _ = Journal::open(&dir).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            std::fs::metadata(dir.join(FILE_NAME))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
+    }
+}
