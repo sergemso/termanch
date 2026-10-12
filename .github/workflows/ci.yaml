@@ -160,7 +160,10 @@ jobs:
           bin=target/${{ matrix.target }}/release/termanch-server
           strip "$bin"
           file "$bin"
-          if ldd "$bin" 2>&1 | grep -qv 'not a dynamic executable'; then echo "dynamic dependencies found"; ldd "$bin"; exit 1; fi
+          # A static binary has no program interpreter and needs no shared library (ldd words this differently
+          # for static and static-pie files, so read the ELF headers instead).
+          if readelf -l "$bin" | grep -q INTERP; then echo "the binary asks for a dynamic loader"; exit 1; fi
+          if readelf -d "$bin" 2>/dev/null | grep -q NEEDED; then echo "the binary needs shared libraries:"; readelf -d "$bin" | grep NEEDED; exit 1; fi
           ls -l "$bin"
 
       - uses: actions/upload-artifact@v4
