@@ -173,6 +173,68 @@ native_claim() {
   fi
 }
 
+# journal KIND key=value...  records a change before it is made. $JBIN is a verified termanch-server (the
+# downloaded one during an install, the installed one afterwards); it does the writing.
+journal() {
+  _kind="$1"; shift
+  _args=""
+  for f in "$@"; do _args="$_args --journal-field $f"; done
+  # shellcheck disable=SC2086
+  "$JBIN" --journal-dir "$JOURNAL" --journal-record "$_kind" $_args >/dev/null || die "could not write the journal"
+}
+
+# The root-owned updater and request handler (decisions 0076, 0077). They run the installed binary as root, so the
+# server itself can stay an unprivileged user. Idempotent: only what is missing is added, each unit journaled first.
+install_helper_units() {
+  if [ ! -d "$STATE/requests" ]; then
+    journal dir_created "path=$STATE/requests"
+    mkdir -p "$STATE/requests"
+    chown "$RUN_USER" "$STATE/requests"
+    chmod 700 "$STATE/requests"
+  fi
+  _added=""
+  add_unit() { # name, content
+    [ -f "/etc/systemd/system/$1" ] && return 0
+    journal unit_installed "name=$1" "path=/etc/systemd/system/$1"
+    printf '%s\n' "$2" > "/etc/systemd/system/$1"
+    _added=1
+  }
+  add_unit termanch-update.service "[Unit]
+Description=Termanch updater
+
+[Service]
+Type=oneshot
+ExecStart=$BIN --root-helper update --journal-dir $JOURNAL"
+  add_unit termanch-update.timer "[Unit]
+Description=Check for a new Termanch release every day
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=3600
+Persistent=true
+
+[Install]
+WantedBy=timers.target"
+  add_unit termanch-request.service "[Unit]
+Description=Termanch root helper (requests from the server)
+
+[Service]
+Type=oneshot
+ExecStart=$BIN --root-helper requests --journal-dir $JOURNAL --requests-dir $STATE/requests"
+  add_unit termanch-request.path "[Unit]
+Description=Watch for requests from the Termanch server
+
+[Path]
+PathExistsGlob=$STATE/requests/*.json
+
+[Install]
+WantedBy=multi-user.target"
+  if [ -n "$_added" ]; then
+    systemctl daemon-reload
+    systemctl enable --now termanch-update.timer termanch-request.path >/dev/null 2>&1 || die "could not start the updater; see: systemctl status termanch-update.timer"
+  fi
+}
+
 install_native() {
   [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1 \
     || die "this machine does not run systemd, which the host install needs. Use the isolated container install instead (leave out host / host-user)."
@@ -196,6 +258,8 @@ install_native() {
     systemctl is-active --quiet "$UNIT_NAME" || systemctl start "$UNIT_NAME"
     RUN_USER="$(sed -n 's/^User=//p' "$UNIT")"
     RUN_USER="${RUN_USER:-root}"
+    JBIN="$BIN"
+    install_helper_units # installs from before the updater existed get it here
     PORT="$(cat "$JOURNAL/udp_port")"
     native_claim "$PORT"
     return
@@ -223,6 +287,7 @@ install_native() {
   echo "$SHA  $TMP/termanch-server" | sha256sum -c - >/dev/null 2>&1 || die "the downloaded server does not match the signed hash, so nothing was installed"
   chmod 755 "$TMP/termanch-server"
   "$TMP/termanch-server" --help >/dev/null 2>&1 || die "the downloaded server does not run on this machine"
+  JBIN="$TMP/termanch-server"
 
   # 2. What will change. Everything below is recorded in the journal first.
   PORT="$(pick_port udp_in_use 4443 "$JOURNAL/udp_port")"
@@ -234,20 +299,11 @@ install_native() {
   [ "$RUN_USER" = root ] || { id "$RUN_USER" >/dev/null 2>&1 || say "  - a new user  $RUN_USER"; }
   command -v tmux >/dev/null 2>&1 || say "  - the package tmux (sessions are tmux sessions)"
   say "  - state       $STATE"
-  say "  - a service   $UNIT_NAME (starts at boot)"
+  say "  - a service   $UNIT_NAME (starts at boot), and a daily update check (root-owned, signed releases only)"
   say "  - UDP port    $PORT (opened in the firewall if one is active)"
   say "Every change is recorded in $JOURNAL; undo them with: termanch-server --revert --dry-run, then --revert"
   say ""
   [ -z "${TERMANCH_DRY_RUN:-}" ] || { say "(dry run: nothing was changed)"; return; }
-
-  # journal KIND key=value...  records a change before it is made (the verified binary does the writing)
-  journal() {
-    _kind="$1"; shift
-    _args=""
-    for f in "$@"; do _args="$_args --journal-field $f"; done
-    # shellcheck disable=SC2086
-    "$TMP/termanch-server" --journal-dir "$JOURNAL" --journal-record "$_kind" $_args >/dev/null || die "could not write the journal"
-  }
 
   mkdir -p "$JOURNAL"
   chmod 700 "$JOURNAL"
@@ -341,6 +397,7 @@ install_native() {
     sleep 1
   done
 
+  install_helper_units
   native_claim "$PORT"
 }
 

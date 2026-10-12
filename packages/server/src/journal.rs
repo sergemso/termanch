@@ -217,6 +217,14 @@ impl Journal {
         Ok(id)
     }
 
+    /// Marks a change as no longer pending without undoing anything (for example an update that was rolled back).
+    pub fn mark_done(&self, id: u64) -> Result<()> {
+        self.append(&Record::Reverted {
+            reverted: id,
+            ts: now(),
+        })
+    }
+
     /// Changes not yet reverted, oldest first.
     pub fn pending(&self) -> Result<Vec<(u64, Change)>> {
         let records = self.records()?;

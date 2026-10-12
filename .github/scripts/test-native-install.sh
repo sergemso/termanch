@@ -11,6 +11,7 @@ SECRET="$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 43)"
 RUN_USER=termanch
 [ "$MODE" = host ] && RUN_USER=root
 
+# /release (first install), /release2 (9.0.1 works), /release3 (9.0.2 starts but never serves), /release4 (9.0.3 is frozen)
 export TERMANCH_RELEASE_URL=file:///release
 TERMANCH_RELEASE_KEYS="$(cat /keys.txt)"
 export TERMANCH_RELEASE_KEYS
@@ -45,6 +46,53 @@ entries="$(termanch-server --journal-list | wc -l)"
 sh /install.sh "$SECRET" "$ORIGIN" "$MODE"
 [ "$(termanch-server --journal-list | wc -l)" = "$entries" ] || fail "a second install wrote more journal entries"
 systemctl is-active --quiet termanch || fail "the service stopped"
+
+echo "== the updater and the request handler are installed and running"
+systemctl is-active --quiet termanch-update.timer || fail "the update timer is not active"
+systemctl is-active --quiet termanch-request.path || fail "the request path unit is not active"
+[ -d /var/lib/termanch/requests ] || fail "the requests directory is missing"
+[ "$(stat -c %U /var/lib/termanch/requests)" = "$RUN_USER" ] || fail "the requests directory does not belong to $RUN_USER"
+termanch-server --journal-list | grep -q termanch-update.timer || fail "the updater units are not in the journal"
+sha() { sha256sum "$1" | cut -d' ' -f1; }
+helper() { TERMANCH_RELEASE_URL="file://$1" termanch-server --root-helper update; }
+
+echo "== a frozen release is not installed"
+before_sha="$(sha /usr/local/bin/termanch-server)"
+helper /release4 | grep -q "paused" || fail "a frozen release was not reported"
+[ "$(sha /usr/local/bin/termanch-server)" = "$before_sha" ] || fail "a frozen release changed the binary"
+
+echo "== a newer release is installed, the old binary is kept, the service comes back"
+helper /release2 | grep -q "updated .* -> 9.0.1" || fail "the update did not report success"
+[ "$(sha /usr/local/bin/termanch-server)" = "$(sha /release2/termanch-server-x86_64-linux)" ] || fail "the new binary is not in place"
+[ -f /usr/local/bin/termanch-server.prev ] || fail "the previous binary was not kept"
+systemctl is-active --quiet termanch || fail "the service is not active after the update"
+# (applying the same release twice is covered by the unit tests: the test binaries all report the crate's own version)
+
+echo "== a release that does not come up is rolled back"
+good_sha="$(sha /usr/local/bin/termanch-server)"
+set +e
+helper /release3 > /tmp/rollback.txt 2>&1
+code=$?
+set -e
+[ "$code" = 2 ] || { cat /tmp/rollback.txt; fail "a failed update did not exit with 2 (got $code)"; }
+grep -q "rolled back" /tmp/rollback.txt || fail "the rollback was not reported"
+[ "$(sha /usr/local/bin/termanch-server)" = "$good_sha" ] || fail "the old binary was not restored"
+systemctl is-active --quiet termanch || fail "the service is not active after the rollback"
+port="$(sed -n 's/^Environment=TERMANCH_PORT=//p' /etc/systemd/system/termanch.service)"
+for i in 1 2 3 4 5 6 7 8 9 10; do curl -fs "http://127.0.0.1:$port/health" >/dev/null && break; sleep 1; done
+curl -fs "http://127.0.0.1:$port/health" >/dev/null || fail "the restored server does not answer"
+
+echo "== a request from the server reaches the root helper, and junk does not"
+requests=/var/lib/termanch/requests
+printf '{"action":"update-now"}' > $requests/r1.json
+printf '{"action":"rm","path":"/"}' > $requests/r2.json
+ln -s /etc/hostname $requests/r3.json
+chown -h "$RUN_USER" $requests/*.json
+i=0
+while [ -n "$(ls -A $requests)" ] && [ $i -lt 30 ]; do i=$((i + 1)); sleep 1; done
+[ -z "$(ls -A $requests)" ] || fail "the helper did not consume the requests"
+[ -f /etc/hostname ] || fail "a link in the requests directory damaged its target"
+journalctl -u termanch-request --no-pager | grep -q "up to date\|updated" || { journalctl -u termanch-request --no-pager | tail; fail "the helper did not act on the update request"; }
 
 echo "== a changed release is refused"
 cp /release/manifest.json /tmp/manifest.good

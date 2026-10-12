@@ -2436,7 +2436,7 @@ dependencies = [
 
 [[package]]
 name = "termanch-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2446,6 +2446,7 @@ dependencies = [
  "ed25519-dalek",
  "futures-util",
  "hmac",
+ "libc",
  "p256",
  "portable-pty",
  "qrcode",
