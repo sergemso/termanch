@@ -14,13 +14,24 @@ pub enum ClientMessage {
         server_token: String,
     },
     /// Owner-only: refuse this device key from now on.
-    RevokeDevice { device: String },
+    RevokeDevice {
+        device: String,
+    },
     ListSessions,
-    NewSession { name: String },
+    NewSession {
+        name: String,
+    },
     Ping,
-    Attach { session_id: String },
-    Input { data: String },
-    Resize { cols: u16, rows: u16 },
+    Attach {
+        session_id: String,
+    },
+    Input {
+        data: String,
+    },
+    Resize {
+        cols: u16,
+        rows: u16,
+    },
 }
 
 /// Server → Client (WebSocket)
@@ -28,8 +39,13 @@ pub enum ClientMessage {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
     /// Fresh per connection; the device signs it together with the `server_id`.
-    Challenge { nonce: String, server_id: String },
-    DeviceRevoked { device: String },
+    Challenge {
+        nonce: String,
+        server_id: String,
+    },
+    DeviceRevoked {
+        device: String,
+    },
     AuthOk {
         user: String,
         server_name: String,
