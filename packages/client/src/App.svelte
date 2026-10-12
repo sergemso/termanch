@@ -10,6 +10,9 @@
   import { lookup, type DirRecord } from './lib/directory';
   import { deviceKey, publicKeyB64, signChallenge, certExpiry } from './lib/device';
   import AppShell from './AppShell.svelte';
+  import ReportDialog from './ReportDialog.svelte';
+  import { buildReport, noteError, recentErrors } from './lib/report';
+  import { runningBundle } from './lib/update';
   import { DEBUG_KEY, tapCounter } from './lib/viewport';
   import { updateAvailable, watchForUpdates } from './lib/update';
   import { canInstall, promptInstall, isIosBrowser } from './lib/pwa';
@@ -22,6 +25,19 @@
     localStorage.setItem(DEBUG_KEY, on ? '1' : '0');
     window.dispatchEvent(new Event('termanch-debug'));
     showToast(on ? 'Debug overlay on' : 'Debug overlay off');
+  }
+
+  let reportText: string | null = null;
+  function openReport() {
+    const vv = window.visualViewport;
+    reportText = buildReport({
+      version: runningBundle(),
+      userAgent: navigator.userAgent,
+      inner: `${window.innerWidth}x${window.innerHeight}`,
+      visual: vv ? `${Math.round(vv.width)}x${Math.round(vv.height)} top ${Math.round(vv.offsetTop)}` : 'none',
+      connection: selectedServer ? connState : 'no server selected',
+      errors: $recentErrors,
+    });
   }
 
   let user: string | null = null;
@@ -186,6 +202,7 @@
         if (activeSessionId) connection?.send({ type: 'attach', session_id: activeSessionId });
       },
       onFatal: (message) => {
+        noteError(`connection: ${message}`);
         showToast(message, 'error');
         selectedServer = null;
       },
@@ -273,6 +290,7 @@
     const report = (e: ErrorEvent | PromiseRejectionEvent) => {
       const text = String('message' in e ? e.message : (e.reason?.message ?? e.reason ?? ''));
       console.error('uncaught', text);
+      noteError(text);
       if (text.includes('ResizeObserver') || Date.now() - lastReport < 5000) return;
       lastReport = Date.now();
       showToast('Something went wrong. If the screen looks stuck, go back to Servers.', 'error');
@@ -364,7 +382,8 @@
   {:else}
     <header style="display: flex; justify-content: space-between; align-items: center; padding: {narrow ? '8px 12px' : '16px 24px'}; border-bottom: 1px solid var(--border); background: var(--bg-secondary);">
       <h1 style="font-size: 1.25rem; user-select: none; -webkit-user-select: none;" on:click={titleTapped}>Termanch</h1>
-      <div style="display: flex; align-items: center; gap: 16px;">
+      <div style="display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 12px;">
+        <button class="secondary" on:click={openReport} style="padding: 6px 12px;">Report a problem</button>
         {#if $updateAvailable}<button on:click={() => location.reload()} style="padding: 6px 12px;">Update available</button>{/if}
         {#if $canInstall}<button on:click={promptInstall} style="padding: 6px 12px;">Install app</button>{/if}
         <span style="color: var(--fg-muted);">@{user}</span>
@@ -380,11 +399,12 @@
     {/if}
 
     <main style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
-      <svelte:boundary onerror={(e) => console.error('screen failed', e)}>
+      <svelte:boundary onerror={(e) => { console.error('screen failed', e); noteError(String((e as Error)?.message ?? e)); }}>
       {#snippet failed(_error, reset)}
         <div class="card" style="margin: auto; max-width: 360px; text-align: center;">
           <p style="margin-bottom: 12px;">This screen failed to load.</p>
           <button on:click={() => { leaveServer(); reset(); }}>Back to servers</button>
+          <button class="secondary" on:click={openReport}>Report a problem</button>
         </div>
       {/snippet}
       {#if !selectedServer}
@@ -439,6 +459,10 @@
       {/if}
       </svelte:boundary>
     </main>
+  {/if}
+
+  {#if reportText !== null}
+    <ReportDialog text={reportText} onclose={() => (reportText = null)} />
   {/if}
 
   {#if showAddServer}
