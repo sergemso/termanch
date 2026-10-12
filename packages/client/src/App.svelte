@@ -246,10 +246,18 @@
           <aside style="width: 280px; border-right: 1px solid var(--border); background: var(--bg-secondary); padding: 16px; overflow-y: auto;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
               <h3 style="font-size: 0.875rem; text-transform: uppercase; color: var(--fg-muted);">Sessions · {connState}</h3>
-              {#if connDetail}<p style="font-size: 0.75rem; color: var(--danger); margin: 4px 0 8px;">{connDetail}</p>{/if}
               <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem;" on:click={() => connection?.send({ type: 'list_sessions' })}>Refresh</button>
               <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem;" on:click={newSession}>+ New</button>
             </div>
+            {#if connState !== 'connected'}
+              <!-- Own row, wrapped: a long diagnostic inside the flex header squeezed it into a tall narrow column. -->
+              <div style="font-size: 0.75rem; margin: -8px 0 12px; padding: 8px; border-radius: 6px; background: var(--bg); overflow-wrap: anywhere;">
+                <div style="color: var(--fg-muted);">{{ unreachable: 'Server unreachable', reconnecting: 'Reconnecting…', connecting: 'Connecting…', closed: 'Disconnected' }[connState]}</div>
+                {#if connDetail && connState === 'unreachable'}
+                  <details style="margin-top: 4px; color: var(--danger);"><summary style="cursor: pointer;">Details</summary>{connDetail}</details>
+                {/if}
+              </div>
+            {/if}
             <ul style="list-style: none;">
               {#each sessions as session}
                 <li style="padding: 8px 12px; margin-bottom: 4px; border-radius: 6px; cursor: pointer; background: {activeSessionId === session.id ? 'var(--accent)' : 'transparent'}; color: {activeSessionId === session.id ? 'var(--bg)' : 'var(--fg)'};" on:click={() => attach(session.id)}>
