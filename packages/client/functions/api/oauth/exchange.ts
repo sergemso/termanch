@@ -57,7 +57,7 @@ export async function issueCertificate(
 ): Promise<{ cert: string; exp: number }> {
   const exp = nowSecs + CERT_LIFETIME_SECS;
   const payload = new TextEncoder().encode(
-    JSON.stringify({ v: 1, kid: env.CERT_KID || 'k1', sub: user.id, login: user.login, dpk: deviceKey, exp }),
+    JSON.stringify({ v: 1, kid: env.CERT_KID || 'k1', sub: user.id, login: user.login, dpk: deviceKey, iat: nowSecs, exp }),
   );
   const sig = await crypto.subtle.sign({ name: 'Ed25519' }, await signingKey(env.CERT_SIGNING_KEY), payload);
   return { cert: `${b64url(payload)}.${b64url(sig)}`, exp };

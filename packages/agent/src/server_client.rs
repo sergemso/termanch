@@ -130,7 +130,9 @@ impl ServerClient {
                     .send(Message::Text(serde_json::to_string(&msg)?))
                     .await?;
             }
-            ServerMessage::Challenge { .. } | ServerMessage::DeviceRevoked { .. } => {}
+            ServerMessage::Challenge { .. }
+            | ServerMessage::DeviceRevoked { .. }
+            | ServerMessage::UninstallDone { .. } => {}
             ServerMessage::Sessions { sessions } => {
                 info!("Received {} sessions", sessions.len());
                 for session in sessions {

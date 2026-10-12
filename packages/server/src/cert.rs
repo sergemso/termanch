@@ -24,6 +24,9 @@ struct Payload {
     login: String,
     dpk: String,
     exp: u64,
+    /// When the function issued it; certificates from before this field existed have none.
+    #[serde(default)]
+    iat: Option<u64>,
 }
 
 /// A verified certificate.
@@ -33,6 +36,7 @@ pub struct DeviceCert {
     pub login: String,
     /// Stable id of the device key, used by the revocation list.
     pub device: String,
+    pub issued_at: Option<u64>,
     dpk: Vec<u8>,
 }
 
@@ -106,6 +110,7 @@ impl CertKeys {
             github_id: p.sub,
             login: p.login,
             device: device_id(&dpk),
+            issued_at: p.iat,
             dpk,
         })
     }
@@ -170,11 +175,26 @@ pub mod testing {
         }
 
         pub fn issue(&self, device: &Device, id: u64, login: &str, exp: u64) -> String {
+            self.issue_at(device, id, login, exp, Some(now()))
+        }
+
+        /// Like the function's certificates, but with a chosen (or missing) issue time.
+        pub fn issue_at(
+            &self,
+            device: &Device,
+            id: u64,
+            login: &str,
+            exp: u64,
+            iat: Option<u64>,
+        ) -> String {
             let dpk = device.public();
-            let body = serde_json::json!({
+            let mut body = serde_json::json!({
                 "v": 1, "kid": self.kid, "sub": id, "login": login, "dpk": B64.encode(dpk), "exp": exp,
-            })
-            .to_string();
+            });
+            if let Some(iat) = iat {
+                body["iat"] = iat.into();
+            }
+            let body = body.to_string();
             let sig = self.key.sign(body.as_bytes());
             format!("{}.{}", B64.encode(body), B64.encode(sig.to_bytes()))
         }
@@ -264,6 +284,16 @@ mod tests {
         let long = signer.issue(&device, 7, "o", now() + 30 * 24 * 3600);
         assert_eq!(keys.verify(&long, now()), Err(CertError::Malformed));
         assert_eq!(keys.verify("garbage", now()), Err(CertError::Malformed));
+    }
+
+    #[test]
+    fn the_issue_time_is_read_when_present_and_missing_in_old_certificates() {
+        let (signer, device) = (Signer::new("k1"), Device::new());
+        let keys = signer.keys();
+        let with = signer.issue_at(&device, 7, "o", now() + 3600, Some(1234));
+        assert_eq!(keys.verify(&with, now()).unwrap().issued_at, Some(1234));
+        let without = signer.issue_at(&device, 7, "o", now() + 3600, None);
+        assert_eq!(keys.verify(&without, now()).unwrap().issued_at, None);
     }
 
     #[test]

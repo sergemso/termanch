@@ -18,6 +18,9 @@ const CLAIM_TTL: Duration = Duration::from_secs(15 * 60);
 pub struct Identity {
     pub id: u64,
     pub login: String,
+    /// Issue time of the certificate this connection used; never written to owner.json.
+    #[serde(skip)]
+    pub issued_at: Option<u64>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -51,6 +54,10 @@ impl AuthState {
             bind_lock: Mutex::new(()),
             claim_ttl: CLAIM_TTL,
         })
+    }
+
+    pub fn dir(&self) -> &std::path::Path {
+        &self.dir
     }
 
     pub fn server_id(&self) -> &str {
@@ -115,6 +122,7 @@ impl AuthState {
         if secret.is_empty() {
             return Err(anyhow!("empty claim secret"));
         }
+        crate::uninstall::clear(&self.dir);
         if let Some(owner) = self.owner() {
             info!(target: "audit", event = "owner_reset", previous_github_id = owner.id);
             let _ = std::fs::remove_file(self.owner_path());
@@ -227,6 +235,7 @@ impl AuthState {
         let identity = Identity {
             id: device.github_id,
             login: device.login.clone(),
+            issued_at: device.issued_at,
         };
         let decision = self
             .authorize(&identity, claim)
@@ -329,6 +338,7 @@ mod tests {
         Identity {
             id: n,
             login: format!("user{n}"),
+            issued_at: None,
         }
     }
 

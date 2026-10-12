@@ -26,6 +26,7 @@ mod netutil;
 mod pty;
 mod rtc;
 mod sessions;
+mod uninstall;
 mod websocket;
 
 use auth::AuthState;
@@ -206,6 +207,16 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
+    // An uninstalled server that Docker restarted stays idle instead of coming back as a new unclaimed
+    // server; the installer's --claim removes the marker, which ends the idle wait so Docker restarts it.
+    if args.claim.is_none() && !args.register && uninstall::is_uninstalled(&args.config_dir) {
+        println!("This server was uninstalled. Remove its container, or run the installer again to set it up.");
+        while uninstall::is_uninstalled(&args.config_dir) {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+        return Ok(());
+    }
+
     let keys = cert::CertKeys::from_env()?;
     anyhow::ensure!(
         !keys.is_empty(),
@@ -248,7 +259,16 @@ async fn main() -> anyhow::Result<()> {
     info!("Session backend: {}", backend.name());
     let mut state = AppState {
         auth,
-        sessions: Arc::new(SessionManager::new(backend, mode.clone())),
+        sessions: Arc::new(SessionManager::new(backend, mode.clone()).with_uninstall(
+            args.server_name.clone(),
+            Arc::new(|| {
+                // Let the reply reach the client, then stop; Docker then finds the idle marker.
+                std::thread::spawn(|| {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    std::process::exit(0);
+                });
+            }),
+        )),
         server_name: args.server_name.clone(),
         mode: mode.label(),
         rtc_info: None,

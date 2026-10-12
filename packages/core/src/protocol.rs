@@ -17,6 +17,17 @@ pub enum ClientMessage {
     RevokeDevice {
         device: String,
     },
+    /// Owner-only, recently signed in: remove this server (decision 0072). `confirm_name` must equal the
+    /// server's name; the flags choose the optional host cleanup (all off by default).
+    Uninstall {
+        confirm_name: String,
+        #[serde(default)]
+        delete_user: bool,
+        #[serde(default)]
+        remove_tmux: bool,
+        #[serde(default)]
+        kill_sessions: bool,
+    },
     ListSessions,
     NewSession {
         name: String,
@@ -45,6 +56,10 @@ pub enum ServerMessage {
     },
     DeviceRevoked {
         device: String,
+    },
+    /// The server wiped its configuration and will stop; `mode` is `container` or `host:<user>`.
+    UninstallDone {
+        mode: String,
     },
     AuthOk {
         user: String,
@@ -131,6 +146,22 @@ mod tests {
         assert_eq!(v["type"], "challenge");
         let v = serde_json::to_value(ClientMessage::RevokeDevice { device: "d".into() }).unwrap();
         assert_eq!(v["type"], "revoke_device");
+        let v: ClientMessage =
+            serde_json::from_str(r#"{"type":"uninstall","confirm_name":"vps"}"#).unwrap();
+        assert_eq!(
+            v,
+            ClientMessage::Uninstall {
+                confirm_name: "vps".into(),
+                delete_user: false,
+                remove_tmux: false,
+                kill_sessions: false
+            }
+        );
+        let v = serde_json::to_value(ServerMessage::UninstallDone {
+            mode: "container".into(),
+        })
+        .unwrap();
+        assert_eq!(v["type"], "uninstall_done");
     }
 
     #[test]

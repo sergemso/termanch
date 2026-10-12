@@ -37,6 +37,8 @@ struct Fixture {
     signer: Signer,
     server_id: String,
     auth: Arc<AuthState>,
+    dir: std::path::PathBuf,
+    stopped: Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// A browser: its device key and the certificate the hosted function issued for it.
@@ -60,12 +62,20 @@ async fn fixture() -> Fixture {
     let server_id = "test-server-id".to_string();
     let auth = Arc::new(AuthState::new(dir.clone(), signer.keys(), server_id.clone()).unwrap());
     let claim = auth.claim_token().unwrap().unwrap();
+    let stopped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stop_flag = stopped.clone();
     let mut state = AppState {
         auth: auth.clone(),
-        sessions: Arc::new(SessionManager::new(
-            Arc::new(crate::backend::TmuxBackend::default()),
-            crate::backend::RunMode::Container,
-        )),
+        sessions: Arc::new(
+            SessionManager::new(
+                Arc::new(crate::backend::TmuxBackend::default()),
+                crate::backend::RunMode::Container,
+            )
+            .with_uninstall(
+                "test-vps".into(),
+                Arc::new(move || stop_flag.store(true, std::sync::atomic::Ordering::SeqCst)),
+            ),
+        ),
         server_name: "test-vps".into(),
         mode: "container".into(),
         rtc_info: None,
@@ -88,6 +98,8 @@ async fn fixture() -> Fixture {
         signer,
         server_id,
         auth,
+        dir,
+        stopped,
     }
 }
 
@@ -430,6 +442,52 @@ async fn a_connection_for_another_server_expired_or_revoked_certificates_fail(ki
     assert_eq!(f.auth.revoked_devices(), vec![phone.device.id()]);
 }
 
+async fn uninstall_needs_the_name_and_a_recent_login_then_wipes_the_config(kind: Kind) {
+    let f = fixture().await;
+    let alice = f.who(1, "alice");
+    let mut c = Conn::open(kind, &f).await;
+    c.login(&f, &alice, &f.claim).await;
+    c.recv_type("auth_ok").await;
+
+    // Wrong name.
+    c.send(json!({"type":"uninstall","confirm_name":"other"}))
+        .await;
+    let msg = c.recv_type("error").await;
+    assert!(msg["message"].as_str().unwrap().contains("does not match"));
+
+    // A certificate older than an hour, and one from before certificates carried an issue time.
+    for iat in [Some(now() - 7200), None] {
+        let cert = f
+            .signer
+            .issue_at(&alice.device, 1, "alice", now() + 3600, iat);
+        let mut stale = Conn::open(kind, &f).await;
+        stale.login_for(&f.server_id, &alice, &cert, "").await;
+        stale.recv_type("auth_ok").await;
+        stale
+            .send(json!({"type":"uninstall","confirm_name":"test-vps"}))
+            .await;
+        let msg = stale.recv_type("error").await;
+        assert!(
+            msg["message"].as_str().unwrap().contains("Sign in again"),
+            "{msg}"
+        );
+    }
+    assert!(!f.stopped.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(f.dir.join("owner.json").exists());
+
+    // Right name and a fresh certificate.
+    c.send(json!({"type":"uninstall","confirm_name":"test-vps"}))
+        .await;
+    let done = c.recv_type("uninstall_done").await;
+    assert_eq!(done["mode"], "container");
+    let left: Vec<_> = std::fs::read_dir(&f.dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(left, vec!["uninstalled".to_string()]);
+    assert!(f.stopped.load(std::sync::atomic::Ordering::SeqCst));
+}
+
 async fn nothing_is_served_before_auth(kind: Kind) {
     let f = fixture().await;
     let mut c = Conn::open(kind, &f).await;
@@ -501,6 +559,7 @@ macro_rules! over_both_transports {
 over_both_transports!(
     only_the_claiming_github_user_gets_in,
     a_connection_for_another_server_expired_or_revoked_certificates_fail,
+    uninstall_needs_the_name_and_a_recent_login_then_wipes_the_config,
     nothing_is_served_before_auth,
     reconnect_resumes_the_tmux_session_with_its_screen
 );
