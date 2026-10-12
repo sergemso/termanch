@@ -13,6 +13,7 @@
   import ReportDialog from './ReportDialog.svelte';
   import { buildReport, noteError, recentErrors } from './lib/report';
   import { runningBundle } from './lib/update';
+  import { startUsageMeter } from './lib/usageMeter';
   import { DEBUG_KEY, tapCounter } from './lib/viewport';
   import { updateAvailable, watchForUpdates } from './lib/update';
   import { canInstall, promptInstall, isIosBrowser } from './lib/pwa';
@@ -285,6 +286,7 @@
     media();
     mq.addEventListener('change', media);
     watchForUpdates();
+    const stopUsage = startUsageMeter(() => !!selectedServer && connState === 'connected' && !!activeSessionId);
     // Last line of defence: an error nobody caught must not leave a dead screen without a word.
     let lastReport = 0;
     const report = (e: ErrorEvent | PromiseRejectionEvent) => {
@@ -298,6 +300,7 @@
     window.addEventListener('error', report);
     window.addEventListener('unhandledrejection', report);
     return () => {
+      stopUsage();
       window.removeEventListener('error', report);
       window.removeEventListener('unhandledrejection', report);
       mq.removeEventListener('change', media);
