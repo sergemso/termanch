@@ -32,7 +32,7 @@ Done-when: CI is green on master; no doc describes deferred designs as current.
 
 ---
 
-### 2.1 Single-owner server binding — [~]
+### 2.1 Single-owner server binding — [x]
 Status: code merged (#33); the real login and Add Server check passed on 2026-10-12; close #15 after the owner confirms in step 0.1 of `termanch-v2-environment-and-ux.md`.
 Issue: #15
 Class: implement · Needs: 1.2 · Check: `cargo test -p termanch-server`
@@ -46,7 +46,7 @@ Done-when: a second GitHub account cannot attach; tests pass.
 
 ---
 
-### 2.2 Reconnect and screen replay — [~]
+### 2.2 Reconnect and screen replay — [x]
 Status: code merged (#33); the drop-and-restore check is pending in step 0.1 of `termanch-v2-environment-and-ux.md`.
 Issue: #16
 Class: implement · Needs: 1.2 · Check: `cargo test -p termanch-server && pnpm --filter termanch-client test`
