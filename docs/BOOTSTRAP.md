@@ -150,6 +150,8 @@ The servers need no secrets.
 ```bash
 wrangler pages secret put GITHUB_CLIENT_ID --project-name <pages project>
 wrangler pages secret put GITHUB_CLIENT_SECRET --project-name <pages project>
+# Ed25519 key that signs device certificates (DECISION-0062); its public half goes in packages/server/cert-keys.txt
+wrangler pages secret put CERT_SIGNING_KEY --project-name <pages project>
 ```
 
 ---

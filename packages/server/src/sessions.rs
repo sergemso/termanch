@@ -28,7 +28,12 @@ impl SessionManager {
     }
 
     /// Serves one authenticated connection until it ends or goes silent.
-    pub async fn serve(&self, mut link: Link, identity: crate::auth::Identity) -> Result<()> {
+    pub async fn serve(
+        &self,
+        mut link: Link,
+        identity: crate::auth::Identity,
+        auth: &crate::auth::AuthState,
+    ) -> Result<()> {
         let mut attachment: Option<Attachment> = None;
         let (mut cols, mut rows) = (80u16, 24u16);
         let idle = tokio::time::sleep(IDLE_TIMEOUT);
@@ -40,7 +45,7 @@ impl SessionManager {
                     let Some(text) = msg else { break };
                     idle.as_mut().reset(tokio::time::Instant::now() + IDLE_TIMEOUT);
                     let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) else { continue };
-                    if let Err(e) = self.handle(client_msg, &mut attachment, &mut cols, &mut rows, &link.tx).await {
+                    if let Err(e) = self.handle(client_msg, auth, &mut attachment, &mut cols, &mut rows, &link.tx).await {
                         if !send(&link.tx, &ServerMessage::Error { message: e.to_string() }).await { break; }
                     }
                 }
@@ -72,13 +77,19 @@ impl SessionManager {
     async fn handle(
         &self,
         msg: ClientMessage,
+        auth: &crate::auth::AuthState,
         attachment: &mut Option<Attachment>,
         cols: &mut u16,
         rows: &mut u16,
         tx: &LinkTx,
     ) -> Result<()> {
         match msg {
-            ClientMessage::Auth { .. } => {} // handled once, before this loop (websocket.rs)
+            // The handshake happens once, before this loop (connection.rs).
+            ClientMessage::Hello | ClientMessage::Auth { .. } => {}
+            ClientMessage::RevokeDevice { device } => {
+                auth.revoke_device(&device)?;
+                send_r(tx, &ServerMessage::DeviceRevoked { device }).await?;
+            }
             ClientMessage::Ping => send_r(tx, &ServerMessage::Pong).await?,
             ClientMessage::ListSessions => {
                 let sessions = self.backend.list().await?;

@@ -285,7 +285,9 @@ mod tests {
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
 
         let dir = std::env::temp_dir().join(format!("termanch-ann-{}", uuid::Uuid::new_v4()));
-        let auth = Arc::new(AuthState::with_api(dir.clone(), "http://127.0.0.1:1".into()).unwrap());
+        let auth = Arc::new(
+            AuthState::new(dir.clone(), crate::cert::CertKeys::default(), "srv".into()).unwrap(),
+        );
         auth.provide_claim("one-time").unwrap();
         let key = Arc::new(ServerKey::load_or_create(&dir).unwrap());
         let task = tokio::spawn(run(

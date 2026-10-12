@@ -5,19 +5,47 @@ use std::fmt::Display;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ClientMessage {
-    Auth { token: String, server_token: String },
+    /// Opens the handshake; the server answers with a `challenge`.
+    Hello,
+    /// Device certificate plus a signature over the challenge (DECISION-0062); no GitHub token.
+    Auth {
+        cert: String,
+        signature: String,
+        server_token: String,
+    },
+    /// Owner-only: refuse this device key from now on.
+    RevokeDevice {
+        device: String,
+    },
     ListSessions,
-    NewSession { name: String },
+    NewSession {
+        name: String,
+    },
     Ping,
-    Attach { session_id: String },
-    Input { data: String },
-    Resize { cols: u16, rows: u16 },
+    Attach {
+        session_id: String,
+    },
+    Input {
+        data: String,
+    },
+    Resize {
+        cols: u16,
+        rows: u16,
+    },
 }
 
 /// Server → Client (WebSocket)
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage {
+    /// Fresh per connection; the device signs it together with the `server_id`.
+    Challenge {
+        nonce: String,
+        server_id: String,
+    },
+    DeviceRevoked {
+        device: String,
+    },
     AuthOk {
         user: String,
         server_name: String,
@@ -89,12 +117,23 @@ mod tests {
         assert_eq!(v["type"], "session_attached");
         let v = serde_json::to_value(ClientMessage::NewSession { name: "n".into() }).unwrap();
         assert_eq!(v["type"], "new_session");
+        let v = serde_json::to_value(ClientMessage::Hello).unwrap();
+        assert_eq!(v["type"], "hello");
+        let v = serde_json::to_value(ServerMessage::Challenge {
+            nonce: "n".into(),
+            server_id: "s".into(),
+        })
+        .unwrap();
+        assert_eq!(v["type"], "challenge");
+        let v = serde_json::to_value(ClientMessage::RevokeDevice { device: "d".into() }).unwrap();
+        assert_eq!(v["type"], "revoke_device");
     }
 
     #[test]
     fn test_client_message_roundtrip() {
         let msg = ClientMessage::Auth {
-            token: "test".into(),
+            cert: "cert".into(),
+            signature: "sig".into(),
             server_token: "server".into(),
         };
         let json = serde_json::to_string(&msg).unwrap();

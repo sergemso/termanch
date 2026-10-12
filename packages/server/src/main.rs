@@ -16,6 +16,7 @@ use tracing::info;
 
 mod auth;
 mod backend;
+mod cert;
 mod connection;
 mod directory;
 #[cfg(test)]
@@ -194,14 +195,14 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
-    // Development only: point GitHub identity checks at a stand-in (used by the end-to-end tests).
-    let github_api = (args.dev_info == "on")
-        .then(|| std::env::var("TERMANCH_GITHUB_API").ok())
-        .flatten();
-    let auth = Arc::new(match github_api {
-        Some(api) => AuthState::with_api(args.config_dir.clone(), api)?,
-        None => AuthState::new(args.config_dir.clone())?,
-    });
+    let keys = cert::CertKeys::from_env()?;
+    anyhow::ensure!(
+        !keys.is_empty(),
+        "no certificate keys configured (TERMANCH_CERT_KEYS)"
+    );
+    std::fs::create_dir_all(&args.config_dir)?;
+    let server_id = directory::ServerKey::load_or_create(&args.config_dir)?.server_id();
+    let auth = Arc::new(AuthState::new(args.config_dir.clone(), keys, server_id)?);
 
     if let Some(secret) = &args.claim {
         auth.reclaim(secret)?;

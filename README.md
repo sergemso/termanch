@@ -54,7 +54,7 @@ docker rm -f termanch && sudo rm -rf /opt/termanch
 
 - Terminal traffic goes browser ↔ your server only, over DTLS. Neither the directory nor Cloudflare carries it.
 - The directory stores your server's public key, public address, port and certificate fingerprint, signed by the server. A tampered record is rejected because the client pins the key when you add the server.
-- The GitHub token is verified by asking GitHub who it belongs to; the server keeps no OAuth secret. Only the owner's GitHub account is accepted.
+- Your browser holds a device key that cannot be exported; after GitHub login the hosted function signs a 7-day certificate for it, and the GitHub token is dropped. Servers verify the certificate and a signature over a per-connection challenge that names the server, so a server cannot replay your login elsewhere. Only the owner's GitHub account is accepted (0062).
 - Root on the VPS can always re-claim the server (it can read the same files).
 - Details: `docs/decisions/` (0053, 0056, 0057) and `docs/facts/`.
 
@@ -90,7 +90,7 @@ Server (environment variables of the container; the installer sets the first two
 | `TERMANCH_BACKEND` | `tmux` (default) or `command` |
 | `TERMANCH_CONFIG_DIR` | Owner, keys and certificate (default `~/.config/termanch`) |
 
-Client build: `VITE_GITHUB_CLIENT_ID`. The OAuth code exchange runs in a Pages Function that needs `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` as secrets on the Pages project.
+Client build: `VITE_GITHUB_CLIENT_ID`. The OAuth code exchange runs in a Pages Function that needs `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` and `CERT_SIGNING_KEY` (base64 PKCS#8 Ed25519) as secrets on the Pages project. Servers trust its public key from `packages/server/cert-keys.txt`; self-hosters set `TERMANCH_CERT_KEYS=kid=<base64url key>` on their servers.
 
 ## Development
 

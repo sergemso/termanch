@@ -1,5 +1,7 @@
 export type ClientMessage =
-  | { type: 'auth'; token: string; server_token: string }
+  | { type: 'hello' }
+  | { type: 'auth'; cert: string; signature: string; server_token: string }
+  | { type: 'revoke_device'; device: string }
   | { type: 'list_sessions' }
   | { type: 'new_session'; name: string }
   | { type: 'ping' }
@@ -8,6 +10,8 @@ export type ClientMessage =
   | { type: 'resize'; cols: number; rows: number };
 
 export type ServerMessage =
+  | { type: 'challenge'; nonce: string; server_id: string }
+  | { type: 'device_revoked'; device: string }
   | { type: 'auth_ok'; user: string; server_name: string }
   | { type: 'sessions'; sessions: SessionInfo[] }
   | { type: 'session_attached'; session_id: string }

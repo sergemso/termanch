@@ -57,7 +57,9 @@ impl ServerClient {
         let (mut ws_tx, mut ws_rx) = ws_stream.split();
 
         let auth_msg = ClientMessage::Auth {
-            token: String::new(),
+            // The parked agent has no device key (issue #19); it cannot pass the certificate handshake.
+            cert: String::new(),
+            signature: String::new(),
             server_token: self.server_token.clone(),
         };
         ws_tx
@@ -126,6 +128,7 @@ impl ServerClient {
                     .send(Message::Text(serde_json::to_string(&msg)?))
                     .await?;
             }
+            ServerMessage::Challenge { .. } | ServerMessage::DeviceRevoked { .. } => {}
             ServerMessage::Sessions { sessions } => {
                 info!("Received {} sessions", sessions.len());
                 for session in sessions {

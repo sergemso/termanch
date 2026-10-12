@@ -1,5 +1,5 @@
 // Browser end-to-end test and resource gates (issue #21). Real Chromium, real termanch-server, real tmux;
-// only GitHub is a stand-in. Usage: node e2e/run.mjs   (needs a built server, a built harness, and Chrome)
+// only the hosted function that issues certificates is a stand-in (here: a key pair made in this script). Usage: node e2e/run.mjs   (needs a built server, a built harness, and Chrome)
 //   TERMANCH_BIN   server binary          (default ../../target/release/termanch-server)
 //   CHROME_PATH    Chrome/Chromium binary (default: Playwright's "chrome" channel)
 import { chromium } from 'playwright-core';
@@ -8,7 +8,7 @@ import { createServer } from 'node:http';
 import { mkdtempSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, extname, resolve } from 'node:path';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, generateKeyPairSync, sign, createPrivateKey, createPublicKey } from 'node:crypto';
 
 const here = import.meta.dirname;
 const BIN = process.env.TERMANCH_BIN ?? resolve(here, '../../../target/release/termanch-server');
@@ -24,10 +24,20 @@ const listen = (server) => new Promise((r) => server.listen(0, '127.0.0.1', () =
 const randomPort = () => 30000 + Math.floor(Math.random() * 30000);
 
 // --- stand-ins and helpers ---------------------------------------------------------------------------
-const github = createServer((req, res) => {
-  const who = { 'Bearer alice': { id: 1, login: 'alice' }, 'Bearer bob': { id: 2, login: 'bob' } }[req.headers.authorization];
-  res.writeHead(who ? 200 : 401, { 'Content-Type': 'application/json' }).end(JSON.stringify(who ?? {}));
-});
+// Stand-in for the Pages function: mints device certificates exactly like functions/api/oauth/exchange.ts.
+const signer = generateKeyPairSync('ed25519');
+const signerPublic = signer.publicKey.export({ format: 'der', type: 'spki' }).subarray(-32).toString('base64url');
+const mint = (deviceKey, id, login, exp = Math.floor(Date.now() / 1000) + 3600) => {
+  const payload = Buffer.from(JSON.stringify({ v: 1, kid: 'e2e', sub: id, login, dpk: deviceKey, exp }));
+  return `${payload.toString('base64url')}.${sign(null, payload, signer.privateKey).toString('base64url')}`;
+};
+// The server's id is its public key; the client pins it, and the signed challenge names it.
+const serverIdOf = (configDir) => {
+  const seed = readFileSync(join(configDir, 'server_key'));
+  const der = Buffer.concat([Buffer.from('302e020100300506032b657004220420', 'hex'), seed]);
+  return createPublicKey(createPrivateKey({ key: der, format: 'der', type: 'pkcs8' }))
+    .export({ format: 'der', type: 'spki' }).subarray(-32).toString('base64url');
+};
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 const dist = join(here, 'dist');
 const statics = createServer((req, res) => {
@@ -57,7 +67,6 @@ async function waitFor(fn, what, ms = 15000) {
 if (!existsSync(BIN)) throw new Error(`server binary not found: ${BIN}`);
 if (!existsSync(join(dist, 'index.html'))) throw new Error('harness not built: run vite build -c e2e/vite.config.ts');
 
-const ghPort = await listen(github);
 const webPort = await listen(statics);
 const home = mkdtempSync(join(tmpdir(), 'termanch-e2e-'));
 const httpPort = randomPort();
@@ -75,7 +84,7 @@ const server = spawn(BIN, [], {
     TERMANCH_PUBLIC_IP: '127.0.0.1',
     TERMANCH_DIRECTORY_URL: '',
     TERMANCH_DEV_INFO: 'on',
-    TERMANCH_GITHUB_API: `http://127.0.0.1:${ghPort}`,
+    TERMANCH_CERT_KEYS: `e2e=${signerPublic}`,
     TERMANCH_CLAIM_SECRET: claim,
   },
   stdio: ['ignore', 'inherit', 'inherit'],
@@ -86,30 +95,37 @@ try {
   await waitFor(() => fetch(`http://127.0.0.1:${httpPort}/health`).then((r) => r.ok, () => false), 'server health');
   const info = await (await fetch(`http://127.0.0.1:${httpPort}/rtc-info`)).json();
   const record = { ip: info.ip, udp_port: info.port, fingerprint: info.fingerprint };
+  const serverId = serverIdOf(join(home, 'config'));
 
   browser = await chromium.launch({
     ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'chrome' }),
     args: ['--no-sandbox', '--disable-features=WebRtcHideLocalIpsWithMdns', '--allow-loopback-in-peer-connection'],
   });
-  const open = async (token, claimSecret) => {
+  const open = async (who, claimSecret, pinnedId = serverId) => {
     const page = await (await browser.newContext()).newPage();
     page.on('pageerror', (e) => fail(`page error: ${e.message}`));
     await page.goto(`http://127.0.0.1:${webPort}/`);
-    await page.evaluate((o) => window.__e2e.start(o), { record, token, claim: claimSecret });
+    const cert = mint(await page.evaluate(() => window.__e2e.deviceKey()), who.id, who.login);
+    await page.evaluate((o) => window.__e2e.start(o), { record, cert, serverId: pinnedId, claim: claimSecret });
     return page;
   };
   const e2e = (page, fn, arg) => page.evaluate(fn, arg);
 
   // 1. Claim: the first GitHub user to present the secret becomes the owner, over WebRTC.
-  const alice = await open('alice', claim);
+  const alice = await open({ id: 1, login: 'alice' }, claim);
   await waitFor(() => e2e(alice, () => window.__e2e.state === 'connected'), 'alice connected');
   if ((await e2e(alice, () => window.__e2e.kind())) !== 'rtc') fail('expected the WebRTC transport');
   console.log('ok  login and claim over WebRTC');
 
   // 2. Someone else is refused.
-  const bob = await open('bob');
+  const bob = await open({ id: 2, login: 'bob' });
   await waitFor(() => e2e(bob, () => window.__e2e.fatal !== ''), 'bob refused');
   console.log('ok  a second GitHub user is refused');
+
+  // 2b. A server that relays another server's challenge gets no signature: the client signs only for the id it pinned.
+  const relayed = await open({ id: 1, login: 'alice' }, undefined, 'not-this-server');
+  await waitFor(() => e2e(relayed, () => window.__e2e.fatal.includes('not the one you added')), 'pinned id enforced');
+  console.log('ok  the challenge must name the server the client pinned');
 
   // 3. Create a session, type, see the output.
   await e2e(alice, () => window.__e2e.send({ type: 'new_session', name: 's1' }));
@@ -162,7 +178,6 @@ try {
 } finally {
   await browser?.close().catch(() => {});
   server.kill();
-  github.close();
   statics.close();
   rmSync(home, { recursive: true, force: true });
 }

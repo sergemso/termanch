@@ -8,10 +8,12 @@
   import { parseClaim, parseServerLink } from './lib/onboard';
   import { Connection, type ConnState } from './lib/connection';
   import { lookup, type DirRecord } from './lib/directory';
+  import { deviceKey, publicKeyB64, signChallenge, certExpiry } from './lib/device';
   import { canInstall, promptInstall, isIosBrowser } from './lib/pwa';
 
   let user: string | null = null;
-  let githubToken: string | null = null;
+  /** Device certificate from the hosted function; the GitHub token itself is never kept (DECISION-0062). */
+  let deviceCert: string | null = null;
   let servers: ServerListItem[] = [];
   let selectedServer: ServerListItem | null = null;
   let sessions: SessionInfo[] = [];
@@ -49,12 +51,13 @@
   function checkAuth() {
     try {
       const stored = JSON.parse(localStorage.getItem('termanch_auth') || 'null');
-      if (stored?.token && stored?.login) {
-        githubToken = stored.token;
+      if (stored?.cert && stored?.login && certExpiry(stored.cert) * 1000 > Date.now()) {
+        deviceCert = stored.cert;
         user = stored.login;
         return true;
       }
     } catch {}
+    localStorage.removeItem('termanch_auth'); // old token-era entry or an expired certificate: sign in again
     return false;
   }
 
@@ -90,12 +93,12 @@
       const res = await fetch('/api/oauth/exchange', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, device_key: await publicKeyB64(await deviceKey()) }),
       });
       if (!res.ok) throw new Error('OAuth exchange failed');
-      const { token, login } = await res.json();
-      localStorage.setItem('termanch_auth', JSON.stringify({ token, login }));
-      githubToken = token;
+      const { cert, login } = await res.json();
+      localStorage.setItem('termanch_auth', JSON.stringify({ cert, login }));
+      deviceCert = cert;
       user = login;
       showToast(`Welcome, ${login}!`);
       return true;
@@ -141,7 +144,11 @@
         }
         return { record, wsUrl: server.server_url || undefined };
       },
-      token: () => githubToken!,
+      credentials: async () => {
+        const pair = await deviceKey();
+        return { cert: deviceCert!, sign: (id, nonce) => signChallenge(pair, id, nonce) };
+      },
+      serverId: server.server_id,
       claim: server.claim,
       onState: (s, detail) => {
         connState = s;
@@ -205,7 +212,7 @@
   function logout() {
     localStorage.removeItem('termanch_auth');
     user = null;
-    githubToken = null;
+    deviceCert = null;
     selectedServer = null;
     sessions = [];
     activeSessionId = null;

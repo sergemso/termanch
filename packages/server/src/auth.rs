@@ -1,7 +1,6 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -9,12 +8,12 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
-const GITHUB_API: &str = "https://api.github.com";
-const IDENTITY_TTL: Duration = Duration::from_secs(60);
+use crate::cert::{CertError, CertKeys};
+
 /// A claim secret works for this long after it is issued, then once only.
 const CLAIM_TTL: Duration = Duration::from_secs(15 * 60);
 
-/// A GitHub user, as reported by GitHub for an access token.
+/// A GitHub user, as vouched for by a device certificate.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Identity {
     pub id: u64,
@@ -31,36 +30,31 @@ pub enum Decision {
     Denied,
 }
 
-/// Verifies GitHub access tokens and decides who may use this server (DECISION-0053).
-/// The server holds no OAuth secret: the token is checked by asking GitHub who it belongs to.
+/// Verifies device certificates and decides who may use this server (DECISION-0062, DECISION-0053).
+/// The server holds no secret of the hosted function: it checks signatures against its public keys.
 pub struct AuthState {
-    http: reqwest::Client,
-    github_api: String,
     dir: PathBuf,
-    cache: Mutex<HashMap<String, (Identity, Instant)>>,
+    keys: CertKeys,
+    server_id: String,
     // Serialises owner binding so two clients cannot both claim.
     bind_lock: Mutex<()>,
     claim_ttl: Duration,
 }
 
 impl AuthState {
-    pub fn new(dir: PathBuf) -> Result<Self> {
-        Self::with_api(dir, GITHUB_API.to_string())
-    }
-
-    pub fn with_api(dir: PathBuf, github_api: String) -> Result<Self> {
+    pub fn new(dir: PathBuf, keys: CertKeys, server_id: String) -> Result<Self> {
         std::fs::create_dir_all(&dir)?;
         Ok(Self {
-            http: reqwest::Client::builder()
-                .user_agent("termanch-server")
-                .timeout(Duration::from_secs(10))
-                .build()?,
-            github_api,
             dir,
-            cache: Mutex::new(HashMap::new()),
+            keys,
+            server_id,
             bind_lock: Mutex::new(()),
             claim_ttl: CLAIM_TTL,
         })
+    }
+
+    pub fn server_id(&self) -> &str {
+        &self.server_id
     }
 
     fn owner_path(&self) -> PathBuf {
@@ -143,30 +137,6 @@ impl AuthState {
         Ok(Some(token))
     }
 
-    /// Asks GitHub who the access token belongs to (cached briefly).
-    pub async fn identify(&self, token: &str) -> Result<Identity> {
-        if let Some((identity, at)) = self.cache.lock().unwrap().get(token) {
-            if at.elapsed() < IDENTITY_TTL {
-                return Ok(identity.clone());
-            }
-        }
-        let resp = self
-            .http
-            .get(format!("{}/user", self.github_api))
-            .bearer_auth(token)
-            .header("Accept", "application/vnd.github+json")
-            .send()
-            .await?;
-        if !resp.status().is_success() {
-            return Err(anyhow!("GitHub rejected the token ({})", resp.status()));
-        }
-        let identity: Identity = resp.json().await?;
-        let mut cache = self.cache.lock().unwrap();
-        cache.retain(|_, (_, at)| at.elapsed() < IDENTITY_TTL);
-        cache.insert(token.to_string(), (identity.clone(), Instant::now()));
-        Ok(identity)
-    }
-
     /// Decides whether `identity` may use the server; binds the first user who presents the claim token.
     pub fn authorize(&self, identity: &Identity, claim: Option<&str>) -> Result<Decision> {
         let _guard = self.bind_lock.lock().unwrap();
@@ -194,20 +164,69 @@ impl AuthState {
         }
     }
 
-    /// Full check for one connection: identify, authorize, and write the audit record (never the token).
-    pub async fn check(
+    fn revoked_path(&self) -> PathBuf {
+        self.dir.join("revoked_devices.json")
+    }
+
+    pub fn revoked_devices(&self) -> Vec<String> {
+        std::fs::read_to_string(self.revoked_path())
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_default()
+    }
+
+    /// Adds a device to the revocation list (idempotent). Only the owner reaches this.
+    pub fn revoke_device(&self, device: &str) -> Result<()> {
+        let _guard = self.bind_lock.lock().unwrap();
+        let mut list = self.revoked_devices();
+        if !list.iter().any(|d| d == device) {
+            list.push(device.to_string());
+            write_private(
+                &self.revoked_path(),
+                serde_json::to_string(&list)?.as_bytes(),
+            )?;
+            info!(target: "audit", event = "device_revoked", device);
+        }
+        Ok(())
+    }
+
+    /// Full check for one connection: certificate, challenge signature, revocation, ownership. Writes the
+    /// audit record (never the certificate or signature).
+    pub fn check(
         &self,
-        token: &str,
+        cert: &str,
+        signature: &str,
+        nonce: &str,
         claim: Option<&str>,
         ip: Option<&str>,
     ) -> Result<Identity, AuthError> {
-        let identity = match self.identify(token).await {
-            Ok(i) => i,
-            Err(e) => {
-                warn!(target: "audit", event = "auth", success = false, reason = "bad_token", ip = ip.unwrap_or("-"));
-                tracing::debug!("identify failed: {e}");
-                return Err(AuthError::BadToken);
-            }
+        let ip = ip.unwrap_or("-");
+        let fail = |reason: &'static str, e: AuthError| {
+            warn!(target: "audit", event = "auth", success = false, reason, ip);
+            e
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let device = self.keys.verify(cert, now).map_err(|e| match e {
+            CertError::Expired => fail("expired_certificate", AuthError::Expired),
+            CertError::UnknownKid => fail("unknown_kid", AuthError::BadCertificate),
+            CertError::BadSignature => fail("bad_certificate_signature", AuthError::BadCertificate),
+            CertError::Malformed => fail("malformed_certificate", AuthError::BadCertificate),
+        })?;
+        if device
+            .verify_challenge(&self.server_id, nonce, signature)
+            .is_err()
+        {
+            return Err(fail("bad_challenge_signature", AuthError::BadCertificate));
+        }
+        if self.revoked_devices().contains(&device.device) {
+            return Err(fail("device_revoked", AuthError::Revoked));
+        }
+        let identity = Identity {
+            id: device.github_id,
+            login: device.login.clone(),
         };
         let decision = self
             .authorize(&identity, claim)
@@ -217,7 +236,7 @@ impl AuthState {
             Decision::NeedsClaim => (false, "needs_claim"),
             Decision::Denied => (false, "not_owner"),
         };
-        info!(target: "audit", event = "auth", success, reason, github_id = identity.id, login = %identity.login, ip = ip.unwrap_or("-"));
+        info!(target: "audit", event = "auth", success, reason, github_id = identity.id, login = %identity.login, device = %device.device, ip);
         match decision {
             Decision::Allowed => Ok(identity),
             Decision::NeedsClaim => Err(AuthError::NeedsClaim),
@@ -228,7 +247,9 @@ impl AuthState {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum AuthError {
-    BadToken,
+    BadCertificate,
+    Expired,
+    Revoked,
     NeedsClaim,
     NotOwner,
     Internal,
@@ -237,7 +258,9 @@ pub enum AuthError {
 impl AuthError {
     pub fn message(&self) -> &'static str {
         match self {
-            AuthError::BadToken => "GitHub login is invalid or expired",
+            AuthError::BadCertificate => "This device's login is invalid; sign in again",
+            AuthError::Expired => "Your login has expired; sign in again",
+            AuthError::Revoked => "This device has been revoked",
             AuthError::NeedsClaim => {
                 "This server is not registered yet; add it with its registration link"
             }
@@ -295,8 +318,6 @@ pub fn claim_qr(link: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{extract::State, http::HeaderMap, routing::get, Json, Router};
-    use std::sync::Arc;
 
     fn temp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!("termanch-test-{}", uuid::Uuid::new_v4()));
@@ -312,7 +333,7 @@ mod tests {
     }
 
     fn auth() -> AuthState {
-        AuthState::with_api(temp_dir(), "http://127.0.0.1:1".into()).unwrap()
+        AuthState::new(temp_dir(), CertKeys::default(), "srv".into()).unwrap()
     }
 
     #[test]
@@ -351,7 +372,7 @@ mod tests {
 
     #[test]
     fn a_client_supplied_secret_claims_the_server_until_it_expires() {
-        let mut a = auth();
+        let a = auth();
         a.provide_claim("from-the-install-command").unwrap();
         assert_eq!(
             a.active_claim().as_deref(),
@@ -406,10 +427,10 @@ mod tests {
     #[test]
     fn owner_survives_restart() {
         let dir = temp_dir();
-        let a = AuthState::with_api(dir.clone(), "http://127.0.0.1:1".into()).unwrap();
+        let a = AuthState::new(dir.clone(), CertKeys::default(), "srv".into()).unwrap();
         let claim = a.claim_token().unwrap().unwrap();
         a.authorize(&id(7), Some(&claim)).unwrap();
-        let b = AuthState::with_api(dir, "http://127.0.0.1:1".into()).unwrap();
+        let b = AuthState::new(dir, CertKeys::default(), "srv".into()).unwrap();
         assert_eq!(b.authorize(&id(7), None).unwrap(), Decision::Allowed);
         assert_eq!(b.authorize(&id(8), None).unwrap(), Decision::Denied);
     }
@@ -439,43 +460,71 @@ mod tests {
         assert!(qr.lines().count() <= 32);
     }
 
-    async fn mock_github() -> String {
-        async fn user(
-            State(_): State<Arc<()>>,
-            headers: HeaderMap,
-        ) -> Result<Json<Identity>, axum::http::StatusCode> {
-            match headers.get("authorization").and_then(|v| v.to_str().ok()) {
-                Some("Bearer good") => Ok(Json(Identity {
-                    id: 42,
-                    login: "octo".into(),
-                })),
-                _ => Err(axum::http::StatusCode::UNAUTHORIZED),
-            }
-        }
-        let app = Router::new()
-            .route("/user", get(user))
-            .with_state(Arc::new(()));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-        format!("http://{addr}")
-    }
+    #[test]
+    fn check_verifies_the_certificate_and_enforces_ownership() {
+        use crate::cert::testing::*;
+        let signer = Signer::new("k1");
+        let a = AuthState::new(temp_dir(), signer.keys(), "srv".into()).unwrap();
+        let (alice, bob) = (Device::new(), Device::new());
+        let cert = |d: &Device, id: u64, login: &str| signer.issue(d, id, login, now() + 3600);
+        let check = |d: &Device, c: &str, nonce: &str, claim: Option<&str>| {
+            a.check(c, &d.sign("srv", nonce), nonce, claim, None)
+        };
 
-    #[tokio::test]
-    async fn check_identifies_with_github_and_enforces_ownership() {
-        let api = mock_github().await;
-        let a = AuthState::with_api(temp_dir(), api).unwrap();
+        let ca = cert(&alice, 42, "octo");
         assert_eq!(
-            a.check("bad", None, None).await.unwrap_err(),
-            AuthError::BadToken
-        );
-        assert_eq!(
-            a.check("good", None, None).await.unwrap_err(),
+            check(&alice, &ca, "n", None).unwrap_err(),
             AuthError::NeedsClaim
         );
         let claim = a.claim_token().unwrap().unwrap();
-        let who = a.check("good", Some(&claim), None).await.unwrap();
-        assert_eq!(who.id, 42);
-        assert_eq!(a.check("good", None, None).await.unwrap().login, "octo");
+        assert_eq!(check(&alice, &ca, "n", Some(&claim)).unwrap().id, 42);
+        assert_eq!(check(&alice, &ca, "n2", None).unwrap().login, "octo");
+
+        let cb = cert(&bob, 43, "other");
+        assert_eq!(
+            check(&bob, &cb, "n", None).unwrap_err(),
+            AuthError::NotOwner
+        );
+        // Bob's key with Alice's certificate: the challenge signature does not match the certificate.
+        assert_eq!(
+            check(&bob, &ca, "n", None).unwrap_err(),
+            AuthError::BadCertificate
+        );
+        // A signature made for another server does not work here.
+        assert_eq!(
+            a.check(&ca, &alice.sign("elsewhere", "n"), "n", None, None)
+                .unwrap_err(),
+            AuthError::BadCertificate
+        );
+    }
+
+    #[test]
+    fn expired_and_revoked_devices_are_refused_and_revocation_persists() {
+        use crate::cert::testing::*;
+        let signer = Signer::new("k1");
+        let dir = temp_dir();
+        let a = AuthState::new(dir.clone(), signer.keys(), "srv".into()).unwrap();
+        let d = Device::new();
+        let claim = a.claim_token().unwrap().unwrap();
+        let good = signer.issue(&d, 1, "me", now() + 3600);
+        a.check(&good, &d.sign("srv", "n"), "n", Some(&claim), None)
+            .unwrap();
+
+        let old = signer.issue(&d, 1, "me", now() - 5);
+        assert_eq!(
+            a.check(&old, &d.sign("srv", "n"), "n", None, None)
+                .unwrap_err(),
+            AuthError::Expired
+        );
+
+        a.revoke_device(&d.id()).unwrap();
+        a.revoke_device(&d.id()).unwrap();
+        let b = AuthState::new(dir, signer.keys(), "srv".into()).unwrap();
+        assert_eq!(b.revoked_devices(), vec![d.id()]);
+        assert_eq!(
+            b.check(&good, &d.sign("srv", "n"), "n", None, None)
+                .unwrap_err(),
+            AuthError::Revoked
+        );
     }
 }
