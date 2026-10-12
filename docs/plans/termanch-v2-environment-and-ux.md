@@ -78,7 +78,7 @@ Container: a `termanch-server --update` check shown in Server settings ("new ima
 | 5 | A4 self-update, search, share links | phase 2 |
 
 ## Capacity math (free tier)
-- Directory: announces every ~5 min per server → 288/day/server; with 10k servers 2.9M/day exceeds 100k/day Workers requests. Mitigation already designed: announce only on change plus a 6 h keepalive (4/day/server → 40k/day at 10k servers). Verify the server does this before scaling past ~1k servers.
+- Directory: a claimed server re-announces every 12 h (`REFRESH_EVERY`, `directory.rs`), an unclaimed one every 5 min, plus on IP/claim change: ~2 requests/day/server, so 10k servers use ~20k of the 100k/day Workers limit. Lookups add one per reconnect that has no cached record.
 - Cross-device list: ~2 requests per login; negligible.
 - herdr/tool updates: GitHub API from each server, 1/day; no Cloudflare cost.
 - Image: herdr adds a single static binary (order of 10 MB); target stays under the 512 MB RAM gate; track image size in the #21 gates.

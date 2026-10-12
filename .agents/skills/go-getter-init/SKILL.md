@@ -5,7 +5,7 @@ description: Set up this project's agent harness and SDLC practices through a gu
 
 # go-getter init
 
-Run the CLI as `npx --yes github:vivantel/go-getter <command>` (written `gg <command>` below). It needs Node.js; if `node --version` fails or is older than the oldest supported LTS, tell the user that go-getter will record their choices but enforcement on this machine stays advisory until Node is installed, and continue.
+Run the CLI bundled with this skill: `node <skill-dir>/cli/compiler/bin/go-getter.mjs <command>`, where `<skill-dir>` is the absolute path of the directory holding this file (written `gg <command>` below), from the project's root. It needs no network. If `<skill-dir>/cli` is missing, the skill was installed without its files: tell the user to reinstall the plugin, or copy the whole `go-getter-init` directory, and stop. It needs Node.js; if `node --version` fails or is older than the oldest supported LTS, tell the user that go-getter will record their choices but enforcement on this machine stays advisory until Node is installed, and continue.
 
 ## 1. Look before asking
 
@@ -13,7 +13,7 @@ Run `gg detect` and keep its JSON. Anything it answers (languages, test commands
 
 ## 2. Choose packs
 
-Run `gg packs`. Present the packs grouped by family (harness, sdlc) and ask which to configure. Recommend all harness packs. Order the chosen packs so every pack comes after the packs it `requires`.
+Run `gg packs`. Present the packs grouped by family (harness, sdlc) and ask which to configure, as a multi-select question where the host's question tool supports it. Recommend all harness packs. Order the chosen packs so every pack comes after the packs it `requires`.
 
 ## 3. Interview, pack by pack
 
@@ -22,10 +22,10 @@ For each pack, run `gg pack <id>` and walk its `questions` in order:
 - Skip a question whose `when` condition is not met by earlier answers.
 - If the question has a `detect` key (a dotted path into the `gg detect` result, e.g. `commands.test`) and the detection result covers it, propose that value and ask for confirmation.
 - A question of `type: text` or `type: list` has no options: ask it with the prefilled value (the detected value, else the question's `default`; a list question with both prefills the detected items followed by the default items not already in it) and let the user accept or edit it. Check the answer against the question's `pattern` (each item, for a list) and re-ask on a mismatch. A list answer is an array of strings.
-- Ask a choice question exactly one at a time. Show every option with its `tradeoff`, list the recommended option first and mark it "(Recommended)". Never invent options; the pack's options are the full list, plus the user's free-text answer if none fits — in that case explain that a free-text answer cannot be rendered and ask them to pick the closest option or stop.
+- Ask a choice question alone in its message, through the host's question tool when it has one (one entry per option: label = option name, description = `tradeoff`; never a numbered list), else as plain text with every option and its `tradeoff`. List the recommended option first, marked "(Recommended)". Never invent options; the pack's options are the full list, plus the user's free-text answer if none fits — in that case explain that a free-text answer cannot be rendered and ask them to pick the closest option or stop.
 - After the first question of a pack, offer "accept the recommended defaults for the rest of this pack" (recommended option for choice questions, the prefilled value for text and list questions).
 
-Ask once, before rendering, who is accountable for these decisions (their name for `accepted-by`).
+Ask last, alone, before rendering, who is accountable for these decisions (their name for `accepted-by`).
 
 ## 4. One go-ahead, then render
 
