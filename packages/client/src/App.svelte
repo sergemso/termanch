@@ -68,7 +68,8 @@
   }
 
   function addServer(server: ServerListItem) {
-    saveServers([...servers.filter((s) => s.server_url !== server.server_url), server]);
+    const same = (s: ServerListItem) => (server.server_id ? s.server_id === server.server_id : !s.server_id && s.server_url === server.server_url);
+    saveServers([...servers.filter((s) => !same(s)), server]);
   }
 
   async function handleOAuthCallback() {

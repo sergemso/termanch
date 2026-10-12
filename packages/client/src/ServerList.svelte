@@ -36,7 +36,7 @@
             </div>
             <div style="flex: 1; min-width: 0;">
               <h3 style="font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{server.server_name}</h3>
-              <p style="font-size: 0.75rem; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{server.server_url}</p>
+              <p style="font-size: 0.75rem; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{server.server_url || (server.record ? `${server.record.ip}:${server.record.udp_port}` : '')}</p>
             </div>
             <div style="display: flex; gap: 8px;">
               <button class="secondary" on:click={() => onselect(server)} style="padding: 8px 16px;">Connect</button>
