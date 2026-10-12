@@ -1,26 +1,35 @@
 # termanch-server image. Built and pushed by CI only (.github/workflows/docker-build.yaml).
-FROM rust:1-slim-bookworm AS builder
+# cargo-chef compiles the dependencies in their own layer, keyed on Cargo.lock, so a source change rebuilds
+# only our crates. The runtime base comes from docker/Dockerfile.base (rebuilt weekly).
+ARG BASE_IMAGE=ghcr.io/sergemso/termanch-base:latest
+
+FROM lukemathwalker/cargo-chef:latest-rust-1-slim-bookworm AS chef
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config libssl-dev cmake \
     && rm -rf /var/lib/apt/lists/*
 
 # The workspace lists every package, so each must be present; only the server is built.
+FROM chef AS planner
+COPY Cargo.toml Cargo.lock ./
+COPY packages/core ./packages/core
+COPY packages/server ./packages/server
+COPY packages/agent ./packages/agent
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release -p termanch-server --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
 COPY packages/core ./packages/core
 COPY packages/server ./packages/server
 COPY packages/agent ./packages/agent
 RUN cargo build --release -p termanch-server && strip target/release/termanch-server
 
-# Runtime: Node is here so coding agents (codex, claude) can be installed inside the session environment.
-FROM node:22-bookworm-slim
+FROM ${BASE_IMAGE}
 LABEL org.opencontainers.image.source="https://github.com/sergemso/termanch" \
       org.opencontainers.image.description="Termanch server: web terminal for remote AI coding agents" \
       org.opencontainers.image.licenses="MIT"
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates tmux git curl openssh-client procps \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY --from=builder /app/target/release/termanch-server /usr/local/bin/termanch-server
 
 # The base image already has a non-root user `node` (uid 1000); its home is the persistent volume.
