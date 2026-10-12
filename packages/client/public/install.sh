@@ -55,6 +55,7 @@ if [ "$(id -u)" -ne 0 ]; then
   command -v sudo >/dev/null 2>&1 || die "run this as root (or install sudo)"
   exec sudo env TERMANCH_IMAGE="$IMAGE" TERMANCH_CONTAINER="$NAME" TERMANCH_DATA="$ROOT" \
     TERMANCH_SKIP_FIREWALL="${TERMANCH_SKIP_FIREWALL:-}" TERMANCH_DRY_RUN="${TERMANCH_DRY_RUN:-}" \
+    TERMANCH_FORCE="${TERMANCH_FORCE:-}" TERMANCH_RELEASE_URL="${TERMANCH_RELEASE_URL:-}" TERMANCH_RELEASE_KEYS="${TERMANCH_RELEASE_KEYS:-}" \
     sh -c "$(curl -fsSL "$ORIGIN/install.sh")" termanch-install "$SECRET" "$ORIGIN" "$MODE"
 fi
 
