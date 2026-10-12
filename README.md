@@ -5,7 +5,7 @@ A web terminal for managing remote AI coding agents (Codex, Claude Code, Herdr) 
 ## How it works
 
 ```
- Browser (client)  ── WebRTC data channel, direct, end-to-end encrypted ──►  Your VPS (Docker)
+ Browser (client)  ── WebRTC data channel, direct, end-to-end encrypted ──►  Your VPS
  app.termanch.vivantel.dev          one UDP port                               termanch-server + tmux
         │                                                                          │
         └── GitHub login ── signed directory (address + key, never traffic) ◄──────┘
@@ -24,30 +24,48 @@ You need a Linux VPS with a public IP (512 MB RAM, 1 vCPU is enough) and root ac
 2. Choose **Add Server**. Copy the command it shows and run it on your VPS.
 3. Wait a minute. The server appears in the list. Tap it.
 
-That is the whole setup. The command installs Docker if needed, picks a free UDP port, starts the server and hands it a one-time secret. It is safe to run again; running it with a new secret re-claims the server for a new owner.
+That is the whole setup. The command picks a free UDP port, starts the server and hands it a one-time secret. It is safe to run again; running it with a new secret re-claims the server for a new owner. Add Server also asks **where sessions should run** (see below).
 
 **Prefer to scan?** On the VPS run `curl -fsSL https://app.termanch.vivantel.dev/install.sh | sh -s -- - https://app.termanch.vivantel.dev`. It shows a QR code; in Add Server choose **Scan a QR** and use the camera, or take a screenshot of the code and pick it from the gallery (delete the screenshot afterwards).
 
 ### Firewalls
 
-The server needs **one inbound UDP port** (the installer picks a free one, usually 4443, and opens it in `ufw` or `firewalld` if they are active). If you use a provider firewall or security group (AWS, GCP, Oracle, Hetzner Cloud Firewall), open that port there. The app tells you which port when it cannot reach your server: *"Server unreachable on UDP port N"*. To see the port: `cat /opt/termanch/udp_port`.
+The server needs **one inbound UDP port** (the installer picks a free one, usually 4443, and opens it in `ufw` or `firewalld` if they are active). If you use a provider firewall or security group (AWS, GCP, Oracle, Hetzner Cloud Firewall), open that port there. The app tells you which port when it cannot reach your server: *"Server unreachable on UDP port N"*. To see the port: `cat /opt/termanch/udp_port` (isolated container) or `sudo cat /var/lib/termanch-root/udp_port` (on the machine).
 
 Some mobile and corporate networks block UDP. Those clients cannot connect until the tunnel fallback is available (see the roadmap).
 
 ### Where your agents run
 
-Sessions run **inside the container**, in `/opt/termanch/home` (mounted as the container's home, so it survives restarts and upgrades). The image has tmux, git, curl and Node. Install your agents in a Termanch session, for example:
+Add Server offers two choices (decisions 0058 and 0075):
+
+**In an isolated container** (the default). Sessions run inside a Docker container, in `/opt/termanch/home` (mounted as the container's home, so it survives restarts and upgrades). Docker is installed if missing. The container cannot see the rest of your VPS. The image has tmux, git, curl and Node. Install your agents in a Termanch session, for example:
 
 ```bash
 npm install -g @anthropic-ai/claude-code @openai/codex
 ```
 
+**On the machine itself** (no Docker). The server is a single static binary run as a systemd service, and sessions run directly on your VPS, where your repositories and agent tools already are. You choose between a dedicated unprivileged user `termanch` (created for you, recommended) and `root`. This gives your browser a shell on the server itself, so the app shows a warning and asks you to confirm. Requirements: systemd, `curl`, `ssh-keygen` (package `openssh-client`), x86_64 or aarch64; `tmux` is installed if missing.
+
+Before anything is installed the installer checks the release: its manifest must carry a valid signature by the project's release key, and the binary must match the signed SHA-256 (see `SECURITY.md`). It lists every change it will make, records each one in a journal in `/var/lib/termanch-root` before making it, and can undo them.
+
 ### Updating and removing
+
+Isolated container:
 
 ```bash
 # update: run the install command again (any new secret works)
 # remove:
 docker rm -f termanch && sudo rm -rf /opt/termanch
+```
+
+On the machine itself:
+
+```bash
+# see what the installer changed, and what removing it would undo:
+sudo termanch-server --revert --dry-run
+# remove (stop the service and delete its state first; your repositories and the termanch user's home are never touched):
+sudo systemctl stop termanch && sudo rm -rf /var/lib/termanch && sudo termanch-server --revert
+# update (until automatic updates arrive): run the install command again with TERMANCH_FORCE=1 in front of `sh`
 ```
 
 ## Security model
