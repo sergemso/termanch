@@ -59,6 +59,20 @@ jobs:
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ env.PUSH }}
           cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-cache:${{ matrix.arch }}
           cache-to: ${{ env.PUSH == 'true' && format('type=registry,ref={0}/{1}-cache:{2},mode=max', env.REGISTRY, env.IMAGE_NAME, matrix.arch) || '' }}
+      - name: Gate - compressed image size
+        if: env.PUSH == 'true'
+        env:
+          IMAGE_MAX_MB: 160 # 119 MB when the gate was added; raise on purpose, in a reviewed change
+        run: |
+          ref="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          raw="$(docker buildx imagetools inspect --raw "$ref@${{ steps.build.outputs.digest }}")"
+          # The pushed digest may be an index (image + attestation); follow it to the real image.
+          inner="$(jq -r '[.manifests[]? | select(.platform.architecture != "unknown")][0].digest // empty' <<<"$raw")"
+          [ -z "$inner" ] || raw="$(docker buildx imagetools inspect --raw "$ref@$inner")"
+          bytes="$(jq '[.config.size, (.layers[].size)] | add' <<<"$raw")"
+          mb=$((bytes / 1048576))
+          echo "compressed image size (${{ matrix.arch }}): ${mb} MB (limit ${IMAGE_MAX_MB} MB)"
+          [ "$mb" -le "$IMAGE_MAX_MB" ] || { echo "image too large"; exit 1; }
       - name: Export digest
         if: env.PUSH == 'true'
         run: |

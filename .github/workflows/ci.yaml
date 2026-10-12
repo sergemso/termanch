@@ -46,6 +46,13 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
+      - name: Keep the server binary for the browser end-to-end job
+        uses: actions/upload-artifact@v4
+        with:
+          name: termanch-server
+          path: target/release/termanch-server
+          retention-days: 1
+
   client:
     name: Client (typecheck, build)
     runs-on: ubuntu-latest
@@ -69,3 +76,44 @@ jobs:
       - run: pnpm --filter termanch-client run build
 
       - run: pnpm --filter termanch-client run test
+
+      - name: Gate - client bundle size
+        run: pnpm --filter termanch-client run check:bundle
+
+  # Real Chrome against the real server binary: login and claim over WebRTC, typing, reconnect with screen replay,
+  # plus the resource gates (server RSS with 10 sessions, CPU while output streams). Only GitHub is a stand-in.
+  e2e:
+    name: Browser end-to-end and resource gates
+    needs: rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install tmux
+        run: sudo apt-get update && sudo apt-get install -y tmux
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: termanch-server
+          path: bin
+
+      - run: chmod +x bin/termanch-server
+
+      - run: pnpm --filter termanch-client run e2e:build
+
+      - name: Run the browser end-to-end test
+        working-directory: packages/client
+        env:
+          TERMANCH_BIN: ${{ github.workspace }}/bin/termanch-server
+        run: node e2e/run.mjs
