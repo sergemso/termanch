@@ -233,7 +233,7 @@ try {
   // 7. The real app on a phone: connect, open a session, go back to the server list and connect again.
   // Each lap used to risk a hang or a broken screen, so run several and fail on any page error.
   {
-    const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true });
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true, permissions: ['clipboard-read', 'clipboard-write'] });
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
@@ -299,10 +299,15 @@ try {
         });
         await page.locator('.xterm-helper-textarea').focus();
         await page.keyboard.type('hi');
-        await page.waitForFunction(() => /keydown key="h"/.test(document.querySelector('.log pre')?.textContent ?? ''), null, { timeout: 5000 }).catch(async (e) => {
-          console.log('log panel:', await page.evaluate(() => document.querySelector('.log')?.textContent ?? 'none'));
-          throw e;
-        });
+        await page.waitForFunction(() => /keydown key="h"/.test(document.querySelector('.log pre')?.textContent ?? ''), null, { timeout: 5000 });
+        // The panel is part of the layout and its buttons work: Copy puts the lines on the clipboard, Clear empties them.
+        const box = await page.locator('.log .bar').boundingBox();
+        if (!box || box.y < 0) fail(`the log buttons are off screen: ${JSON.stringify(box)}`);
+        await page.locator('.log').getByRole('button', { name: 'Copy', exact: true }).click();
+        const copied = await page.evaluate(() => navigator.clipboard.readText());
+        if (!/keydown key="h"/.test(copied)) fail(`Copy did not copy the log: ${copied.slice(0, 80)}`);
+        await page.locator('.log').getByRole('button', { name: 'Clear', exact: true }).click();
+        await page.waitForFunction(() => /input events \(0\)/.test(document.querySelector('.log .bar')?.textContent ?? ''), null, { timeout: 3000 });
         await page.evaluate(() => {
           localStorage.setItem('termanch_debug', '0');
           window.dispatchEvent(new Event('termanch-debug'));

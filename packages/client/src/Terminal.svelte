@@ -223,8 +223,8 @@
   });
 </script>
 
-{#if debug}<InputLog />{/if}
 <div class="wrap">
+  {#if debug}<InputLog />{/if}
   <div
     class="screen"
     bind:this={terminalContainer}
