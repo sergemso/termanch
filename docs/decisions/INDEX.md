@@ -60,3 +60,7 @@
 0054-session-backends,"The server owns sessions through a pluggable backend","architecture, sessions, agents",active
 0056-automatic-connectivity,"Servers reach the client automatically through a signed directory and quick tunnels","deployment, networking, security, roadmap",active
 0057-webrtc-direct-transport,"The browser reaches the server over a direct WebRTC data channel","transport, networking, security, roadmap",active
+0058-run-modes,"A server runs sessions in an isolated container or on the host, chosen at install","deployment, security, sessions, roadmap",active
+0059-environment-profile-and-bundled-tools,"The environment profile lives on the server and bundled tools update themselves","deployment, sessions, agents, roadmap",active
+0060-directory-scale-r2-cdn,"The directory serves at least 10^5 servers on free tiers, with public records on R2 behind the CDN","directory, scale, networking, roadmap",active
+0061-agent-state-and-push,"Agent state comes from process scans and tool adapters; notifications are installed-PWA Web Push","agents, notifications, pwa, roadmap",active

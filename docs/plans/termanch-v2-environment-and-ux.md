@@ -1,92 +1,114 @@
-# Termanch Roadmap: environment, app, session and agent UX
+# Termanch Plan: environment, app/session/agent UX, directory scale
 
-Builds on `termanch-v1.md` (which still owns #15–#23). Items here are proposals until their issue is opened and a decision is recorded.
+Companion to `termanch-v1.md` (which still owns issues #15–#23). Decisions: 0058 run modes, 0059 environment profile, 0060 directory scale, 0061 agent state and push; guardrails `host-mode-explicit-consent`, `directory-request-budget`; fact 0022. Order, by decision: mobile UX + PWA first, then environment, then directory scale. A fresh session needs only this file, those artifacts and the repo.
 
-## Principles
-1. Zero config by default, every knob one tap away. A first-time user gets a working terminal with an agent installed.
-2. The server is the source of truth (DECISION-0054). The browser holds no state it cannot rebuild from the server plus the signed directory.
-3. Free tier only. Every item below states its request/memory cost.
-4. Phone first: each screen is designed at 360×640, then widened.
+Repo facts for a cold start: Rust server `packages/server` (tmux/PTY via `SessionBackend`, WebRTC in `rtc.rs`, directory announcer in `directory.rs`), Svelte 5 client `packages/client` (`src/App.svelte`, `AddServerModal.svelte`, `ServerList.svelte`, `lib/`), Cloudflare Pages Functions in `packages/client/functions/api/{oauth,directory}`, installer `packages/client/public/install.sh`, image `docker/Dockerfile`. Use `npx --yes pnpm@9`. Hosted client https://app.termanch.vivantel.dev. Land every step as one squashed PR with green CI.
 
-## A. Environment (where terminals run, and what is in them)
+## Phase 0: finish v1
 
-### A1. Run mode: Container or Host
-- Add Server asks: **Isolated container** (default) or **This host** (warning: the owner gets root on the VPS).
-- Carried in the install command/QR as a trailing word; the installer starts the container with `--pid=host --privileged` for host mode and sets `TERMANCH_RUN=host`.
-- The server runs session commands through `nsenter -t 1 -m -u -i -n -p`; a startup self-check fails loudly with the reason.
-- The mode is shown in the server card and the session header ("host" badge in amber).
+### 0.1 Close the real end-to-end check (#15, #16) — [~]
+Class: debug · Needs: none · Check: `gh issue view 15 --json state -q .state | grep -q CLOSED && gh issue view 16 --json state -q .state | grep -q CLOSED`
+Context: Login works (fixed in #37). Server added and connected; typing and the drop/restore test are not yet confirmed by the owner. Server list identity fix is PR #38.
+Do: 1. Merge #38. 2. With the owner, type in a terminal, drop the network for 10 s, confirm re-attach with screen replay. 3. Fix findings, close #15 and #16.
+Done-when: both issues closed with the evidence in a comment.
 
-### A2. Environment profile (checkboxes in Add Server, editable later in Server settings)
-| Component | Default | Notes |
-|---|---|---|
-| tmux | on | session persistence backend |
-| herdr | on | agent multiplexer, see A3 |
-| zellij | off | alternative multiplexer |
-| claude, codex | off, one tap each | installed with npm into the persistent home |
-| git, ssh, curl | on | already in the image |
-| mosh-style prediction | later | backlog |
-- A profile is a JSON list stored on the server (`$CONFIG/env.json`) and applied by an idempotent `termanch-server --ensure-env`, run on start and when the client sends `set_env`.
-- Container mode installs into the volume (no image rebuild). Host mode uses the host package manager (apt/dnf/apk detected) and only for components the owner ticked.
-- Each install streams progress to the client and is audit-logged without output content.
+### 0.2 Browser end-to-end test and resource gates in CI (#21) — [ ]
+Class: implement · Needs: 0.1 · Check: `gh workflow list | grep -qi e2e`
+Context: Harness is not in the repo; build a vite bundle of Connection+waitForServer, run Chromium (`playwright-core`, update the lockfile with `npx pnpm@9`) with `--disable-web-security` against the real binary with `TERMANCH_DEV_INFO=on` and `TERMANCH_GITHUB_API` pointing at a stand-in. Gates: server RSS under 512 MB under load, image size reported and capped.
+Do: add the e2e job and gates to `.github/workflows`; keep it under the free CI minutes.
+Done-when: CI runs the test on a PR and fails when RSS or image size exceed the limits.
 
-### A3. herdr in the image, kept current
-- The image ships herdr (release binary `herdr-linux-{x86_64,aarch64}` from GitHub releases, fetched in the Dockerfile).
-- Updates: a small `termanch-updater` checks the releases API once per 24 h (1 request/day/server; GitHub allows 60/h unauthenticated), downloads into `$HOME/.local/bin` on the persistent volume, verifies the asset's checksum when published, keeps the previous binary for rollback. No restart needed for new sessions.
-- CI rebuilds the image weekly and on every herdr release (scheduled workflow) so fresh installs start current. Same mechanism updates tmux/node base through the base image.
-- Needs #22 (herdr verdict) first; if herdr does not fit the command backend, a dedicated adapter is part of that item.
+## Phase A: mobile UX and PWA
 
-### A4. Server self-update
-Container: a `termanch-server --update` check shown in Server settings ("new image available"), applied by the installer one-liner re-run (pull + recreate, volume kept). Host-mode also offers it as a button that runs the same recreate through the Docker socket if mounted.
+### A.1 Mobile terminal UX (#17) — [ ]
+Class: implement · Needs: 0.1 · Check: `cd packages/client && npx --yes pnpm@9 build && npx --yes pnpm@9 test`
+Context: Mobile is the product's core promise. Today the client is desktop-oriented.
+Do: 1. Key row (Esc, Tab sticky Ctrl, Alt, arrows, `| ~ /`, paste) and a visualViewport-aware layout. 2. Touch scroll, pinch font size, long-press select, two-finger paste. 3. Responsive server list and Add Server modal; status bar with transport (direct/WebSocket) and RTT. 4. Record real-device results (iOS Safari 16+, Chrome Android 100+).
+Done-when: on a phone, `ls`, Esc/Ctrl combos and scrolling work; results recorded in `docs/facts`.
 
-## B. App (hosted client)
-- **Home** = servers list with live state (online/offline from directory freshness, last seen, mode badge, running sessions and agents count).
-- **Server settings**: name, mode, environment profile (A2), update status, re-claim (new owner), remove.
-- **Cross-device list**: the owner's servers sync through the directory (server ids keyed by GitHub id; one small D1 row per owner). One request on login. Removes the "empty in another browser" gap. Cost: 1 read + (rarely) 1 write per login; far below the 100k/day limit.
-- **PWA** (#18): install prompt, offline shell, resume triggers reconnect.
-- **Settings**: font size, theme, key row layout, haptics, notifications.
+### A.2 Installable PWA (#18) — [ ]
+Class: implement · Needs: A.1 · Check: `ls packages/client/dist/manifest.webmanifest`
+Context: iOS Web Push requires an installed PWA (0061). `packages/client/public/manifest.json` exists; there is no service worker.
+Do: 1. Manifest, icons, service worker caching static assets only (no tokens in Cache/IndexedDB). 2. On visibilitychange/online, trigger reconnect. 3. Install prompt.
+Done-when: installable on Android and iOS; cold start from cache shows the shell offline.
 
-## C. Sessions
-- Session list per server with name, backend (tmux/herdr), cwd, running command, last activity, unread badge.
-- Create session from a template: Shell, Claude Code, Codex, herdr workspace, custom command; choose directory (recent repos list from the server).
-- Rename, kill (confirm), duplicate. Swipe actions on mobile.
-- Multiple panes: a switcher (tabs on desktop, bottom sheet on phone), not split panes on phones.
-- Reconnect = re-attach with screen replay (#16); a banner shows state (connecting / reconnected / server down) and never blocks typing.
-- Scrollback search and copy mode; share a read-only view link (backlog).
+### A.3 Session list and templates — [ ]‖
+Class: implement · Needs: A.1 · Check: `cd packages/client && npx --yes pnpm@9 test`
+Context: Sessions are listed by name only. `new_session` takes a name (`App.svelte`).
+Do: 1. Session cards with backend, cwd, running command, last activity. 2. New-session templates (Shell, Claude Code, Codex, herdr, custom command) and directory picker from the server's recent repos. 3. Rename, kill with confirm, duplicate; swipe actions on mobile. 4. Session switcher as bottom sheet on phones. Protocol additions go through `packages/core` and the server `connection.rs`.
+Done-when: a user can start Claude Code in a chosen directory from a phone in under 5 taps.
 
-## D. Terminal UX (#17)
-- Key row: Esc, Tab, Ctrl (sticky), Alt, arrows, `|`, `~`, `/`, paste; soft-keyboard-aware viewport (visualViewport).
-- Gestures: scroll, two-finger tap for paste, pinch for font size, long-press select.
-- Latency: show the transport (direct/WebSocket) and RTT in the status bar.
-- Accessibility: contrast themes, large text, screen reader labels for controls.
+## Phase B: environment and agents
 
-## E. Agent UX (#19)
-- Detection in the server: process scan of each pane's tree for claude/codex/herdr, with a state model **idle → working → needs input → done/error**.
-- Session list shows state chips; a global "needs you" inbox lists sessions waiting for input, newest first.
-- Notifications: in-app toasts, tab title badge, installed-PWA Web Push (VAPID, no paid service; payload carries no terminal text).
-- Quick answers: when an agent waits for y/n or a numbered choice, offer buttons that send the keystroke.
-- Agent run log per session (start, end, state changes), no output retained beyond tmux scrollback.
-- Later: diff viewer, file browser, prompt library, voice input (browser speech API).
+### B.1 herdr and backend CLI verdict (#22) — [ ]‖
+Class: explore · Needs: 0.1 · Check: `test -s docs/facts/0017-backend-clis.md`
+Context: See v1 step 7.1. herdr 0.9.x ships release binaries `herdr-linux-{x86_64,aarch64}`.
+Do: as v1 7.1. Note whether herdr fits the command backend or needs an adapter on its socket API.
+Done-when: each tool has a verdict and a tested snippet or a written reason.
 
-## Phasing and issues
-| Phase | Items | Needs |
-|---|---|---|
-| 0 | finish v1: #15, #16, #21, #20 | now |
-| 1 | A1 run mode, B cross-device list | after #16 |
-| 2 | #22 herdr verdict, A3 herdr + updater, A2 profile | #22 |
-| 3 | #17 mobile terminal UX, #18 PWA, C session list and templates | #16 |
-| 4 | #19 / E agent states, inbox, push | #16, #18 |
-| 5 | A4 self-update, search, share links | phase 2 |
+### B.2 Run modes on the server and installer (0058) — [ ]
+Class: implement · Needs: 0.1 · Check: `cargo test -p termanch-server`
+Context: Container mode is today's behaviour. Host mode runs the container with `--pid=host --privileged` and prefixes session commands with `nsenter -t 1 -m -u -i -n -p`; owner picks root or a dedicated `termanch` user at install. Guardrail `host-mode-explicit-consent` applies.
+Do: 1. `TERMANCH_RUN=container|host` plus `TERMANCH_RUN_USER`; startup self-check with a clear error. 2. `install.sh` accepts `host` and `host-user`, creates the user, passes flags. 3. Audit entry when a host session opens; mode in the server info message. 4. Test on a second container on a free port, leaving the running one alone.
+Done-when: host mode shows the host's `/etc/hostname` and processes; container mode does not; tests pass.
 
-## Capacity math (free tier)
-- Directory: a claimed server re-announces every 12 h (`REFRESH_EVERY`, `directory.rs`), an unclaimed one every 5 min, plus on IP/claim change: ~2 requests/day/server, so 10k servers use ~20k of the 100k/day Workers limit. Lookups add one per reconnect that has no cached record.
-- Cross-device list: ~2 requests per login; negligible.
-- herdr/tool updates: GitHub API from each server, 1/day; no Cloudflare cost.
-- Image: herdr adds a single static binary (order of 10 MB); target stays under the 512 MB RAM gate; track image size in the #21 gates.
+### B.3 Add Server mode choice and server settings — [ ]
+Class: implement · Needs: B.2, A.1 · Check: `cd packages/client && npx --yes pnpm@9 test`
+Context: `AddServerModal.svelte` builds the command through `lib/onboard.ts installCommand`.
+Do: mode radio with the host warning, root/user choice, mode badge on server card and session header, a Server settings screen (name, mode, remove, re-claim).
+Done-when: the generated command and QR carry the choice; badge visible.
 
-## Risks
-| Risk | Mitigation |
-|---|---|
-| Host mode = root on the VPS | explicit warning, owner-only, audit log, off by default |
-| herdr API/CLI unstable or not fitting the backend shape | #22 verdict first; pin the last good version, rollback |
-| Auto-update ships a broken binary | checksum, keep previous, health check after switch |
-| Per-package installs on host differ by distro | detect package manager, support apt first, document the rest |
+### B.4 Environment profile on the server (0059) — [ ]
+Class: implement · Needs: B.2, B.1 · Check: `cargo test -p termanch-server`
+Context: Profile lives in `$TERMANCH_CONFIG_DIR/env.json`, owner-only edits.
+Do: 1. `env.json` schema (tmux, herdr, zellij, claude, codex, extras). 2. `termanch-server --ensure-env`, idempotent, run at start and on `set_env`; container installs into the volume, host installs via detected package manager (apt first) for ticked components only. 3. Stream progress; audit-log without output.
+Done-when: ticking a component installs it; re-running changes nothing; unticked ones are untouched.
+
+### B.5 Environment checkboxes in the app — [ ]
+Class: implement · Needs: B.4, B.3 · Check: `cd packages/client && npx --yes pnpm@9 test`
+Do: checkboxes in Add Server and Server settings, progress view, defaults tmux and herdr on.
+Done-when: a profile change from a phone is applied on the server and shown after reload.
+
+### B.6 Bundle herdr and keep it updated (0059) — [ ]
+Class: implement · Needs: B.1 · Check: `grep -q herdr docker/Dockerfile && test -f .github/workflows/image-refresh.yaml`
+Do: 1. Dockerfile fetches the release binary per arch. 2. `termanch-updater` (daily, GitHub releases, checksum when published, keep previous, rollback on failed health check). 3. Scheduled and release-triggered image rebuild. 4. Image size within the #21 gate.
+Done-when: a container started from an old image updates herdr within 24 h; rollback tested.
+
+### B.7 Agent state detection (#19, 0061) — [ ]
+Class: implement · Needs: B.1, 0.1 · Check: `cargo test -p termanch-server`
+Do: process-tree scan per pane for claude/codex/herdr; states idle/working/needs input/done/error; adapters for herdr status and Claude/Codex hooks; documented heuristic; audit without output; protocol message to clients.
+Done-when: running `claude` or `codex` in a pane shows state changes within 5 s.
+
+### B.8 Agent UI, inbox and Web Push — [ ]
+Class: implement · Needs: B.7, A.2, A.3 · Check: `cd packages/client && npx --yes pnpm@9 test`
+Do: state chips, "needs you" inbox, tab badge, quick-answer buttons for y/n and numbered choices, installed-PWA Web Push (VAPID, no terminal text in the payload) with in-app fallback.
+Done-when: with the PWA closed, a needs-input event reaches the phone.
+
+## Phase C: directory scale (0060, fact 0022)
+
+### C.1 Spike: R2 + CDN limits — [ ]‖
+Class: explore · Needs: none · Check: `test -s docs/facts/0023-r2-cdn-spike.md`
+Context: Free limits in fact 0022 are unverified. Zone `vivantel.dev` is on Cloudflare; the Cloudflare token is in the repo `.env` (never print it).
+Do: create a public R2 bucket on a custom domain (e.g. `dir.termanch.vivantel.dev`), set a Cache Rule (1 h edge TTL), measure that repeated GETs do not invoke any Worker or class B operation, confirm free-tier numbers from Cloudflare docs, record the verdict and update fact 0022.
+Done-when: fact 0023 states pass/fail with measurements.
+
+### C.2 Announce on change plus 7-day keepalive — [ ]
+Class: implement · Needs: none · Check: `cargo test -p termanch-server`
+Context: `packages/server/src/directory.rs` has `REFRESH_EVERY` = 12 h.
+Do: announce on IP/port/fingerprint/claim change and every 7 days; unclaimed 5 min stays; adjust tests; update fact 0022.
+Done-when: a claimed idle server announces once per 7 days (test with a fake clock).
+
+### C.3 Signed records on R2 behind the CDN — [ ]
+Class: implement · Needs: C.1, C.2 · Check: `cd packages/client && npx --yes pnpm@9 test`
+Do: `announce` writes `r/<id>.json` to R2; client `lookup` reads the CDN URL and retries with `?v=<seq>` on failed connect; D1 stays for claims until verified in production; migrate with rollback.
+Done-when: lookups produce zero Worker requests in Cloudflare analytics over a test day.
+
+### C.4 Owner-keyed server list — [ ]
+Class: implement · Needs: C.2 · Check: `cd packages/client && npx --yes pnpm@9 test`
+Do: D1 table (github id → server ids and names, no secrets); the OAuth exchange response includes it; client caches 1 h and writes on add/remove/rename; merges with localStorage on first login.
+Done-when: a server added in one browser appears in another after login with no extra reads.
+
+### C.5 Request-budget alarm — [ ]
+Class: implement · Needs: C.3, C.4 · Check: `grep -q directory-request-budget docs/guardrails/INDEX.md`
+Do: a daily scheduled workflow reads Cloudflare analytics for Workers requests and opens an issue above 60%; update fact 0022 with measured numbers.
+Done-when: the workflow runs green and the issue path is tested with a lowered threshold.
