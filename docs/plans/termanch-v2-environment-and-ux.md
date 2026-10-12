@@ -27,7 +27,7 @@ Do: 1. Key row (Esc, Tab sticky Ctrl, Alt, arrows, `| ~ /`, paste) and a visualV
 Done-when: on a phone, `ls`, Esc/Ctrl combos and scrolling work; results recorded in `docs/facts`.
 
 ### A.2 Installable PWA (#18) — [ ]
-Class: implement · Needs: A.1 · Check: `ls packages/client/dist/manifest.webmanifest`
+Class: implement · Needs: A.1, S.5 · Check: `ls packages/client/dist/manifest.webmanifest`
 Context: iOS Web Push requires an installed PWA (0061). `packages/client/public/manifest.json` exists; there is no service worker.
 Do: 1. Manifest, icons, service worker caching static assets only (no tokens in Cache/IndexedDB). 2. On visibilitychange/online, trigger reconnect. 3. Install prompt.
 Done-when: installable on Android and iOS; cold start from cache shows the shell offline.
@@ -47,9 +47,9 @@ Do: as v1 7.1. Note whether herdr fits the command backend or needs an adapter o
 Done-when: each tool has a verdict and a tested snippet or a written reason.
 
 ### B.2 Run modes on the server and installer (0058) — [ ]
-Class: implement · Needs: 0.1 · Check: `cargo test -p termanch-server`
+Class: implement · Needs: 0.1, S.1 · Check: `cargo test -p termanch-server`
 Context: Container mode is today's behaviour. Host mode runs the container with `--pid=host --privileged` and prefixes session commands with `nsenter -t 1 -m -u -i -n -p`; owner picks root or a dedicated `termanch` user at install. Guardrail `host-mode-explicit-consent` applies.
-Do: 1. `TERMANCH_RUN=container|host` plus `TERMANCH_RUN_USER`; startup self-check with a clear error. 2. `install.sh` accepts `host` and `host-user`, creates the user, passes flags. 3. Audit entry when a host session opens; mode in the server info message. 4. Test on a second container on a free port, leaving the running one alone.
+Do: 1. `TERMANCH_RUN=container|host` plus `TERMANCH_RUN_USER`, with the dedicated user pre-selected and root an explicit choice; startup self-check with a clear error. 2. `install.sh` accepts `host` and `host-user`, creates the user, passes flags. 3. Audit entry when a host session opens; mode in the server info message. 4. Test on a second container on a free port, leaving the running one alone.
 Done-when: host mode shows the host's `/etc/hostname` and processes; container mode does not; tests pass.
 
 ### B.3 Add Server mode choice and server settings — [ ]
@@ -59,7 +59,7 @@ Do: mode radio with the host warning, root/user choice, mode badge on server car
 Done-when: the generated command and QR carry the choice; badge visible.
 
 ### B.4 Environment profile on the server (0059) — [ ]
-Class: implement · Needs: B.2, B.1 · Check: `cargo test -p termanch-server`
+Class: implement · Needs: B.2, B.1, S.7 · Check: `cargo test -p termanch-server`
 Context: Profile lives in `$TERMANCH_CONFIG_DIR/env.json`, owner-only edits.
 Do: 1. `env.json` schema (tmux, herdr, zellij, claude, codex, extras). 2. `termanch-server --ensure-env`, idempotent, run at start and on `set_env`; container installs into the volume, host installs via detected package manager (apt first) for ticked components only. 3. Stream progress; audit-log without output.
 Done-when: ticking a component installs it; re-running changes nothing; unticked ones are untouched.
@@ -70,7 +70,7 @@ Do: checkboxes in Add Server and Server settings, progress view, defaults tmux a
 Done-when: a profile change from a phone is applied on the server and shown after reload.
 
 ### B.6 Bundle herdr and keep it updated (0059) — [ ]
-Class: implement · Needs: B.1 · Check: `grep -q herdr docker/Dockerfile && test -f .github/workflows/image-refresh.yaml`
+Class: implement · Needs: B.1, S.3 · Check: `grep -q herdr docker/Dockerfile && test -f .github/workflows/image-refresh.yaml`
 Do: 1. Dockerfile fetches the release binary per arch. 2. `termanch-updater` (daily, GitHub releases, checksum when published, keep previous, rollback on failed health check). 3. Scheduled and release-triggered image rebuild. 4. Image size within the #21 gate.
 Done-when: a container started from an old image updates herdr within 24 h; rollback tested.
 
@@ -84,13 +84,61 @@ Class: implement · Needs: B.7, A.2, A.3 · Check: `cd packages/client && npx --
 Do: state chips, "needs you" inbox, tab badge, quick-answer buttons for y/n and numbered choices, installed-PWA Web Push (VAPID, no terminal text in the payload) with in-app fallback.
 Done-when: with the PWA closed, a needs-input event reaches the phone.
 
+## Phase S: security (decisions 0062–0067, fact 0023)
+
+### S.1 Device-key credentials (0062) — [ ]
+Class: implement · Needs: 0.1 · Check: `cargo test -p termanch-server && cd packages/client && npx --yes pnpm@9 test`
+Context: Today `App.svelte` passes `githubToken` to `Connection` (`token: () => githubToken!`) and `packages/server/src/auth.rs` `identify()` asks GitHub who owns it, so every server sees a replayable token. Guardrail `github-token-stays-in-browser`. `packages/client/functions/api/oauth/exchange.ts` already holds `GITHUB_CLIENT_SECRET`.
+Do: 1. Client: non-extractable ECDSA P-256 key in IndexedDB. 2. Function: after the OAuth exchange, sign a device certificate (GitHub id, device public key, 7-day expiry, `kid`) with an Ed25519 key from a new Pages secret `CERT_SIGNING_KEY`; keep the cached `CryptoKey` in module scope (10 ms CPU limit); do not return the GitHub token to the browser beyond what the app needs, and never send it to servers. 3. Server: accept `kid`-addressed public keys from config, verify certificate and a signature over a server challenge that includes the `server_id`; keep the owner check and claim flow of 0053. 4. Per-owner revoked-device list stored on the server. 5. Remove the token from the wire protocol (`packages/core`), update tests and the e2e harness.
+Done-when: a connection succeeds with a certificate; a connection replayed to a different `server_id`, an expired or revoked certificate, and a certificate from an unknown `kid` all fail; the GitHub token appears in no server message or log (test greps both).
+
+### S.2 Passkey step-up for root and device revocation (0065) — [ ]
+Class: implement · Needs: S.1, B.2 · Check: `cargo test -p termanch-server`
+Context: Root host sessions (decision 0058) must not rely on the device certificate alone.
+Do: 1. WebAuthn registration at install (QR/command flow) and an assertion check every 12 h before a root session; verify on the server. 2. App: active sessions list, revoke device, end session. 3. Audit entries without session content.
+Done-when: a root session cannot start without a fresh assertion; revoking a device ends its sessions; tests cover both.
+
+### S.3 Signed releases, pinned installer, freeze file (0063) — [ ]
+Class: implement · Needs: 0.2 · Check: `grep -q cosign .github/workflows/docker-build.yaml && grep -q '@sha256:' packages/client/public/install.sh`
+Context: CI builds the image in `.github/workflows/docker-build.yaml`; `packages/client/public/install.sh` uses `ghcr.io/sergemso/termanch:latest`. Guardrail `releases-are-signed`.
+Do: 1. cosign keyless signing in CI for images and bundled artifacts. 2. A release step rewrites the installer with the published digest and verifies the signature (cosign or a digest check) before running. 3. A signed `freeze` file on the CDN that the installer and updater check. 4. Document hardware-key 2FA, scoped tokens, branch protection for installer, Dockerfile and workflows.
+Done-when: a tampered image or a published freeze file makes the installer stop; CI proves it with a test image.
+
+### S.4 Directory abuse controls and degraded mode (0064) — [ ]
+Class: implement · Needs: C.2 · Check: `cd packages/client && npx --yes pnpm@9 test`
+Context: `packages/client/functions/api/directory/_lib.ts` has `NEW_IDS_PER_SRC_PER_HOUR` and `MIN_ANNOUNCE_INTERVAL_MS`; abuse still costs Worker requests. Guardrail `directory-request-budget`.
+Do: 1. Cloudflare rate-limiting rule for announce (document and apply with the API token). 2. Hashcash proof for a new `server_id`, produced by the server, verified in `parseAnnounce`. 3. Client `connectToServer` falls back to the cached record when the directory returns 429/5xx. 4. Message on fresh install when the directory is down.
+Done-when: unproven new ids are rejected; with the directory forced to 503 an existing server still connects.
+
+### S.5 Web baseline: CSP and SECURITY.md (0066) — [ ]‖
+Class: implement · Needs: none · Check: `test -f packages/client/public/_headers && test -f SECURITY.md`
+Context: Fact 0023 notes the hosted client's headers were not checked.
+Do: 1. Check current headers with `curl -I`. 2. Add `_headers` (strict CSP without inline script, frame-ancestors none, HSTS, nosniff, referrer policy); fix any inline script the build emits. 3. `SECURITY.md` with the advisory channel and 90-day window. 4. Verify the app still works (login, add server, terminal).
+Done-when: `curl -I` shows the headers and the e2e or a manual login passes.
+
+### S.6 Privacy notice and delete-my-data (0066) — [ ]
+Class: implement · Needs: S.5, C.4 · Check: `cd packages/client && npx --yes pnpm@9 test`
+Do: privacy page in the client; authenticated `POST /api/me/delete` removing the owner list and the records of that owner's servers; tests; retention (30 days idle) stated.
+Done-when: after deletion, lookups of that owner's servers return 404 and the list is empty.
+
+### S.7 Change journal, dry-run and revert (0067) — [ ]
+Class: implement · Needs: B.2 · Check: `cargo test -p termanch-server`
+Context: Guardrail `host-changes-are-journaled`.
+Do: journal in the config dir; every installer and profile change writes an entry before applying; `--dry-run` list; `termanch-server --revert`; image rollback after a failed health check; short terms page.
+Done-when: installing then reverting in a test container restores the starting state; a failed health check restores the previous image.
+
+### S.8 Key rotation and incident runbook — [ ]
+Class: plan · Needs: S.1, S.3 · Check: `test -s docs/skills/incident-response.md`
+Do: write a procedure in `docs/skills/incident-response.md` for leaked certificate signing key (rotate by `kid`), compromised release (freeze file, revoke), directory flood, and disclosure handling; rehearse each once on a staging project.
+Done-when: the procedure exists and each scenario has a recorded rehearsal.
+
 ## Phase C: directory scale (0060, fact 0022)
 
 ### C.1 Spike: R2 + CDN limits — [ ]‖
-Class: explore · Needs: none · Check: `test -s docs/facts/0023-r2-cdn-spike.md`
+Class: explore · Needs: none · Check: `test -s docs/facts/0024-r2-cdn-spike.md`
 Context: Free limits in fact 0022 are unverified. Zone `vivantel.dev` is on Cloudflare; the Cloudflare token is in the repo `.env` (never print it).
 Do: create a public R2 bucket on a custom domain (e.g. `dir.termanch.vivantel.dev`), set a Cache Rule (1 h edge TTL), measure that repeated GETs do not invoke any Worker or class B operation, confirm free-tier numbers from Cloudflare docs, record the verdict and update fact 0022.
-Done-when: fact 0023 states pass/fail with measurements.
+Done-when: fact 0024 states pass/fail with measurements.
 
 ### C.2 Announce on change plus 7-day keepalive — [ ]
 Class: implement · Needs: none · Check: `cargo test -p termanch-server`
@@ -99,7 +147,7 @@ Do: announce on IP/port/fingerprint/claim change and every 7 days; unclaimed 5 m
 Done-when: a claimed idle server announces once per 7 days (test with a fake clock).
 
 ### C.3 Signed records on R2 behind the CDN — [ ]
-Class: implement · Needs: C.1, C.2 · Check: `cd packages/client && npx --yes pnpm@9 test`
+Class: implement · Needs: C.1, C.2, S.4 · Check: `cd packages/client && npx --yes pnpm@9 test`
 Do: `announce` writes `r/<id>.json` to R2; client `lookup` reads the CDN URL and retries with `?v=<seq>` on failed connect; D1 stays for claims until verified in production; migrate with rollback.
 Done-when: lookups produce zero Worker requests in Cloudflare analytics over a test day.
 

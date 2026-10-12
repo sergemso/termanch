@@ -12,6 +12,7 @@ tags: [deployment, sessions, agents, roadmap]
 
 - The profile (tmux, herdr, zellij, claude, codex, extras) is `env.json` in the server's config dir. Only the authenticated owner changes it, from the app (`set_env`); the server applies it idempotently at start and on change, and streams progress.
 - herdr ships in the image. A daily in-container updater downloads new release binaries into the persistent volume (checksum when published, previous version kept for rollback); CI also rebuilds the image weekly and on upstream releases.
+- Updates are opt-in in host mode and signed/verified everywhere (0063); every host change is journaled (0067).
 - In host mode the profile installs through the host package manager only for ticked components.
 
 ## Why

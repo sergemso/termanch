@@ -64,3 +64,9 @@
 0059-environment-profile-and-bundled-tools,"The environment profile lives on the server and bundled tools update themselves","deployment, sessions, agents, roadmap",active
 0060-directory-scale-r2-cdn,"The directory serves at least 10^5 servers on free tiers, with public records on R2 behind the CDN","directory, scale, networking, roadmap",active
 0061-agent-state-and-push,"Agent state comes from process scans and tool adapters; notifications are installed-PWA Web Push","agents, notifications, pwa, roadmap",active
+0062-device-key-credentials,"Browsers authenticate to servers with a device key and a signed certificate, never the GitHub token","security, auth, roadmap",active
+0063-signed-releases-and-opt-in-updates,"Releases are signed, the installer pins digests, and host-mode updates are opt-in","security, supply-chain, deployment, roadmap",active
+0064-directory-abuse-controls,"The directory resists abuse and clients keep working when it is exhausted","directory, security, scale, roadmap",active
+0065-host-mode-step-up,"Root host sessions need a passkey step-up and devices can be revoked","security, auth, deployment, roadmap",active
+0066-web-baseline-and-privacy,"The hosted client ships a strict CSP, a disclosure policy, a privacy notice and data deletion","security, privacy, web, roadmap",active
+0067-change-journal-and-revert,"Every host change is journaled, previewed and revertible","safety, deployment, roadmap",active

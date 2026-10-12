@@ -34,3 +34,6 @@ no-commits-on-the-default-branch,"Work must not happen on the default branch","p
 tracker-writes-follow-the-answer,"Writes to the plan tracker follow the project's answer","practice-packs, hooks, guardrail",active
 host-mode-explicit-consent,"Host mode needs explicit consent and is audited","security, deployment",active
 directory-request-budget,"The directory stays within the free request budget at 10^5 servers","directory, scale, cost",active
+github-token-stays-in-browser,"The GitHub token never goes to a server","security, auth",active
+releases-are-signed,"Releases, bundled tools and the installer are signed and verified","security, supply-chain",active
+host-changes-are-journaled,"Host changes are journaled and revertible","safety, deployment",active
