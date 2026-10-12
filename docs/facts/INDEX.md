@@ -27,5 +27,6 @@
 | 0024 | R2 and CDN spike results | directory, scale, cloudflare, r2, spike | active |
 | 0025 | Free write path spike results | directory, scale, nostr, spike | active |
 | 0026 | Client UI baseline before the v3 UI work | client, mobile, ios | active |
+| 0027 | What iOS fires on a swipe-typing correction in xterm's textarea | client, mobile, ios, terminal | active |
 
 <!-- bootstrap-generated: true -->

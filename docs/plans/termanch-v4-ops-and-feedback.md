@@ -6,7 +6,7 @@ Cold start: Svelte 5 client in `packages/client` (`src/App.svelte`, `Terminal.sv
 
 ## Problem reports (0074)
 
-### R.1 Report a problem button and issue template — [ ]‖
+### R.1 Report a problem button and issue template — [x]‖
 Class: implement · Needs: none · Check: `cd packages/client && npx --yes pnpm@9 test && test -f ../../.github/ISSUE_TEMPLATE/problem.yml`
 Context: There is no error memory in the client and no issue template (`.github/` has only `workflows/`). The repository is `sergemso/termanch`. Guardrail `diagnostics-never-include-secrets`. `App.svelte` already has a global error handler (`report`) and a `svelte:boundary` failure screen. A GitHub new-issue URL is limited to about 8 KB.
 Do: 1. Create `src/lib/report.ts`: a ring buffer of the last 10 errors (message, first stack frame, time) fed by the global handlers; `buildReport()` returning app version (bundle name), user agent summary, viewport numbers (`viewportBox`), connection state and the errors; a scrubber that removes certificates (`xxx.yyy` base64url pairs), claim secrets, tokens, IPv4/IPv6 addresses and `:port` pairs, and never reads terminal content or session names. 2. Add `.github/ISSUE_TEMPLATE/problem.yml` (GitHub issue form with a `diagnostics` textarea and a what-happened field) and `config.yml` pointing to it. 3. `reportUrl(report)` builds `https://github.com/sergemso/termanch/issues/new?template=problem.yml&diagnostics=...`; over 7000 characters it copies the text to the clipboard and opens the URL with a short paste note. 4. Add a Report a problem entry in the header and on the failure screen of `svelte:boundary`. 5. Tests with realistic samples (a real-looking certificate, claim secret, IPs, ports) proving the scrubber removes them, and the long-text clipboard path.
@@ -14,7 +14,7 @@ Done-when: unit tests pass including the scrubber samples; the template file exi
 
 ## Usage tiers (0073)
 
-### T.1 On-device usage meter — [ ]‖
+### T.1 On-device usage meter — [x]‖
 Class: implement · Needs: none · Check: `cd packages/client && npx --yes pnpm@9 test`
 Context: Decision 0073 and guardrail `usage-stays-on-device`. Thresholds in weekly foreground hours with an attached session: copper 1, silver 5, gold 15, platinum 30; the badge shows the last completed ISO week and progress for the current one. Storage is the browser's own (`localStorage` key `termanch_usage`), 8 weeks kept.
 Do: 1. Create `src/lib/usage.ts`: `addForeground(ms, now)` into an ISO-week bucket, `tierOf(hours)`, `summary(now)` (last completed week tier, current week hours and progress to the next tier, last 8 weeks). 2. A ticker in `App.svelte` that counts only while `document.visibilityState === 'visible'` and a session is attached (`activeSessionId` set and connected), in steps of at most 5 s so a suspended tab does not add time. 3. Pure functions for week boundaries (ISO weeks, Monday start, user's local time) with tests around year ends. 4. Nothing is sent anywhere.
@@ -28,13 +28,13 @@ Done-when: tests render the badge for each tier and the stats list; `FUNDING.yml
 
 ## iOS swipe typing
 
-### X.1 Capture what iOS fires on a swipe correction — [ ]
+### X.1 Capture what iOS fires on a swipe correction — [x]
 Class: explore · Needs: none · Check: `test -s docs/facts/0027-ios-swipe-typing-events.md`
 Context: On the owner's iPhone, swipe-typing "pleased" is auto-corrected to "phrased", and tapping another suggestion types a space instead of replacing the word. xterm.js 5.3 already sets `autocorrect=off`, `autocapitalize=off`, `spellcheck=false` on its hidden `.xterm-helper-textarea` (`src/Terminal.svelte` sets it to `opacity: 0`) and empties the textarea after each input. Hypothesis, unconfirmed: iOS has nothing to replace in the emptied textarea. The debug overlay switch (five taps on the title, `termanch_debug`) already exists.
 Do: 1. Behind the debug switch only, attach listeners for `beforeinput` (log `inputType`, `data`, `getTargetRanges()`), `input`, `compositionstart/update/end`, `keydown` and `selectionchange` on the helper textarea, logging also `value` and the selection; show the last 40 lines in the debug overlay with a Copy button. 2. Ask the owner to run: swipe a word, pick the first suggestion; swipe a word, pick a different suggestion; type a word and accept autocorrect; with the key row open and closed; paste the logs. 3. Write `docs/facts/0027-ios-swipe-typing-events.md` with the observed sequences and whether `insertReplacementText` or composition events appear, and a verdict: rollback feasible or compose line needed.
 Done-when: fact 0027 exists with the captured sequences and the verdict, and the logger ships behind the debug switch.
 
-### X.2 Make swipe-typing corrections work in the terminal — [ ]
+### X.2 Make swipe-typing corrections work in the terminal — [~] (code in PR #65; owner confirms on the iPhone)
 Class: implement · Needs: X.1 · Check: `cd packages/client && npx --yes pnpm@9 test`
 Context: Chosen by the verdict in fact 0027. Option rollback: keep the swiped word in the helper textarea until a space, Enter or other key, and when iOS reports a replacement send backspaces (0x7f times the previous word length) plus the replacement; the shadow buffer must reset on any non-text key or cursor movement. Option compose line: a text line above the key row where swiping and corrections work natively, sent with Enter or a Send button.
 Do: 1. Implement the option the fact recommends, in `src/Terminal.svelte` (rollback) or a new `ComposeLine.svelte` (compose line). 2. Unit-test the shadow-buffer logic (replace, reset on key, Unicode length) with synthetic event sequences taken from fact 0027. 3. Owner verifies on the iPhone with the procedure `docs/skills/mobile-ui-device-check.md`.
@@ -42,7 +42,7 @@ Done-when: unit tests pass with the captured sequences and the owner confirms on
 
 ## Remote uninstall (0072)
 
-### D.1 Certificate issue time and the uninstall message — [ ]
+### D.1 Certificate issue time and the uninstall message — [x]
 Class: implement · Needs: none · Check: `cargo test -p termanch-server -p termanch-core && cd packages/client && npx --yes pnpm@9 test`
 Context: Decision 0072. The device certificate payload (`packages/client/functions/api/oauth/exchange.ts`, `packages/server/src/cert.rs`) has `exp` only; freshness needs `iat`. `ClientMessage` in `packages/core/src/protocol.rs` (mirror `packages/client/src/lib/protocol.ts`). Handlers live in `packages/server/src/sessions.rs`; `AuthState` in `auth.rs`. Container mode has no host access.
 Do: 1. Add `iat` (unix seconds) to the certificate payload in the function and `Payload`/`DeviceCert` in `cert.rs` (optional on read so existing certificates still verify; a missing `iat` counts as not fresh). 2. Add `ClientMessage::Uninstall { confirm_name, delete_user, remove_tmux, kill_sessions }` and `ServerMessage::UninstallStarted { stage, mode }`/`UninstallDone`. 3. In the server, accept it only from the owner with `confirm_name == server_name` and a certificate whose `iat` is at most 1 hour old, else reply with a clear error (`Sign in again to uninstall`). 4. Stage 1 body in a new `uninstall.rs`: wipe the config dir contents (keys, owner, claim), audit each step without content, then exit the process after the reply. Do not delete the host user or packages here (that is D.3). 5. Tests: wrong name, stale `iat`, non-owner, success wipes the files in a temp config dir.
