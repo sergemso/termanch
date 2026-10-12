@@ -9,6 +9,9 @@ on:
     branches: [master]
     paths: ['docker/Dockerfile.base', '.github/workflows/base-image.yaml']
   workflow_dispatch:
+  # BOOTSTRAP ONLY: publishes the first base image from the PR that introduces it; removed in the same PR.
+  pull_request:
+    paths: ['docker/Dockerfile.base', '.github/workflows/base-image.yaml']
 
 permissions:
   contents: read
