@@ -239,6 +239,31 @@
     };
   });
 
+  /**
+   * A link pasted into a tab where the app is already open only changes the fragment (no reload), so
+   * the load-time handling below never sees it.
+   */
+  onMount(() => {
+    const onHash = () => {
+      const claim = parseClaim(window.location.hash);
+      const serverId = parseServerLink(window.location.hash);
+      if (!claim && !serverId) return;
+      window.history.replaceState({}, '', window.location.pathname);
+      if (!user) {
+        // Signed out: keep it across the GitHub login, as a load with the fragment does.
+        if (serverId) sessionStorage.setItem('termanch_pending_server', serverId);
+        else if (claim) sessionStorage.setItem('termanch_pending_claim', claim);
+      } else if (serverId) {
+        void addServerById(serverId);
+      } else if (claim) {
+        addPrefill = claim;
+        showAddServer = true;
+      }
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  });
+
   onMount(async () => {
     // A claim link (#claim=...), from a QR opened in the camera app, is kept across the GitHub login redirect.
     const claim = parseClaim(window.location.hash);

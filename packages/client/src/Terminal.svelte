@@ -137,7 +137,13 @@
     // instead of leaving a blank screen.
     try {
       const gl = new WebglAddon();
-      gl.onContextLoss(() => gl.dispose());
+      gl.onContextLoss(() => {
+        try {
+          gl.dispose();
+        } catch {
+          /* xterm 5.3 can throw while swapping renderers; the screen keeps its last frame until the next redraw */
+        }
+      });
       term.loadAddon(gl);
     } catch {
       /* DOM renderer */
