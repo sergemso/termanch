@@ -9,6 +9,7 @@
   import { Connection, type ConnState } from './lib/connection';
   import { lookup, type DirRecord } from './lib/directory';
   import { deviceKey, publicKeyB64, signChallenge, certExpiry } from './lib/device';
+  import AppShell from './AppShell.svelte';
   import { canInstall, promptInstall, isIosBrowser } from './lib/pwa';
 
   let user: string | null = null;
@@ -230,20 +231,11 @@
   }
 
   onMount(() => {
-    // The soft keyboard shrinks the visual viewport but not the layout one; follow it so the key row stays visible.
-    const vv = window.visualViewport;
-    const fit = () => {
-      document.documentElement.style.setProperty('--app-height', `${vv?.height ?? window.innerHeight}px`);
-      if (vv && vv.offsetTop) window.scrollTo(0, 0);
-    };
     const mq = window.matchMedia('(max-width: 720px)');
     const media = () => (narrow = mq.matches);
-    fit();
     media();
-    vv?.addEventListener('resize', fit);
     mq.addEventListener('change', media);
     return () => {
-      vv?.removeEventListener('resize', fit);
       mq.removeEventListener('change', media);
     };
   });
@@ -309,7 +301,7 @@
   });
 </script>
 
-<div class="app" style="display: flex; flex-direction: column; flex: 1; min-height: 0; {selectedServer ? 'height: var(--app-height, 100dvh); overflow: hidden;' : ''}">
+<AppShell pinned={!!selectedServer}>
   {#if !user}
     <div class="auth-screen">
       <div class="card" style="max-width: 400px; margin: auto; margin-top: 10vh;">
@@ -400,7 +392,7 @@
   {#if toast}
     <Toast {toast} onclose={() => toast = null} />
   {/if}
-</div>
+</AppShell>
 
 <style>
   .auth-screen {

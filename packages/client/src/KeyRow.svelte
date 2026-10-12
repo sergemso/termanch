@@ -44,7 +44,7 @@
   .row {
     display: flex;
     gap: 6px;
-    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    padding: 6px 8px 6px;
     overflow-x: auto;
     background: var(--bg-secondary);
     border-top: 1px solid var(--border);
