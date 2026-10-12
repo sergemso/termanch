@@ -38,6 +38,14 @@ const serverIdOf = (configDir) => {
   return createPublicKey(createPrivateKey({ key: der, format: 'der', type: 'pkcs8' }))
     .export({ format: 'der', type: 'spki' }).subarray(-32).toString('base64url');
 };
+// The real client build (pnpm build), served with the single-page-app fallback.
+const appDist = resolve(here, '../dist');
+const appServer = createServer((req, res) => {
+  const path = req.url.split('?')[0];
+  let file = join(appDist, path);
+  if (!file.startsWith(appDist) || !existsSync(file) || path === '/') file = join(appDist, 'index.html');
+  res.writeHead(200, { 'Content-Type': mime[extname(file)] ?? 'application/octet-stream' }).end(readFileSync(file));
+});
 const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 const dist = join(here, 'dist');
 const statics = createServer((req, res) => {
@@ -65,9 +73,11 @@ async function waitFor(fn, what, ms = 15000) {
 
 // --- run ---------------------------------------------------------------------------------------------
 if (!existsSync(BIN)) throw new Error(`server binary not found: ${BIN}`);
+if (!existsSync(join(appDist, 'index.html'))) throw new Error('client not built: run pnpm build');
 if (!existsSync(join(dist, 'index.html'))) throw new Error('harness not built: run vite build -c e2e/vite.config.ts');
 
 const webPort = await listen(statics);
+const appPort = await listen(appServer);
 const home = mkdtempSync(join(tmpdir(), 'termanch-e2e-'));
 const httpPort = randomPort();
 const udpPort = randomPort();
@@ -219,6 +229,64 @@ try {
   console.log(`    10 s of output (${(bytes / 1048576).toFixed(1)} MB reached the browser): ${cpu.toFixed(2)} CPU-s in ${wall.toFixed(1)} s = ${(share * 100).toFixed(0)}% of one vCPU (limit ${LIMITS.cpuShare * 100}%)`);
   if (bytes < 100000) fail(`only ${bytes} bytes of output reached the browser`);
   if (share > LIMITS.cpuShare) fail(`relaying output used ${(share * 100).toFixed(0)}% of a vCPU, over ${LIMITS.cpuShare * 100}%`);
+
+  // 7. The real app on a phone: connect, open a session, go back to the server list and connect again.
+  // Each lap used to risk a hang or a broken screen, so run several and fail on any page error.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+    await page.goto(`http://127.0.0.1:${appPort}/`);
+    const deviceKey = await page.evaluate(async () => {
+      const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign', 'verify']);
+      await new Promise((ok, no) => {
+        const r = indexedDB.open('termanch', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('device');
+        r.onsuccess = () => {
+          const tx = r.result.transaction('device', 'readwrite');
+          tx.objectStore('device').put(pair, 'key');
+          tx.oncomplete = ok;
+          tx.onerror = () => no(tx.error);
+        };
+        r.onerror = () => no(r.error);
+      });
+      const raw = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
+      return btoa(String.fromCharCode(...raw)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    });
+    await page.evaluate(
+      ([cert, item]) => {
+        localStorage.setItem('termanch_auth', JSON.stringify({ cert, login: 'alice' }));
+        localStorage.setItem('termanch_servers', JSON.stringify([item]));
+      },
+      [mint(deviceKey, 1, 'alice'), { server_url: '', server_id: serverId, server_name: 'e2e-server', registered_at: Date.now(), record }],
+    );
+    await page.reload();
+    // Removing a server asks first; declining keeps it.
+    page.once('dialog', (d) => d.dismiss());
+    await page.getByRole('button', { name: 'Remove server' }).click();
+    if (!(await page.getByText('e2e-server').isVisible())) fail('the server was removed without confirmation');
+    for (let lap = 1; lap <= 3; lap++) {
+      await page.getByRole('button', { name: 'Connect', exact: true }).click();
+      await page.locator('.dot.ok').waitFor({ timeout: 20000 }).catch(async (e) => {
+        console.log('page errors:', errors, '\n', (await page.locator('body').innerText()).slice(0, 400));
+        throw e;
+      });
+      // Connecting lands in a session by itself: the top bar names it instead of saying "Sessions".
+      await page.waitForFunction(() => !document.querySelector('button[aria-label=Sessions]')?.textContent?.includes('Sessions'), null, { timeout: 5000 });
+      await page.getByRole('button', { name: 'Sessions' }).click();
+      await page.getByText('s1', { exact: true }).first().click();
+      await page.locator('.xterm').waitFor({ timeout: 5000 });
+      await page.getByRole('button', { name: 'Sessions' }).click();
+      await page.getByRole('button', { name: '← Servers' }).click();
+      await page.getByText('Your Servers').waitFor({ timeout: 5000 });
+      console.log(`    lap ${lap}: connect, session, back to servers`);
+    }
+    if (errors.length) fail(`app flow raised errors: ${errors.slice(0, 3).join(' | ')}`);
+    await ctx.close();
+    console.log('ok  connect, open a session and return to the server list, three times, on a phone');
+  }
 } catch (e) {
   fail(e.stack ?? String(e));
 } finally {

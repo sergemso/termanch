@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { Terminal as XTermTerminal } from 'xterm';
   import { FitAddon } from 'xterm-addon-fit';
   import { WebglAddon } from 'xterm-addon-webgl';
@@ -27,6 +27,34 @@
   let fitAddon: FitAddon | null = null;
   let resizeObserver: ResizeObserver | null = null;
   let unsubscribe: (() => void) | null = null;
+  let webgl: WebglAddon | null = null;
+  let disposed = false;
+
+  /** Runs once: the WebGL addon goes before the terminal (the other order throws), and nothing here may throw. */
+  function teardown() {
+    if (disposed) return;
+    disposed = true;
+    if (qualityTimer) clearInterval(qualityTimer);
+    try {
+      unsubscribe?.();
+      resizeObserver?.disconnect();
+    } catch {
+      /* already gone */
+    }
+    try {
+      webgl?.dispose();
+    } catch {
+      /* the renderer may already be gone */
+    }
+    try {
+      term?.dispose();
+    } catch {
+      /* xterm 5.3 can throw while tearing down a renderer */
+    }
+    webgl = null;
+    term = null;
+    fitAddon = null;
+  }
 
   function sendInput(data: string) {
     if (activeSessionId) connection.send({ type: 'input', data: textToB64(data) });
@@ -143,8 +171,10 @@
         } catch {
           /* xterm 5.3 can throw while swapping renderers; the screen keeps its last frame until the next redraw */
         }
+        if (webgl === gl) webgl = null;
       });
       term.loadAddon(gl);
+      webgl = gl;
     } catch {
       /* DOM renderer */
     }
@@ -154,8 +184,13 @@
     term.onResize(({ cols, rows }) => sendResize(cols, rows));
 
     resizeObserver = new ResizeObserver(() => {
-      fitAddon?.fit();
-      if (term) sendResize(term.cols, term.rows);
+      if (disposed || !term) return;
+      try {
+        fitAddon?.fit();
+      } catch {
+        return; // mid-teardown or a renderer swap; the next resize fits again
+      }
+      sendResize(term.cols, term.rows);
     });
     resizeObserver.observe(terminalContainer);
 
@@ -174,17 +209,7 @@
       quality = kind ? `${kind === 'rtc' ? 'direct' : 'relay'}${connection.rtt != null ? ` · ${connection.rtt} ms` : ''}` : '';
     }, 1000);
 
-    return () => {
-      if (qualityTimer) clearInterval(qualityTimer);
-      unsubscribe?.();
-      resizeObserver?.disconnect();
-      term?.dispose();
-    };
-  });
-
-  onDestroy(() => {
-    resizeObserver?.disconnect();
-    term?.dispose();
+    return teardown;
   });
 </script>
 

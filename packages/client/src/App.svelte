@@ -11,6 +11,7 @@
   import { deviceKey, publicKeyB64, signChallenge, certExpiry } from './lib/device';
   import AppShell from './AppShell.svelte';
   import { DEBUG_KEY, tapCounter } from './lib/viewport';
+  import { updateAvailable, watchForUpdates } from './lib/update';
   import { canInstall, promptInstall, isIosBrowser } from './lib/pwa';
 
   const titleTap = tapCounter();
@@ -193,10 +194,29 @@
     connection.start();
   }
 
+  const lastKey = () => `termanch_last_session_${selectedServer?.server_id || selectedServer?.server_url || ''}`;
+
   function attach(id: string) {
     drawerOpen = false;
     activeSessionId = id;
+    try {
+      localStorage.setItem(lastKey(), id);
+    } catch {
+      /* private mode */
+    }
     connection?.send({ type: 'attach', session_id: id });
+  }
+
+  /** After connecting: open the session used last on this server, else the first one, so a tap on Connect lands in a terminal. */
+  function openDefaultSession(list: SessionInfo[]) {
+    if (activeSessionId || list.length === 0) return;
+    let last: string | null = null;
+    try {
+      last = localStorage.getItem(lastKey());
+    } catch {
+      /* private mode */
+    }
+    attach((list.find((x) => x.id === last) ?? list[0]).id);
   }
 
   function newSession() {
@@ -208,6 +228,7 @@
     switch (msg.type) {
       case 'sessions':
         sessions = msg.sessions;
+        openDefaultSession(msg.sessions);
         break;
       case 'session_attached':
         activeSessionId = msg.session_id;
@@ -246,7 +267,21 @@
     const media = () => (narrow = mq.matches);
     media();
     mq.addEventListener('change', media);
+    watchForUpdates();
+    // Last line of defence: an error nobody caught must not leave a dead screen without a word.
+    let lastReport = 0;
+    const report = (e: ErrorEvent | PromiseRejectionEvent) => {
+      const text = String('message' in e ? e.message : (e.reason?.message ?? e.reason ?? ''));
+      console.error('uncaught', text);
+      if (text.includes('ResizeObserver') || Date.now() - lastReport < 5000) return;
+      lastReport = Date.now();
+      showToast('Something went wrong. If the screen looks stuck, go back to Servers.', 'error');
+    };
+    window.addEventListener('error', report);
+    window.addEventListener('unhandledrejection', report);
     return () => {
+      window.removeEventListener('error', report);
+      window.removeEventListener('unhandledrejection', report);
       mq.removeEventListener('change', media);
     };
   });
@@ -330,6 +365,7 @@
     <header style="display: flex; justify-content: space-between; align-items: center; padding: {narrow ? '8px 12px' : '16px 24px'}; border-bottom: 1px solid var(--border); background: var(--bg-secondary);">
       <h1 style="font-size: 1.25rem; user-select: none; -webkit-user-select: none;" on:click={titleTapped}>Termanch</h1>
       <div style="display: flex; align-items: center; gap: 16px;">
+        {#if $updateAvailable}<button on:click={() => location.reload()} style="padding: 6px 12px;">Update available</button>{/if}
         {#if $canInstall}<button on:click={promptInstall} style="padding: 6px 12px;">Install app</button>{/if}
         <span style="color: var(--fg-muted);">@{user}</span>
         <button class="secondary" on:click={logout}>Logout</button>
@@ -344,6 +380,13 @@
     {/if}
 
     <main style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+      <svelte:boundary onerror={(e) => console.error('screen failed', e)}>
+      {#snippet failed(_error, reset)}
+        <div class="card" style="margin: auto; max-width: 360px; text-align: center;">
+          <p style="margin-bottom: 12px;">This screen failed to load.</p>
+          <button on:click={() => { leaveServer(); reset(); }}>Back to servers</button>
+        </div>
+      {/snippet}
       {#if !selectedServer}
         <ServerList {servers} onselect={connectToServer} onadd={() => { addPrefill = null; showAddServer = true; }} onremove={(i) => saveServers(servers.filter((_, n) => n !== i))} />
       {:else}
@@ -385,14 +428,16 @@
 
           <div style="flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;">
             {#if narrow}
-              <div style="padding: 6px 8px; background: var(--bg-secondary); border-bottom: 1px solid var(--border);">
-                <button class="secondary" aria-label="Sessions" style="padding: 6px 10px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" on:click={() => (drawerOpen = !drawerOpen)}>☰ {sessions.find((x) => x.id === activeSessionId)?.name ?? 'Sessions'}</button>
+              <div style="display: flex; gap: 6px; padding: 6px 8px; background: var(--bg-secondary); border-bottom: 1px solid var(--border);">
+                <button class="secondary" aria-label="Sessions" style="padding: 6px 10px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;" on:click={() => (drawerOpen = !drawerOpen)}>☰ {sessions.find((x) => x.id === activeSessionId)?.name ?? 'Sessions'}</button>
+                <button class="secondary" aria-label="Servers" style="padding: 6px 10px;" on:click={leaveServer}>Servers</button>
               </div>
             {/if}
             {#if connection}<Terminal {connection} {activeSessionId} {connState} />{/if}
           </div>
         </div>
       {/if}
+      </svelte:boundary>
     </main>
   {/if}
 
