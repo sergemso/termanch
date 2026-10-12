@@ -1,0 +1,17 @@
+name: Problem report
+description: Something in Termanch did not work (opened from the app's Report a problem button)
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, what you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Filled in by the app. It contains the app version, browser, screen numbers, connection state and recent error messages, with certificates, secrets, tokens and addresses removed. Please read it before submitting.
+      render: text

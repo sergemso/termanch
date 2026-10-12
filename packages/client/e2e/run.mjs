@@ -263,6 +263,18 @@ try {
       [mint(deviceKey, 1, 'alice'), { server_url: '', server_id: serverId, server_name: 'e2e-server', registered_at: Date.now(), record }],
     );
     await page.reload();
+    // Report a problem: shows scrubbed diagnostics and opens a prefilled issue on the project's repository.
+    await page.evaluate(() => {
+      window.__opened = [];
+      window.open = (u) => (window.__opened.push(String(u)), null);
+    });
+    await page.getByRole('button', { name: 'Report a problem' }).click();
+    const reportText = await page.locator('[aria-label="Report a problem"] textarea').inputValue();
+    if (!reportText.includes('app:') || !reportText.includes('window: 390x')) fail(`report text is missing diagnostics: ${reportText.slice(0, 120)}`);
+    await page.getByRole('button', { name: 'Open GitHub issue' }).click();
+    const opened = await page.evaluate(() => window.__opened[0] ?? '');
+    if (!opened.startsWith('https://github.com/sergemso/termanch/issues/new?template=problem.yml&diagnostics=')) fail(`unexpected report URL: ${opened.slice(0, 120)}`);
+    if (await page.locator('[aria-label="Report a problem"]').count()) fail('the report dialog stayed open');
     // Removing a server asks first; declining keeps it.
     page.once('dialog', (d) => d.dismiss());
     await page.getByRole('button', { name: 'Remove server' }).click();
