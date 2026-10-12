@@ -12,7 +12,7 @@ describe('issueCertificate', () => {
     expect(exp).toBe(1000 + CERT_LIFETIME_SECS);
     const [body, sig] = cert.split('.');
     expect(await crypto.subtle.verify({ name: 'Ed25519' }, pair.publicKey, dec(sig), dec(body))).toBe(true);
-    expect(JSON.parse(new TextDecoder().decode(dec(body)))).toEqual({ v: 1, kid: 'k9', sub: 7, login: 'octo', dpk, exp });
+    expect(JSON.parse(new TextDecoder().decode(dec(body)))).toEqual({ v: 1, kid: 'k9', sub: 7, login: 'octo', dpk, iat: 1000, exp });
   });
 });
 

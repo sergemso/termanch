@@ -21,11 +21,30 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(60);
 pub struct SessionManager {
     backend: Arc<dyn SessionBackend>,
     mode: RunMode,
+    server_name: String,
+    /// Called after an uninstall has wiped the configuration and told the client; stops the process.
+    on_uninstalled: Arc<dyn Fn() + Send + Sync>,
 }
 
 impl SessionManager {
     pub fn new(backend: Arc<dyn SessionBackend>, mode: RunMode) -> Self {
-        Self { backend, mode }
+        Self {
+            backend,
+            mode,
+            server_name: String::new(),
+            on_uninstalled: Arc::new(|| {}),
+        }
+    }
+
+    /// Enables remote uninstall: `server_name` is what the owner must type, `on_uninstalled` stops the server.
+    pub fn with_uninstall(
+        mut self,
+        server_name: String,
+        on_uninstalled: Arc<dyn Fn() + Send + Sync>,
+    ) -> Self {
+        self.server_name = server_name;
+        self.on_uninstalled = on_uninstalled;
+        self
     }
 
     /// Serves one authenticated connection until it ends or goes silent.
@@ -50,7 +69,7 @@ impl SessionManager {
                         // Who got a shell on the host and as whom; never what they typed.
                         info!(target: "audit", event = "host_session", github_id = identity.id, login = %identity.login, run_as = %self.mode.label(), session = %session_id);
                     }
-                    if let Err(e) = self.handle(client_msg, auth, &mut attachment, &mut cols, &mut rows, &link.tx).await {
+                    if let Err(e) = self.handle(client_msg, auth, &identity, &mut attachment, &mut cols, &mut rows, &link.tx).await {
                         if !send(&link.tx, &ServerMessage::Error { message: e.to_string() }).await { break; }
                     }
                 }
@@ -79,10 +98,12 @@ impl SessionManager {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)] // one connection's state, passed explicitly
     async fn handle(
         &self,
         msg: ClientMessage,
         auth: &crate::auth::AuthState,
+        identity: &crate::auth::Identity,
         attachment: &mut Option<Attachment>,
         cols: &mut u16,
         rows: &mut u16,
@@ -91,6 +112,33 @@ impl SessionManager {
         match msg {
             // The handshake happens once, before this loop (connection.rs).
             ClientMessage::Hello | ClientMessage::Auth { .. } => {}
+            ClientMessage::Uninstall { confirm_name, .. } => {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                if let Err(reason) = crate::uninstall::authorize(
+                    &self.server_name,
+                    &confirm_name,
+                    identity.issued_at,
+                    now,
+                ) {
+                    info!(target: "audit", event = "uninstall_refused", github_id = identity.id, reason);
+                    return Err(anyhow::anyhow!(reason));
+                }
+                info!(target: "audit", event = "uninstall_started", github_id = identity.id, login = %identity.login, mode = %self.mode.label());
+                *attachment = None;
+                crate::uninstall::wipe(auth.dir())?;
+                info!(target: "audit", event = "uninstall_config_wiped");
+                send_r(
+                    tx,
+                    &ServerMessage::UninstallDone {
+                        mode: self.mode.label(),
+                    },
+                )
+                .await?;
+                (self.on_uninstalled)();
+            }
             ClientMessage::RevokeDevice { device } => {
                 auth.revoke_device(&device)?;
                 send_r(tx, &ServerMessage::DeviceRevoked { device }).await?;

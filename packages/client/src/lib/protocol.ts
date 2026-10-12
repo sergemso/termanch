@@ -2,6 +2,7 @@ export type ClientMessage =
   | { type: 'hello' }
   | { type: 'auth'; cert: string; signature: string; server_token: string }
   | { type: 'revoke_device'; device: string }
+  | { type: 'uninstall'; confirm_name: string; delete_user?: boolean; remove_tmux?: boolean; kill_sessions?: boolean }
   | { type: 'list_sessions' }
   | { type: 'new_session'; name: string }
   | { type: 'ping' }
@@ -12,6 +13,7 @@ export type ClientMessage =
 export type ServerMessage =
   | { type: 'challenge'; nonce: string; server_id: string }
   | { type: 'device_revoked'; device: string }
+  | { type: 'uninstall_done'; mode: string }
   | { type: 'auth_ok'; user: string; server_name: string; mode?: string }
   | { type: 'sessions'; sessions: SessionInfo[] }
   | { type: 'session_attached'; session_id: string }
