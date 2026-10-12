@@ -95,6 +95,8 @@ const server = spawn(BIN, [], {
     TERMANCH_DIRECTORY_URL: '',
     TERMANCH_DEV_INFO: 'on',
     TERMANCH_CERT_KEYS: `e2e=${signerPublic}`,
+    LANG: 'C', // sessions must still get a UTF-8 locale from the server
+    LC_ALL: 'C',
     TERMANCH_CLAIM_SECRET: claim,
   },
   stdio: ['ignore', 'inherit', 'inherit'],
@@ -297,9 +299,13 @@ try {
         console.log('page errors:', errors, '\n', (await page.locator('body').innerText()).slice(0, 400));
         throw e;
       });
+      // Connecting lands in a live terminal: the hidden input has focus without any tap.
+      await page.waitForFunction(() => document.activeElement?.classList.contains('xterm-helper-textarea'), null, { timeout: 5000 });
       // Connecting lands in a session by itself: the top bar names it instead of saying "Sessions".
       await page.waitForFunction(() => !document.querySelector('button[aria-label=Sessions]')?.textContent?.includes('Sessions'), null, { timeout: 5000 });
       await page.getByRole('button', { name: 'Sessions' }).click();
+      const heights = await page.evaluate(() => [...document.querySelectorAll('aside button.icon')].map((b) => Math.round(b.getBoundingClientRect().height)));
+      if (heights.length !== 2 || heights[0] !== heights[1]) fail(`Refresh and New differ in size: ${heights}`);
       await page.getByText('s1', { exact: true }).first().click();
       await page.locator('.xterm').waitFor({ timeout: 5000 });
       if (lap === 3) {
@@ -342,6 +348,22 @@ try {
         });
         const pane = execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: { ...process.env, TMUX_TMPDIR: home }, encoding: 'utf8' });
         if (/^hello$/m.test(pane)) fail('the old word reached the shell as well');
+        // Other alphabets: Cyrillic typed on the phone must reach the shell as text, not as octal bytes.
+        await page.keyboard.press('Control+u');
+        await page.keyboard.type('echo привет');
+        await page.keyboard.press('Enter');
+        const utf8 = { ...process.env, TMUX_TMPDIR: home, LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' };
+        await waitFor(() => /^привет$/m.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: utf8, encoding: 'utf8' })), 'Cyrillic text in the shell output', 10000);
+        // Fn panel: navigation keys and symbols appear and go away.
+        await page.getByRole('button', { name: 'Fn', exact: true }).click();
+        await page.getByRole('button', { name: 'PgUp', exact: true }).waitFor({ timeout: 3000 });
+        await page.getByRole('button', { name: '{', exact: true }).waitFor({ timeout: 3000 });
+        await page.getByRole('button', { name: 'Fn', exact: true }).click();
+        if (await page.getByRole('button', { name: 'PgUp', exact: true }).count()) fail('the Fn panel did not close');
+        // Select: the screen text is available as selectable text.
+        await page.getByRole('button', { name: 'Select', exact: true }).click();
+        await page.waitForFunction(() => /привет/.test(document.querySelector('[aria-label="Select text"] pre')?.textContent ?? ''), null, { timeout: 5000 });
+        await page.getByRole('button', { name: 'Close', exact: true }).click();
         await page.evaluate(() => {
           localStorage.setItem('termanch_debug', '0');
           window.dispatchEvent(new Event('termanch-debug'));

@@ -46,3 +46,33 @@ export function clampFont(size: number): number {
 export function pinchFont(start: number, ratio: number): number {
   return clampFont(start * ratio);
 }
+
+/** The Fn panel: navigation and function keys (xterm sequences), then symbols that are awkward on a phone keyboard. */
+export const FN_KEYS: [string, string][] = [
+  ['PgUp', '\x1b[5~'],
+  ['PgDn', '\x1b[6~'],
+  ['Ins', '\x1b[2~'],
+  ['Del', '\x1b[3~'],
+  ['F1', '\x1bOP'],
+  ['F2', '\x1bOQ'],
+  ['F3', '\x1bOR'],
+  ['F4', '\x1bOS'],
+  ['F5', '\x1b[15~'],
+  ['F6', '\x1b[17~'],
+  ['F7', '\x1b[18~'],
+  ['F8', '\x1b[19~'],
+  ['F9', '\x1b[20~'],
+  ['F10', '\x1b[21~'],
+  ['F11', '\x1b[23~'],
+  ['F12', '\x1b[24~'],
+];
+
+export const SYMBOLS = ['{', '}', '[', ']', '(', ')', '<', '>', '\\', '`', '$', '&', '*', ';', '"', "'", '#', '@', '!', '=', '+', '_', '%', '^', ':', '?'];
+
+/** The last `maxLines` lines of a terminal buffer as plain text, trailing blank lines dropped (for the Select view). */
+export function bufferText(getLine: (i: number) => string | undefined, length: number, maxLines = 1000): string {
+  const out: string[] = [];
+  for (let i = Math.max(0, length - maxLines); i < length; i++) out.push((getLine(i) ?? '').replace(/\s+$/, ''));
+  while (out.length && out[out.length - 1] === '') out.pop();
+  return out.join('\n');
+}

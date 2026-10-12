@@ -106,6 +106,7 @@ impl Runner {
         let (program, args) = self.wrap(detach, program, args);
         Command::new(&program)
             .args(&args)
+            .envs(crate::locale::utf8_env())
             .output()
             .await
             .map_err(|e| anyhow!("cannot run {program}: {e}"))

@@ -22,6 +22,7 @@ mod directory;
 #[cfg(test)]
 mod e2e;
 mod link;
+mod locale;
 mod netutil;
 mod pty;
 mod rtc;

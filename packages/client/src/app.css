@@ -138,3 +138,14 @@ a:hover {
     overflow: hidden;
   }
 }
+
+/* One look for the small icon + label buttons (Refresh, New, ...). */
+button.icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}

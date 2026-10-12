@@ -7,11 +7,13 @@
 
   import type { Connection, ConnState } from './lib/connection';
   import { b64ToBytes, textToB64 } from './lib/connection';
-  import { applyMods, clampFont, pinchFont, FONT_DEFAULT, type Mods } from './lib/keys';
+  import { applyMods, bufferText, clampFont, pinchFont, FONT_DEFAULT, type Mods } from './lib/keys';
   import KeyRow from './KeyRow.svelte';
   import InputLog from './InputLog.svelte';
   import { attachInputLogger } from './lib/inputlog';
   import { replacementData, replacementKeys } from './lib/swipe';
+  import SelectView from './SelectView.svelte';
+  import { beep, bellEnabled, setBellEnabled, unlockAudio } from './lib/bell';
   import { DEBUG_KEY, debugEnabled } from './lib/viewport';
 
   export let connection: Connection;
@@ -33,6 +35,9 @@
   let unsubscribe: (() => void) | null = null;
   let webgl: WebglAddon | null = null;
   let disposed = false;
+  let selectText: string | null = null;
+  let bell = bellEnabled();
+  let lastEnter = 0;
   let stopLog: (() => void) | null = null;
   let stopReplace: (() => void) | null = null;
   let debug = debugEnabled(location.search, localStorage.getItem(DEBUG_KEY));
@@ -102,6 +107,18 @@
     } catch {
       /* clipboard unavailable */
     }
+  }
+
+  function openSelect() {
+    if (!term) return;
+    const buf = term.buffer.active;
+    selectText = bufferText((i) => buf.getLine(i)?.translateToString(true), buf.length);
+  }
+
+  function toggleBell() {
+    bell = !bell;
+    setBellEnabled(bell);
+    if (bell) unlockAudio();
   }
 
   function setFont(size: number) {
@@ -204,6 +221,22 @@
     }
     window.addEventListener('termanch-debug', syncDebug);
     term.onData((data) => typed(data));
+    term.onBell(() => bell && beep());
+    if (term.textarea) {
+      // The keyboard's return key says "return", not "OK/Done", and a tap on it must not drop the keyboard.
+      term.textarea.setAttribute('enterkeyhint', 'enter');
+      const area = term.textarea;
+      const noteEnter = (e: Event) => {
+        if ((e as KeyboardEvent).key === 'Enter' || (e as InputEvent).inputType === 'insertLineBreak') lastEnter = performance.now();
+      };
+      const keepFocus = () => {
+        // iOS blurs the field when its Done/OK key is used; right after an Enter, take the focus back.
+        if (!disposed && performance.now() - lastEnter < 600) setTimeout(() => !disposed && term?.focus(), 0);
+      };
+      area.addEventListener('keydown', noteEnter, true);
+      area.addEventListener('beforeinput', noteEnter, true);
+      area.addEventListener('blur', keepFocus);
+    }
     term.onResize(({ cols, rows }) => sendResize(cols, rows));
 
     resizeObserver = new ResizeObserver(() => {
@@ -224,6 +257,7 @@
         // tmux repaints the screen on attach; start clean so a re-attach never doubles the content.
         term?.reset();
         if (term) sendResize(term.cols, term.rows);
+        term?.focus(); // connecting lands in a live terminal
       }
     });
 
@@ -242,7 +276,10 @@
     class="screen"
     bind:this={terminalContainer}
     on:click={() => term?.focus()}
-    on:pointerdown={pointerDown}
+    on:pointerdown={(e) => {
+      unlockAudio();
+      pointerDown(e);
+    }}
     on:pointermove={pointerMove}
     on:pointerup={pointerUp}
     on:pointercancel={pointerUp}
@@ -251,10 +288,12 @@
     <span class="dot" class:ok={connState === 'connected'}></span>
     {connState === 'connected' ? quality || 'connected' : connState}
     <span class="spacer"></span>
+    <button class="font" aria-label={bell ? 'Mute bell' : 'Unmute bell'} aria-pressed={bell} on:pointerdown|preventDefault={toggleBell}>{bell ? '🔔' : '🔕'}</button>
     <button class="font" aria-label="Smaller text" on:pointerdown|preventDefault={() => setFont(fontSize - 1)}>A−</button>
     <button class="font" aria-label="Larger text" on:pointerdown|preventDefault={() => setFont(fontSize + 1)}>A+</button>
   </div>
-  <KeyRow bind:mods onkey={sendInput} onpaste={paste} oncopy={copy} />
+  <KeyRow bind:mods onkey={sendInput} onpaste={paste} oncopy={copy} onselect={openSelect} />
+  {#if selectText !== null}<SelectView text={selectText} onclose={() => { selectText = null; term?.focus(); }} />{/if}
 </div>
 
 <style>
