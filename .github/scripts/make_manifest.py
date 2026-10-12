@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+"""Writes manifest.json for a release (decision 0076).
+
+usage: make_manifest.py VERSION ASSET_DIR OUT [--freeze] [--notes TEXT]
+
+ASSET_DIR holds one file per architecture named termanch-server-<arch>-linux (x86_64, aarch64). The manifest
+lists each with its download URL under this project's GitHub releases and its SHA-256. CI signs the exact bytes
+written here, so the output is deterministic (sorted keys, no timestamps).
+"""
+import hashlib
+import json
+import re
+import sys
+from pathlib import Path
+
+BASE = "https://github.com/sergemso/termanch/releases/download"
+ARCHES = ("x86_64", "aarch64")
+
+
+def main(argv):
+    args = [a for a in argv[1:] if not a.startswith("--")]
+    freeze = "--freeze" in argv
+    notes = ""
+    if "--notes" in argv:
+        notes = argv[argv.index("--notes") + 1]
+        args = [a for a in args if a != notes]
+    if len(args) != 3:
+        sys.exit(__doc__)
+    version, asset_dir, out = args[0], Path(args[1]), Path(args[2])
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        sys.exit(f"version must look like 1.2.3, got {version!r}")
+    binaries = {}
+    for arch in ARCHES:
+        path = asset_dir / f"termanch-server-{arch}-linux"
+        if not path.is_file():
+            sys.exit(f"missing {path}")
+        binaries[arch] = {
+            "url": f"{BASE}/v{version}/{path.name}",
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        }
+    manifest = {"version": version, "freeze": freeze, "notes": notes, "binaries": binaries}
+    out.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+    print(f"wrote {out} for {version}")
+
+
+if __name__ == "__main__":
+    main(sys.argv)

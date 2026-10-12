@@ -1,0 +1,140 @@
+name: Release
+
+# A tag v<version> builds the static binaries, writes a manifest of their hashes, signs it with the release key
+# (decision 0076) and publishes both as a GitHub Release. Run by hand (workflow_dispatch) it does everything but
+# publish, with a throwaway key when the real one is not configured, so the pipeline can be tested.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version for a dry run (nothing is published)'
+        default: '0.0.0'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-latest, target: x86_64-unknown-linux-musl }
+          - { arch: aarch64, runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag matches the version in Cargo.toml
+        if: github.ref_type == 'tag'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          crate="$(grep -m1 '^version' packages/server/Cargo.toml | cut -d'"' -f2)"
+          if [ "$tag" != "$crate" ]; then echo "tag $GITHUB_REF_NAME does not match packages/server/Cargo.toml version $crate"; exit 1; fi
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install the musl toolchain
+        run: sudo apt-get update && sudo apt-get install -y musl-tools cmake
+
+      - name: Build
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CC_aarch64_unknown_linux_musl: musl-gcc
+          TERMANCH_BUILD: ${{ github.sha }}
+        run: cargo build --release --locked -p termanch-server --target ${{ matrix.target }}
+
+      - name: Gate - the binary is fully static
+        run: |
+          bin=target/${{ matrix.target }}/release/termanch-server
+          strip "$bin"
+          if readelf -l "$bin" | grep -q INTERP; then echo "the binary asks for a dynamic loader"; exit 1; fi
+          if readelf -d "$bin" 2>/dev/null | grep -q NEEDED; then echo "the binary needs shared libraries"; exit 1; fi
+          mkdir -p dist
+          cp "$bin" dist/termanch-server-${{ matrix.arch }}-linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.arch }}
+          path: dist/termanch-server-${{ matrix.arch }}-linux
+          retention-days: 7
+
+  manifest:
+    name: Manifest, signature and publish
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Version
+        id: v
+        run: |
+          if [ "${{ github.ref_type }}" = tag ]; then v="${GITHUB_REF_NAME#v}"; else v="${{ inputs.version }}"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Write the manifest
+        run: python3 .github/scripts/make_manifest.py "${{ steps.v.outputs.version }}" dist dist/manifest.json
+
+      - name: Sign the manifest
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.RELEASE_SIGNING_KEY }}
+        run: |
+          umask 077
+          if [ -n "$RELEASE_SIGNING_KEY" ]; then
+            printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release_key"
+            cp packages/server/release-keys.txt "$RUNNER_TEMP/release-keys.txt"
+          elif [ "${{ github.ref_type }}" = tag ]; then
+            echo "RELEASE_SIGNING_KEY is not set: refusing to publish an unsigned release"; exit 1
+          else
+            echo "::warning::RELEASE_SIGNING_KEY is not set; signing the dry run with a throwaway key"
+            ssh-keygen -q -t ed25519 -N '' -C throwaway -f "$RUNNER_TEMP/release_key"
+            echo "r1 $(cut -d' ' -f1,2 "$RUNNER_TEMP/release_key.pub")" > "$RUNNER_TEMP/release-keys.txt"
+          fi
+          ssh-keygen -Y sign -n termanch-release -f "$RUNNER_TEMP/release_key" dist/manifest.json
+          rm -f "$RUNNER_TEMP/release_key"
+          # the same check the installer makes with plain ssh-keygen
+          grep -v '^#' "$RUNNER_TEMP/release-keys.txt" | awk 'NF >= 3 { print "termanch-release " $2 " " $3 }' > "$RUNNER_TEMP/allowed_signers"
+          ssh-keygen -Y verify -f "$RUNNER_TEMP/allowed_signers" -I termanch-release -n termanch-release -s dist/manifest.json.sig < dist/manifest.json
+          echo "TERMANCH_RELEASE_KEYS_FILE=$RUNNER_TEMP/release-keys.txt" >> "$GITHUB_ENV"
+
+      - name: The server binary accepts what was just signed
+        run: |
+          chmod +x dist/termanch-server-x86_64-linux
+          TERMANCH_RELEASE_KEYS="$(cat "$TERMANCH_RELEASE_KEYS_FILE")" dist/termanch-server-x86_64-linux \
+            --verify-release dist/manifest.json --release-sig dist/manifest.json.sig --release-arch aarch64
+          # and refuses a changed manifest
+          cp dist/manifest.json "$RUNNER_TEMP/changed.json" && echo ' ' >> "$RUNNER_TEMP/changed.json"
+          if TERMANCH_RELEASE_KEYS="$(cat "$TERMANCH_RELEASE_KEYS_FILE")" dist/termanch-server-x86_64-linux \
+            --verify-release "$RUNNER_TEMP/changed.json" --release-sig dist/manifest.json.sig; then echo "a changed manifest was accepted"; exit 1; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest
+          path: |
+            dist/manifest.json
+            dist/manifest.json.sig
+          retention-days: 7
+
+      - name: Publish
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes \
+            dist/termanch-server-x86_64-linux dist/termanch-server-aarch64-linux dist/manifest.json dist/manifest.json.sig

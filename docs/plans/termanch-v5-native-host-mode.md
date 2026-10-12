@@ -6,19 +6,19 @@ Cold start: Rust workspace (`packages/core` wire types, `packages/server` the se
 
 ## Build and release
 
-### N.1 Static musl binary without OpenSSL — [ ]‖
+### N.1 Static musl binary without OpenSSL — [x]‖
 Class: implement · Needs: none · Check: `cargo tree -p termanch-server -i openssl-sys 2>&1 | grep -q 'did not match' && cargo build --release -p termanch-server`
 Context: Fact 0028. `reqwest` is the only OpenSSL user. Targets `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl`; CI already has native amd64 and arm64 runners (`docker-build.yaml`). `str0m` builds `aws-lc-rs` from source, which needs a C compiler and cmake.
 Do: 1. In the workspace `Cargo.toml` set `reqwest` to `default-features = false, features = ["json", "rustls-tls"]` (webpki roots, so no system certificate store is needed); fix any compile errors. 2. Add a CI job `static-binary` building both musl targets on the native runners (install `musl-tools`, `cmake`; `RUSTFLAGS=-C target-feature=+crt-static`), failing if `ldd` shows a dynamic dependency, and uploading the binaries as artifacts. 3. Run the existing browser e2e against the musl binary on x86_64 (set `TERMANCH_BIN`) to prove WebRTC, tmux, PTY and the directory announce work; check RSS with the e2e gates. 4. Keep the Docker image build unchanged.
 Done-when: `ldd` on both musl binaries reports "not a dynamic executable"; the e2e passes with the musl binary; `cargo tree -i openssl-sys` finds nothing.
 
-### N.2 Signed release pipeline — [ ]
+### N.2 Signed release pipeline — [~] (code in the N.2 PR; needs the owner to set the RELEASE_SIGNING_KEY secret before the first tag)
 Class: implement · Needs: N.1 · Check: `cargo test -p termanch-server manifest`
 Context: Decision 0076. No release workflow exists. The release key is an Ed25519 key kept as the GitHub Actions secret `RELEASE_SIGNING_KEY`; its public half, with a key id, is embedded in `packages/client/public/install.sh` and in the server binary (`packages/server/release-keys.txt`, same format as `cert-keys.txt`). `ed25519-dalek` is already a server dependency.
 Do: 1. New workflow `.github/workflows/release.yaml` on tags `v*`: build both musl binaries (reuse N.1), write `SHA256SUMS` and `manifest.json` (`{version, kid, binaries: {x86_64: {url, sha256}, aarch64: {...}}, freeze: false, notes}`), sign the exact manifest bytes with the release key, attach `manifest.json`, `manifest.sig` and the binaries to a GitHub Release. 2. In the server crate add `release.rs` with `verify_manifest(bytes, sig, keys)` (key id lookup, Ed25519 verify) and a CLI `termanch-server --verify-release <manifest> <sig>` used by the installer and updater. 3. Unit tests: valid manifest, tampered manifest, unknown key id, wrong signature, freeze flag parsed. 4. Document in `SECURITY.md` how the key is created, stored, rotated and what a freeze does; do not print the key anywhere.
 Done-when: the unit tests pass; a dry-run of the workflow on a test tag in a fork or with `workflow_dispatch` produces a manifest that `--verify-release` accepts and that fails after a one-byte change.
 
-### N.3 Change journal, dry-run and revert (moved from v2 S.7) — [ ]‖
+### N.3 Change journal, dry-run and revert (moved from v2 S.7) — [x]‖
 Class: implement · Needs: none · Check: `cargo test -p termanch-server journal`
 Context: Decision 0067 and guardrail `host-changes-are-journaled`: everything the installer, profile or updater changes on a machine (packages, users, files, units, firewall rules) is journaled before it is applied; `termanch-server --revert` undoes journaled changes; the journal is root-owned so the unprivileged server user cannot alter it.
 Do: 1. `journal.rs`: append-only JSON lines in a root-only directory (`/var/lib/termanch-root/journal.jsonl`), entry kinds `file_created`, `file_replaced` (with a backup path), `user_created`, `package_installed`, `unit_installed`, `firewall_rule_added`, each with enough data to revert and a timestamp. 2. `--dry-run` support: the installer prints the list of entries it would write before applying. 3. `termanch-server --revert [--only <kind>]` reverts in reverse order, skipping things that changed since (hash mismatch) and reporting them; user and package removal only when the entry says we created or installed them. 4. Tests in a temp directory for each kind, partial failure, and idempotence.
