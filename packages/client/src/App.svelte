@@ -8,6 +8,7 @@
   import { parseClaim, parseServerLink } from './lib/onboard';
   import { Connection, type ConnState } from './lib/connection';
   import { lookup, type DirRecord } from './lib/directory';
+  import { canInstall, promptInstall, isIosBrowser } from './lib/pwa';
 
   let user: string | null = null;
   let githubToken: string | null = null;
@@ -19,6 +20,7 @@
   let connState: ConnState = 'closed';
   let connDetail = '';
   let narrow = false;
+  let iosHint = isIosBrowser() && !localStorage.getItem('termanch_ios_hint');
   let drawerOpen = false;
   let showAddServer = false;
   let addPrefill: string | null = null;
@@ -318,10 +320,18 @@
     <header style="display: flex; justify-content: space-between; align-items: center; padding: {narrow ? '8px 12px' : '16px 24px'}; border-bottom: 1px solid var(--border); background: var(--bg-secondary);">
       <h1 style="font-size: 1.25rem;">Termanch</h1>
       <div style="display: flex; align-items: center; gap: 16px;">
+        {#if $canInstall}<button on:click={promptInstall} style="padding: 6px 12px;">Install app</button>{/if}
         <span style="color: var(--fg-muted);">@{user}</span>
         <button class="secondary" on:click={logout}>Logout</button>
       </div>
     </header>
+
+    {#if iosHint && !selectedServer}
+      <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); font-size: 0.85rem;">
+        <span style="flex: 1;">Install Termanch: tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. It starts faster and can notify you.</span>
+        <button class="secondary" style="padding: 4px 10px;" on:click={() => { iosHint = false; localStorage.setItem('termanch_ios_hint', '1'); }}>Dismiss</button>
+      </div>
+    {/if}
 
     <main style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
       {#if !selectedServer}

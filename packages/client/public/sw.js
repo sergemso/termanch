@@ -1,0 +1,78 @@
+// Service worker: makes the app start offline and fast. It caches the static app shell only. It never caches
+// /api/*, the installer, OAuth callbacks, cross-origin requests or anything with a query string, and it holds no
+// tokens: the GitHub token and device keys live in localStorage/IndexedDB, not here.
+const VERSION = 'v1';
+const SHELL = `termanch-shell-${VERSION}`;
+const ASSETS = `termanch-assets-${VERSION}`;
+const STATIC = /^\/(favicon\.svg|manifest\.webmanifest|icons\/[\w.-]+)$/;
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(SHELL).then((c) => c.add('/')).then(() => self.skipWaiting()));
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== SHELL && k !== ASSETS).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim()),
+  );
+});
+
+const withTimeout = (promise, ms) =>
+  Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
+
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  const url = new URL(req.url);
+  if (req.method !== 'GET' || url.origin !== self.location.origin) return;
+
+  // Page loads: the network first (so a new deploy shows at once), the cached shell when offline or slow.
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      (async () => {
+        try {
+          const res = await withTimeout(fetch(req), 4000);
+          if (res.ok && url.pathname === '/' && !url.search) {
+            const copy = res.clone();
+            event.waitUntil(caches.open(SHELL).then((c) => c.put('/', copy)));
+          }
+          return res;
+        } catch {
+          return (await caches.match('/', { cacheName: SHELL })) ?? Response.error();
+        }
+      })(),
+    );
+    return;
+  }
+
+  // Hashed build output never changes under the same name: cache first.
+  if (url.pathname.startsWith('/assets/') && !url.search) {
+    event.respondWith(
+      caches.open(ASSETS).then(async (cache) => {
+        const hit = await cache.match(req);
+        if (hit) return hit;
+        const res = await fetch(req);
+        if (res.ok) cache.put(req, res.clone());
+        return res;
+      }),
+    );
+    return;
+  }
+
+  // Icons and the manifest: show the cached copy, refresh it in the background.
+  if (STATIC.test(url.pathname) && !url.search) {
+    event.respondWith(
+      caches.open(ASSETS).then(async (cache) => {
+        const hit = await cache.match(req);
+        const refresh = fetch(req)
+          .then((res) => {
+            if (res.ok) cache.put(req, res.clone());
+            return res;
+          })
+          .catch(() => hit);
+        return hit ?? refresh;
+      }),
+    );
+  }
+});
