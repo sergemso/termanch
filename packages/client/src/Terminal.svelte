@@ -7,17 +7,21 @@
 
   import type { Connection, ConnState } from './lib/connection';
   import { b64ToBytes, textToB64 } from './lib/connection';
-  import { applyMods, bufferText, clampFont, pinchFont, FONT_DEFAULT, type Mods } from './lib/keys';
-  import KeyRow from './KeyRow.svelte';
-  import InputLog from './InputLog.svelte';
-  import { attachInputLogger } from './lib/inputlog';
-  import { replacementData, replacementKeys } from './lib/swipe';
-  import SelectView from './SelectView.svelte';
-  import FnKeyboard from './FnKeyboard.svelte';
-  import { cellAt, cellBox, ordered, selectionArgs, wordRange, type Cell } from './lib/selection';
+  import { applyMods, bufferText, clampFont, FONT_DEFAULT, type Mods } from './lib/keys';
+  import { beep, bellEnabled, installAudioUnlock, setBellEnabled, unlockAudio } from './lib/bell';
   import { copyText } from './lib/clipboard';
-  import { beep, bellEnabled, setBellEnabled, unlockAudio } from './lib/bell';
+  import { attachInputLogger } from './lib/inputlog';
+  import { attachReplacement } from './lib/swipe';
   import { DEBUG_KEY, debugEnabled } from './lib/viewport';
+  import { KeyboardMode } from './lib/terminal/keyboardMode';
+  import { attachReturnKeyGuard } from './lib/terminal/inputGuards';
+  import { PinchZoom } from './lib/terminal/pinch';
+  import { FONT_FAMILY, THEME } from './lib/terminal/theme';
+  import { TouchSelection, type Selection } from './lib/terminal/touchSelection';
+  import KeyRow from './KeyRow.svelte';
+  import FnKeyboard from './FnKeyboard.svelte';
+  import InputLog from './InputLog.svelte';
+  import SelectView from './SelectView.svelte';
 
   export let connection: Connection;
   export let activeSessionId: string | null = null;
@@ -27,46 +31,48 @@
   let mods: Mods = { ctrl: false, alt: false };
   let fontSize = clampFont(Number(localStorage.getItem(FONT_KEY)) || FONT_DEFAULT);
   let quality = '';
-  let qualityTimer: ReturnType<typeof setInterval> | null = null;
-  const pointers = new Map<number, { x: number; y: number }>();
-  let pinchStart: { dist: number; font: number } | null = null;
+  let selectText: string | null = null;
+  let bell = bellEnabled();
+  let fnOpen = false;
+  let sel: Selection | null = null;
+  let selStatus = '';
+  let debug = debugEnabled(location.search, localStorage.getItem(DEBUG_KEY));
+  const syncDebug = () => (debug = debugEnabled(location.search, localStorage.getItem(DEBUG_KEY)));
 
   let terminalContainer: HTMLDivElement;
   let term: XTermTerminal | null = null;
   let fitAddon: FitAddon | null = null;
-  let resizeObserver: ResizeObserver | null = null;
-  let unsubscribe: (() => void) | null = null;
   let webgl: WebglAddon | null = null;
   let disposed = false;
-  let selectText: string | null = null;
-  let fnOpen = false;
-  /** Touch selection: the two ends (absolute buffer rows), and what the finger is doing. */
-  let sel: { a: Cell; b: Cell } | null = null;
-  let selecting = false;
-  let dragHandle: 'a' | 'b' | null = null;
-  let pressTimer: ReturnType<typeof setTimeout> | null = null;
-  let pressAt = { x: 0, y: 0 };
-  let selStatus = '';
-  let bell = bellEnabled();
-  let lastEnter = 0;
-  let stopLog: (() => void) | null = null;
-  let stopReplace: (() => void) | null = null;
-  let debug = debugEnabled(location.search, localStorage.getItem(DEBUG_KEY));
-  const syncDebug = () => (debug = debugEnabled(location.search, localStorage.getItem(DEBUG_KEY)));
+  /** Everything to undo on teardown, in the order it was set up. */
+  const cleanups: (() => void)[] = [];
+
+  // --- controllers: each owns one concern and is tested on its own (src/lib/terminal) -------------------
+  const pinch = new PinchZoom();
+  const keyboard = new KeyboardMode({
+    field: () => term?.textarea ?? null,
+    isFocused: () => document.activeElement === term?.textarea,
+    isSystemKeyboardUp: () => !!window.visualViewport && window.innerHeight - window.visualViewport.height > 150,
+    onFnChange: (open) => (fnOpen = open),
+  });
+  const touch = new TouchSelection({
+    term: () => term,
+    screenRect: () => terminalContainer?.querySelector('.xterm-screen')?.getBoundingClientRect() ?? null,
+    hostRect: () => terminalContainer?.getBoundingClientRect() ?? null,
+    onChange: (s) => (sel = s),
+    vibrate: () => navigator.vibrate?.(12),
+  });
 
   /** Runs once: the WebGL addon goes before the terminal (the other order throws), and nothing here may throw. */
   function teardown() {
     if (disposed) return;
     disposed = true;
-    stopLog?.();
-    stopReplace?.();
-    window.removeEventListener('termanch-debug', syncDebug);
-    if (qualityTimer) clearInterval(qualityTimer);
-    try {
-      unsubscribe?.();
-      resizeObserver?.disconnect();
-    } catch {
-      /* already gone */
+    for (const undo of cleanups.splice(0).reverse()) {
+      try {
+        undo();
+      } catch {
+        /* already gone */
+      }
     }
     try {
       webgl?.dispose();
@@ -113,11 +119,7 @@
       for (let i = 0; i < term.rows; i++) lines.push(buf.getLine(buf.viewportY + i)?.translateToString(true) ?? '');
       text = lines.join('\n').replace(/\s+$/, '');
     }
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      /* clipboard unavailable */
-    }
+    await copyText(text);
   }
 
   function openSelect() {
@@ -126,126 +128,20 @@
     selectText = bufferText((i) => buf.getLine(i)?.translateToString(true), buf.length);
   }
 
+  async function copySelection() {
+    const text = touch.text();
+    selStatus = text && (await copyText(text)) ? 'Copied' : 'Nothing to copy';
+    setTimeout(() => (selStatus = ''), 1500);
+    if (text) touch.clear();
+  }
+
   function toggleBell() {
     bell = !bell;
     setBellEnabled(bell);
-    if (bell) unlockAudio();
-  }
-
-  const area = () => term?.textarea ?? null;
-
-  /** Brings the system keyboard back. iOS keeps focus on the field when the user hides the keyboard, so a plain
-   *  focus() does nothing; blur first, inside the tap, and focus again. */
-  function showSystemKeyboard() {
-    const a = area();
-    if (!a) return;
-    a.setAttribute('inputmode', 'text');
-    a.blur();
-    a.focus();
-  }
-
-  function focusTerminal() {
-    if (fnOpen) return term?.focus();
-    showSystemKeyboard();
-  }
-
-  function openFn() {
-    const a = area();
-    if (!a) return;
-    fnOpen = true;
-    a.setAttribute('inputmode', 'none'); // focused, but the system keyboard stays away
-    a.blur();
-    a.focus();
-  }
-
-  function closeFn() {
-    fnOpen = false;
-    showSystemKeyboard();
-  }
-
-  function toggleFn() {
-    if (fnOpen) closeFn();
-    else openFn();
-  }
-
-  /** The keyboard button in the status bar: hide the system keyboard when it is up, show it when it is not. */
-  function toggleKeyboard() {
-    if (fnOpen) return closeFn();
-    const a = area();
-    const vv = window.visualViewport;
-    const up = !!vv && window.innerHeight - vv.height > 150;
-    if (up && document.activeElement === a) a?.blur();
-    else showSystemKeyboard();
-  }
-
-  // --- touch selection -------------------------------------------------------------------------------
-  const screenRect = () => terminalContainer?.querySelector('.xterm-screen')?.getBoundingClientRect() ?? null;
-
-  function cellFor(e: { clientX: number; clientY: number }): Cell | null {
-    const r = screenRect();
-    if (!r || !term) return null;
-    return cellAt(e.clientX, e.clientY, r, term.cols, term.rows, term.buffer.active.viewportY);
-  }
-
-  function applySel() {
-    if (!sel || !term) return;
-    const [start, end] = ordered(sel.a, sel.b);
-    const { col, row, length } = selectionArgs(start, end, term.cols);
-    term.select(col, row, length);
-  }
-
-  function clearSel() {
-    sel = null;
-    selecting = false;
-    dragHandle = null;
-    term?.clearSelection();
-  }
-
-  function beginSelect() {
-    pressTimer = null;
-    const cell = term && cellFor({ clientX: pressAt.x, clientY: pressAt.y });
-    if (!cell || !term) return;
-    const text = term.buffer.active.getLine(cell.row)?.translateToString(true) ?? '';
-    const w = wordRange(text, cell.col);
-    sel = { a: { col: w.start, row: cell.row }, b: { col: w.end, row: cell.row } };
-    selecting = true;
-    applySel();
-    navigator.vibrate?.(12);
-  }
-
-  function selectMove(e: PointerEvent) {
-    if (!sel) return;
-    const cell = cellFor(e);
-    if (!cell) return;
-    if (dragHandle) sel = { ...sel, [dragHandle]: cell };
-    else if (selecting) sel = { ...sel, b: cell };
-    else return;
-    applySel();
-  }
-
-  function handleDown(which: 'a' | 'b', e: PointerEvent) {
-    e.stopPropagation();
-    e.preventDefault();
-    dragHandle = which;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  }
-
-  async function copySelection() {
-    const text = term?.getSelection() ?? '';
-    selStatus = text && (await copyText(text)) ? 'Copied' : 'Nothing to copy';
-    setTimeout(() => (selStatus = ''), 1500);
-    if (text) clearSel();
-  }
-
-  /** Pixel position of a selection end inside the screen box, or null when it is scrolled out of view. */
-  function endBox(which: 'a' | 'b') {
-    const r = screenRect();
-    const host = terminalContainer?.getBoundingClientRect();
-    if (!sel || !term || !r || !host) return null;
-    const [start, end] = ordered(sel.a, sel.b);
-    const cell = which === 'a' ? start : end;
-    const box = cellBox(cell, r, term.cols, term.rows, term.buffer.active.viewportY);
-    return box && { x: box.x + (r.left - host.left) + (which === 'b' ? box.w : 0), y: box.y + (r.top - host.top) + box.h };
+    if (bell) {
+      unlockAudio();
+      beep(); // doubles as a sound check
+    }
   }
 
   function setFont(size: number) {
@@ -257,42 +153,24 @@
     }
   }
 
-  const spread = () => {
-    const [a, b] = [...pointers.values()];
-    return Math.hypot(a.x - b.x, a.y - b.y);
-  };
-  function pointerDown(e: PointerEvent) {
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pointers.size === 2) {
-      pinchStart = { dist: spread(), font: fontSize };
-      if (pressTimer) clearTimeout(pressTimer);
-      pressTimer = null;
-    } else if (e.pointerType === 'touch' && !dragHandle) {
-      pressAt = { x: e.clientX, y: e.clientY };
-      if (pressTimer) clearTimeout(pressTimer);
-      pressTimer = setTimeout(beginSelect, 450);
-    }
+  function onPointerDown(e: PointerEvent) {
+    pinch.down(e.pointerId, e.clientX, e.clientY, fontSize);
+    touch.pointerDown(e.clientX, e.clientY, { touch: e.pointerType === 'touch', second: pinch.fingers > 1 });
   }
-  function pointerMove(e: PointerEvent) {
-    if (pressTimer && Math.hypot(e.clientX - pressAt.x, e.clientY - pressAt.y) > 10) {
-      clearTimeout(pressTimer); // the finger moved: a scroll, not a long press
-      pressTimer = null;
-    }
-    selectMove(e);
-    if (!pointers.has(e.pointerId)) return;
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (pointers.size === 2 && pinchStart && pinchStart.dist > 0) {
-      const next = pinchFont(pinchStart.font, spread() / pinchStart.dist);
-      if (next !== fontSize) setFont(next);
-    }
+  function onPointerMove(e: PointerEvent) {
+    touch.pointerMove(e.clientX, e.clientY);
+    const next = pinch.move(e.pointerId, e.clientX, e.clientY);
+    if (next !== null && next !== fontSize) setFont(next);
   }
-  function pointerUp(e: PointerEvent) {
-    if (pressTimer) clearTimeout(pressTimer);
-    pressTimer = null;
-    selecting = false;
-    dragHandle = null;
-    pointers.delete(e.pointerId);
-    if (pointers.size < 2) pinchStart = null;
+  function onPointerUp(e: PointerEvent) {
+    touch.pointerUp();
+    pinch.up(e.pointerId);
+  }
+  function grabHandle(end: 'a' | 'b', e: PointerEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    touch.grab(end);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
 
   function sendResize(cols: number, rows: number) {
@@ -300,38 +178,9 @@
   }
 
   onMount(() => {
-    term = new XTermTerminal({
-      cursorBlink: true,
-      fontSize,
-      fontFamily: '"JetBrains Mono", "Fira Code", "Monaco", "Menlo", monospace',
-      theme: {
-        background: '#0d1117',
-        foreground: '#e6edf3',
-        cursor: '#58a6ff',
-        cursorAccent: '#0d1117',
-        selectionBackground: 'rgba(88, 166, 255, 0.3)',
-        black: '#161b22',
-        red: '#f85149',
-        green: '#3fb950',
-        yellow: '#d29922',
-        blue: '#58a6ff',
-        magenta: '#a371f7',
-        cyan: '#39c5cf',
-        white: '#e6edf3',
-        brightBlack: '#484f58',
-        brightRed: '#ff7b72',
-        brightGreen: '#56d364',
-        brightYellow: '#e3b341',
-        brightBlue: '#79b8ff',
-        brightMagenta: '#b490f7',
-        brightCyan: '#56d4dd',
-        brightWhite: '#ffffff',
-      },
-    });
-
+    term = new XTermTerminal({ cursorBlink: true, fontSize, fontFamily: FONT_FAMILY, theme: THEME });
     fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
-
     term.open(terminalContainer);
     // WebGL is the fast renderer; where it is missing or its context is lost, xterm's DOM renderer takes over
     // instead of leaving a blank screen.
@@ -352,41 +201,25 @@
     }
     fitAddon.fit();
 
+    cleanups.push(installAudioUnlock());
     if (term.textarea) {
-      stopLog = attachInputLogger(term.textarea);
-      // iOS swipe typing: choosing another suggestion replaces the word xterm already sent (fact 0027).
-      const area = term.textarea;
-      const onReplace = (e: Event) => {
-        const data = replacementData(e as InputEvent);
-        if (data !== null) sendInput(replacementKeys(area.value, area.selectionStart, area.selectionEnd, data));
-      };
-      area.addEventListener('beforeinput', onReplace, true);
-      stopReplace = () => area.removeEventListener('beforeinput', onReplace, true);
+      cleanups.push(attachInputLogger(term.textarea));
+      cleanups.push(attachReplacement(term.textarea, sendInput)); // fact 0027
+      cleanups.push(attachReturnKeyGuard(term.textarea, () => !disposed && term?.focus()));
     }
     window.addEventListener('termanch-debug', syncDebug);
-    term.onData((data) => typed(data));
-    // While selecting, the finger must not scroll the page or the terminal.
-    terminalContainer.addEventListener('touchmove', (ev) => (selecting || dragHandle) && ev.preventDefault(), { passive: false });
-    term.onScroll(() => (sel = sel)); // handles follow their text
-    term.onBell(() => bell && beep());
-    if (term.textarea) {
-      // The keyboard's return key says "return", not "OK/Done", and a tap on it must not drop the keyboard.
-      term.textarea.setAttribute('enterkeyhint', 'enter');
-      const area = term.textarea;
-      const noteEnter = (e: Event) => {
-        if ((e as KeyboardEvent).key === 'Enter' || (e as InputEvent).inputType === 'insertLineBreak') lastEnter = performance.now();
-      };
-      const keepFocus = () => {
-        // iOS blurs the field when its Done/OK key is used; right after an Enter, take the focus back.
-        if (!disposed && performance.now() - lastEnter < 600) setTimeout(() => !disposed && term?.focus(), 0);
-      };
-      area.addEventListener('keydown', noteEnter, true);
-      area.addEventListener('beforeinput', noteEnter, true);
-      area.addEventListener('blur', keepFocus);
-    }
-    term.onResize(({ cols, rows }) => sendResize(cols, rows));
+    cleanups.push(() => window.removeEventListener('termanch-debug', syncDebug));
 
-    resizeObserver = new ResizeObserver(() => {
+    term.onData((data) => typed(data));
+    term.onBell(() => bell && beep());
+    term.onScroll(() => touch.refresh()); // handles follow their text
+    term.onResize(({ cols, rows }) => sendResize(cols, rows));
+    // While selecting, the finger must not scroll the page or the terminal.
+    const blockScroll = (ev: TouchEvent) => touch.busy && ev.preventDefault();
+    terminalContainer.addEventListener('touchmove', blockScroll, { passive: false });
+    cleanups.push(() => terminalContainer.removeEventListener('touchmove', blockScroll));
+
+    const resizeObserver = new ResizeObserver(() => {
       if (disposed || !term) return;
       try {
         fitAddon?.fit();
@@ -396,22 +229,26 @@
       sendResize(term.cols, term.rows);
     });
     resizeObserver.observe(terminalContainer);
+    cleanups.push(() => resizeObserver.disconnect());
 
-    unsubscribe = connection.subscribe((msg) => {
-      if (msg.type === 'output') {
-        term?.write(b64ToBytes(msg.data));
-      } else if (msg.type === 'session_attached') {
-        // tmux repaints the screen on attach; start clean so a re-attach never doubles the content.
-        term?.reset();
-        if (term) sendResize(term.cols, term.rows);
-        term?.focus(); // connecting lands in a live terminal
-      }
-    });
+    cleanups.push(
+      connection.subscribe((msg) => {
+        if (msg.type === 'output') {
+          term?.write(b64ToBytes(msg.data));
+        } else if (msg.type === 'session_attached') {
+          // tmux repaints the screen on attach; start clean so a re-attach never doubles the content.
+          term?.reset();
+          if (term) sendResize(term.cols, term.rows);
+          term?.focus(); // connecting lands in a live terminal
+        }
+      }),
+    );
 
-    qualityTimer = setInterval(() => {
+    const qualityTimer = setInterval(() => {
       const kind = connection.kind;
       quality = kind ? `${kind === 'rtc' ? 'direct' : 'relay'}${connection.rtt != null ? ` · ${connection.rtt} ms` : ''}` : '';
     }, 1000);
+    cleanups.push(() => clearInterval(qualityTimer));
 
     return teardown;
   });
@@ -420,44 +257,38 @@
 <div class="wrap">
   {#if debug}<InputLog />{/if}
   <div class="screenbox">
-  <div
-    class="screen"
-    bind:this={terminalContainer}
-    on:click={() => {
-      if (sel) clearSel();
-      else focusTerminal();
-    }}
-    on:pointerdown={(e) => {
-      unlockAudio();
-      pointerDown(e);
-    }}
-    on:pointermove={pointerMove}
-    on:pointerup={pointerUp}
-    on:pointercancel={pointerUp}
-  ></div>
-  {#if sel && !selecting}
-    {@const a = endBox('a')}
-    {@const b = endBox('b')}
-    <div class="selbar">
-      <button type="button" on:click={copySelection}>Copy</button>
-      <button type="button" class="secondary" on:click={clearSel}>Done</button>
-    </div>
-    {#if a}<button type="button" class="handle" aria-label="Selection start" style="left: {a.x}px; top: {a.y}px;" on:pointerdown={(e) => handleDown('a', e)} on:pointermove={selectMove} on:pointerup={pointerUp}></button>{/if}
-    {#if b}<button type="button" class="handle" aria-label="Selection end" style="left: {b.x}px; top: {b.y}px;" on:pointerdown={(e) => handleDown('b', e)} on:pointermove={selectMove} on:pointerup={pointerUp}></button>{/if}
-  {/if}
-  {#if selStatus}<div class="selstatus">{selStatus}</div>{/if}
+    <div
+      class="screen"
+      bind:this={terminalContainer}
+      on:click={() => (sel ? touch.clear() : keyboard.tap())}
+      on:pointerdown={onPointerDown}
+      on:pointermove={onPointerMove}
+      on:pointerup={onPointerUp}
+      on:pointercancel={onPointerUp}
+    ></div>
+    {#if sel && !sel.dragging}
+      {@const a = (sel, touch.handlePosition('a'))}
+      {@const b = (sel, touch.handlePosition('b'))}
+      <div class="selbar">
+        <button type="button" on:click={copySelection}>Copy</button>
+        <button type="button" class="secondary" on:click={() => touch.clear()}>Done</button>
+      </div>
+      {#if a}<button type="button" class="handle" aria-label="Selection start" style="left: {a.x}px; top: {a.y}px;" on:pointerdown={(e) => grabHandle('a', e)} on:pointermove={onPointerMove} on:pointerup={onPointerUp}></button>{/if}
+      {#if b}<button type="button" class="handle" aria-label="Selection end" style="left: {b.x}px; top: {b.y}px;" on:pointerdown={(e) => grabHandle('b', e)} on:pointermove={onPointerMove} on:pointerup={onPointerUp}></button>{/if}
+    {/if}
+    {#if selStatus}<div class="selstatus">{selStatus}</div>{/if}
   </div>
   <div class="status" aria-live="polite">
     <span class="dot" class:ok={connState === 'connected'}></span>
     {connState === 'connected' ? quality || 'connected' : connState}
     <span class="spacer"></span>
-    <button class="font" aria-label="Show or hide the keyboard" on:pointerdown|preventDefault={toggleKeyboard}>⌨</button>
+    <button class="font" aria-label="Show or hide the keyboard" on:pointerdown|preventDefault={() => keyboard.toggleSystem()}>⌨</button>
     <button class="font" aria-label={bell ? 'Mute bell' : 'Unmute bell'} aria-pressed={bell} on:pointerdown|preventDefault={toggleBell}>{bell ? '🔔' : '🔕'}</button>
     <button class="font" aria-label="Smaller text" on:pointerdown|preventDefault={() => setFont(fontSize - 1)}>A−</button>
     <button class="font" aria-label="Larger text" on:pointerdown|preventDefault={() => setFont(fontSize + 1)}>A+</button>
   </div>
-  <KeyRow bind:mods onkey={sendInput} onpaste={paste} oncopy={copy} onselect={openSelect} {fnOpen} onfn={toggleFn} />
-  {#if fnOpen}<FnKeyboard bind:mods onkey={typed} onback={closeFn} />{/if}
+  <KeyRow bind:mods onkey={sendInput} onpaste={paste} oncopy={copy} onselect={openSelect} {fnOpen} onfn={() => keyboard.toggleFn()} />
+  {#if fnOpen}<FnKeyboard bind:mods onkey={typed} onback={() => keyboard.closeFn()} />{/if}
   {#if selectText !== null}<SelectView text={selectText} onclose={() => { selectText = null; term?.focus(); }} />{/if}
 </div>
 

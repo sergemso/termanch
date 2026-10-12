@@ -19,3 +19,17 @@ export function replacementData(e: Pick<InputEvent, 'inputType' | 'data' | 'isCo
   const data = e.data ?? e.dataTransfer?.getData('text/plain') ?? '';
   return data || null;
 }
+
+/**
+ * Listens on the terminal's hidden input and turns a keyboard's "replace the word you just typed" into
+ * keystrokes (see above). `send` receives the bytes to type. Returns the function that removes the listener.
+ * Add other keyboards' quirks as further cases in this one place.
+ */
+export function attachReplacement(area: HTMLTextAreaElement, send: (keys: string) => void): () => void {
+  const onBeforeInput = (e: Event) => {
+    const data = replacementData(e as InputEvent);
+    if (data !== null) send(replacementKeys(area.value, area.selectionStart, area.selectionEnd, data));
+  };
+  area.addEventListener('beforeinput', onBeforeInput, true);
+  return () => area.removeEventListener('beforeinput', onBeforeInput, true);
+}

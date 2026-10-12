@@ -248,6 +248,18 @@ try {
   // Each lap used to risk a hang or a broken screen, so run several and fail on any page error.
   {
     const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true, permissions: ['clipboard-read', 'clipboard-write'] });
+    // A counting stand-in for Web Audio, so the bell can be checked without a sound card.
+    await ctx.addInitScript(() => {
+      window.__beeps = 0;
+      window.AudioContext = class {
+        state = 'suspended';
+        currentTime = 0;
+        destination = {};
+        resume() { this.state = 'running'; return Promise.resolve(); }
+        createOscillator() { window.__beeps++; return { type: '', frequency: { value: 0 }, connect: (x) => x, start() {}, stop() {} }; }
+        createGain() { return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect: (x) => x }; }
+      };
+    });
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
@@ -355,6 +367,11 @@ try {
         await page.keyboard.press('Enter');
         const utf8 = { ...process.env, TMUX_TMPDIR: home, LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8' };
         await waitFor(() => /^привет$/m.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: utf8, encoding: 'utf8' })), 'Cyrillic text in the shell output', 10000);
+        // The terminal bell (what `printf '\a'` and agents ring) becomes a beep once audio was unlocked by a tap.
+        await page.keyboard.press('Control+u');
+        await page.keyboard.type("printf '\\a'");
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(() => window.__beeps > 0, null, { timeout: 8000 }).catch(() => fail('the terminal bell did not make a sound'));
         // Fn: a keyboard grid takes the system keyboard's place (and sends keys), ABC brings the system keyboard back.
         await page.keyboard.press('Control+u');
         await page.keyboard.type('echo ');
