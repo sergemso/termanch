@@ -72,7 +72,7 @@ export function applyView(sessions: HubSession[], agents: AgentMap, view: Sessio
     let order = 0;
     if (view.sort === 'human') {
       order = Number(needsYou(bb)) - Number(needsYou(aa));
-      if (!order && needsYou(aa) && needsYou(bb)) order = (aa?.ts ?? now) - (bb?.ts ?? now);
+      if (!order && needsYou(aa) && needsYou(bb)) order = (aa?.waitingSince ?? aa?.ts ?? now) - (bb?.waitingSince ?? bb?.ts ?? now);
     }
     if (view.sort === 'response') order = (bb?.lastResponseAt ?? -Infinity) - (aa?.lastResponseAt ?? -Infinity);
     if (view.sort === 'cache') order = (remaining(a) ?? Infinity) - (remaining(b) ?? Infinity);

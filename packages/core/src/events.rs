@@ -107,6 +107,9 @@ pub struct SessionAgentState {
     /// change. Absent until it has.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_response_at: Option<u64>,
+    /// Start of the continuous needs-input/error wait; activity and state refreshes do not advance it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waiting_since: Option<u64>,
 }
 
 #[cfg(test)]
@@ -140,7 +143,10 @@ mod tests {
         let old: SessionAgentState =
             serde_json::from_str(r#"{"session":"s","state":"idle","seq":1,"stale":false,"ts":5}"#)
                 .unwrap();
-        assert_eq!((old.agent, old.last_response_at), (None, None));
+        assert_eq!(
+            (old.agent, old.last_response_at, old.waiting_since),
+            (None, None, None)
+        );
         let v = serde_json::to_value(&SessionAgentState {
             session: "s".into(),
             state: AgentState::Idle,
@@ -149,9 +155,14 @@ mod tests {
             ts: 5,
             agent: None,
             last_response_at: None,
+            waiting_since: None,
         })
         .unwrap();
-        assert!(v.get("agent").is_none() && v.get("last_response_at").is_none());
+        assert!(
+            v.get("agent").is_none()
+                && v.get("last_response_at").is_none()
+                && v.get("waiting_since").is_none()
+        );
     }
 
     #[test]

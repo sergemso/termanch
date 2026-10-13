@@ -50,6 +50,8 @@ export interface SessionAgentState {
   agent?: string;
   /** When the agent last answered (ms since the epoch); absent until it has. */
   last_response_at?: number;
+  /** Start of the continuous human wait; absent on older servers. */
+  waiting_since?: number;
 }
 
 /** Plan v6: `seq` and `ts` come from the server; unknown `kind`s and extra fields are ignored. */

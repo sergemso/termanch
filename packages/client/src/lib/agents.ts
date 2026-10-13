@@ -10,6 +10,8 @@ export interface SessionAgent {
   agent?: string;
   /** When the agent last answered (ms): the server's value, advanced by `done` and `message` events as they arrive. */
   lastResponseAt?: number;
+  /** Start of the continuous needs-input/error wait; activity does not advance it. */
+  waitingSince?: number;
   /** As the server saw it at the snapshot; use `isStale` for the live answer. */
   stale: boolean;
   /** Server time (ms) of the last event. */
@@ -24,6 +26,8 @@ export interface SessionAgent {
 }
 
 export type AgentMap = Record<string, SessionAgent>;
+
+const waiting = (state: AgentState) => state === 'needs_input' || state === 'error';
 
 export const STALE_AFTER_MS = 60_000;
 export const TIMELINE_CAP = 10;
@@ -42,7 +46,8 @@ export function applySnapshot(map: AgentMap, states: SessionAgentState[]): Agent
     const old = map[s.session];
     // A lower seq than ours means the server restarted its counters: what we hold is from before, drop it.
     const keep = old && old.seq <= s.seq ? old : {};
-    next[s.session] = { ...keep, state: s.state, seq: s.seq, stale: s.stale, ts: s.ts, agent: s.agent, lastResponseAt: s.last_response_at };
+    next[s.session] = { ...keep, state: s.state, seq: s.seq, stale: s.stale, ts: s.ts, agent: s.agent, lastResponseAt: s.last_response_at,
+      waitingSince: waiting(s.state) ? s.waiting_since ?? (old && old.seq <= s.seq && waiting(old.state) ? old.waitingSince ?? old.ts : s.ts) : undefined };
   }
   return next;
 }
@@ -59,6 +64,7 @@ export function applyEvents(map: AgentMap, events: AgentEvent[]): { map: AgentMa
     const ev = e as Record<string, unknown>;
     switch (e.kind) {
       case 'state':
+        a.waitingSince = waiting(ev.state as AgentState) ? (waiting(a.state) ? a.waitingSince ?? cur?.ts ?? e.ts : e.ts) : undefined;
         if (ev.state === 'done' || (a.state === 'working' && (ev.state === 'idle' || ev.state === 'needs_input'))) a.lastResponseAt = e.ts;
         a.state = ev.state as AgentState;
         if (a.state !== 'needs_input') delete a.prompt;

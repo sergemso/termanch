@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { adaptiveDefault, applyView, loadView, presetView, saveView, withServerStatus } from './views';
-import type { AgentMap, SessionAgent } from './agents';
+import { applyEvents, applySnapshot, type AgentMap, type SessionAgent } from './agents';
 import type { HubSession } from './hub';
 
 const session = (serverId: string, id: string): HubSession => ({ id, name: id, agent: null, serverId, serverName: `Host ${serverId}`, key: `${serverId}/${id}` });
@@ -19,6 +19,24 @@ const keys = (view: ReturnType<typeof presetView>, map = agents) => applyView(se
 describe('session view presets', () => {
   it('Needs me includes errors and orders by longest wait across servers', () => {
     expect(keys(presetView('needs'))).toEqual(['b/oldest', 'a/error', 'a/newer']);
+  });
+  it('keeps the longest wait first through activity and a refreshed snapshot', () => {
+    let map = applyEvents({}, [
+      { session: 'b/oldest', seq: 1, ts: 1000, source: 'hook', confidence: 'high', kind: 'state', state: 'needs_input' },
+      { session: 'a/newer', seq: 1, ts: 2000, source: 'hook', confidence: 'high', kind: 'state', state: 'needs_input' },
+      { session: 'b/oldest', seq: 2, ts: 3000, source: 'hook', confidence: 'high', kind: 'message', summary: 'still waiting' },
+    ]).map;
+    expect(keys(presetView('needs'), map)).toEqual(['b/oldest', 'a/newer']);
+    map = applySnapshot(map, [
+      { session: 'b/oldest', seq: 2, ts: 4000, state: 'needs_input', stale: false },
+      { session: 'a/newer', seq: 1, ts: 2000, state: 'needs_input', stale: false },
+    ]);
+    expect(keys(presetView('needs'), map)).toEqual(['b/oldest', 'a/newer']);
+    const cold = applySnapshot({}, [
+      { session: 'b/oldest', seq: 2, ts: 4000, state: 'needs_input', stale: false, waiting_since: 1000 },
+      { session: 'a/newer', seq: 1, ts: 2000, state: 'needs_input', stale: false, waiting_since: 2000 },
+    ]);
+    expect(keys(presetView('needs'), cold)).toEqual(['b/oldest', 'a/newer']);
   });
   it('Working includes only working sessions', () => {
     expect(keys(presetView('working'))).toEqual(['b/working']);
