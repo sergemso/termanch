@@ -215,6 +215,12 @@ impl SessionManager {
                     send_r(tx, &ServerMessage::AgentEvents { events }).await?;
                 }
             }
+            ClientMessage::Peek { session, hash } => {
+                // Only a counter in the audit log: what is on the screen is never logged.
+                audit_peek(identity.id, &session);
+                let reply = peek(self.backend.as_ref(), &session, hash.as_deref()).await;
+                send_r(tx, &reply).await?;
+            }
             ClientMessage::ListSessions => {
                 let sessions = self.backend.list().await?;
                 send_r(tx, &ServerMessage::Sessions { sessions }).await?;
@@ -292,6 +298,59 @@ async fn next_events(
         }
     }
     Some(out)
+}
+
+fn audit_peek(github_id: u64, session: &str) {
+    info!(target: "audit", event = "peek", github_id, session = %session);
+}
+
+/// The most a snapshot carries; a phone screen is a few KB, this only stops a huge pane from being sent.
+pub const SNAPSHOT_MAX: usize = 16 * 1024;
+
+/// A session's visible screen for the client to draw at once (decision 0084). Never fails: a manager that cannot
+/// capture (herdr) gets an empty snapshot, which the client reads as "attach normally".
+pub async fn peek(
+    backend: &dyn SessionBackend,
+    session: &str,
+    known: Option<&str>,
+) -> ServerMessage {
+    use sha2::{Digest, Sha256};
+    let none = || ServerMessage::Snapshot {
+        session: session.to_string(),
+        text: String::new(),
+        hash: String::new(),
+        unchanged: false,
+    };
+    let Ok(raw) = backend.capture_styled(session).await else {
+        return none();
+    };
+    // Blank lines below the cursor carry nothing; keep the end of the text when it is too long.
+    let mut text = raw.trim_end().to_string();
+    if text.len() > SNAPSHOT_MAX {
+        let mut cut = text.len() - SNAPSHOT_MAX;
+        while !text.is_char_boundary(cut) {
+            cut += 1;
+        }
+        text = text[cut..].to_string();
+    }
+    let hash: String = Sha256::digest(text.as_bytes())[..8]
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    if known == Some(hash.as_str()) {
+        return ServerMessage::Snapshot {
+            session: session.to_string(),
+            text: String::new(),
+            hash,
+            unchanged: true,
+        };
+    }
+    ServerMessage::Snapshot {
+        session: session.to_string(),
+        text,
+        hash,
+        unchanged: false,
+    }
 }
 
 const PROMPT_CHANGED: &str = "That prompt changed";
@@ -462,5 +521,119 @@ mod answer_tests {
             .to_string()
             .contains("not confirmed"));
         assert!(b.sent.lock().unwrap().is_empty() && b2.sent.lock().unwrap().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod peek_tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    struct Fake(Mutex<Option<String>>);
+    #[async_trait::async_trait]
+    impl SessionBackend for Fake {
+        fn name(&self) -> &str {
+            "fake"
+        }
+        async fn list(&self) -> Result<Vec<termanch_core::protocol::SessionInfo>> {
+            Ok(vec![])
+        }
+        async fn create(&self, _: &str) -> Result<()> {
+            Ok(())
+        }
+        fn attach(&self, _: &str, _: u16, _: u16) -> Result<Attachment> {
+            Err(anyhow::anyhow!("no"))
+        }
+        async fn capture_styled(&self, _: &str) -> Result<String> {
+            self.0
+                .lock()
+                .unwrap()
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("no pane"))
+        }
+    }
+
+    fn parts(m: ServerMessage) -> (String, String, bool) {
+        match m {
+            ServerMessage::Snapshot {
+                text,
+                hash,
+                unchanged,
+                ..
+            } => (text, hash, unchanged),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_snapshot_carries_the_text_then_says_unchanged_for_a_known_hash() {
+        let b = Fake(Mutex::new(Some("\x1b[31mred\x1b[0m word\n\n\n".into())));
+        let (text, hash, unchanged) = parts(peek(&b, "s", None).await);
+        assert_eq!(
+            text, "\x1b[31mred\x1b[0m word",
+            "colour codes stay, trailing blank lines go"
+        );
+        assert!(!unchanged && hash.len() == 16);
+        let (text2, hash2, unchanged2) = parts(peek(&b, "s", Some(&hash)).await);
+        assert!(text2.is_empty() && unchanged2 && hash2 == hash);
+        *b.0.lock().unwrap() = Some("changed".into());
+        assert!(
+            !parts(peek(&b, "s", Some(&hash)).await).2,
+            "a different screen is sent in full"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_huge_pane_is_cut_to_its_end_and_a_manager_that_cannot_capture_gets_an_empty_snapshot(
+    ) {
+        let big = format!("{}END", "x".repeat(40_000));
+        let b = Fake(Mutex::new(Some(big)));
+        let (text, _, _) = parts(peek(&b, "s", None).await);
+        assert_eq!(text.len(), SNAPSHOT_MAX);
+        assert!(text.ends_with("END"));
+        let none = Fake(Mutex::new(None));
+        assert_eq!(
+            parts(peek(&none, "s", None).await),
+            (String::new(), String::new(), false)
+        );
+    }
+
+    #[derive(Clone, Default)]
+    struct Buf(Arc<Mutex<Vec<u8>>>);
+    impl std::io::Write for Buf {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(b);
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for Buf {
+        type Writer = Buf;
+        fn make_writer(&'a self) -> Buf {
+            self.clone()
+        }
+    }
+
+    /// The audit line the handler writes names the session and nothing from the screen.
+    #[tokio::test]
+    async fn the_audit_line_for_a_peek_holds_no_pane_text() {
+        let buf = Buf::default();
+        let sub = tracing_subscriber::fmt()
+            .with_writer(buf.clone())
+            .with_ansi(false)
+            .finish();
+        let secret = "SECRET-SCREEN-TEXT";
+        let b = Fake(Mutex::new(Some(secret.into())));
+        let _guard = tracing::subscriber::set_default(sub);
+        audit_peek(1, "s");
+        let reply = peek(&b, "s", None).await;
+        assert!(parts(reply).0.contains(secret));
+        let logged = String::from_utf8(buf.0.lock().unwrap().clone()).unwrap();
+        assert!(
+            logged.contains("peek") && !logged.contains(secret),
+            "{logged}"
+        );
     }
 }

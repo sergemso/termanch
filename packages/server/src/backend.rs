@@ -31,6 +31,10 @@ pub trait SessionBackend: Send + Sync {
     async fn capture(&self, _id: &str) -> Result<String> {
         Err(anyhow!("this session manager cannot read a pane"))
     }
+    /// Like `capture`, with the colour and style escape codes kept (for a snapshot the client draws).
+    async fn capture_styled(&self, id: &str) -> Result<String> {
+        self.capture(id).await
+    }
     /// Types `text` into the session's pane as if it was typed there.
     async fn send_text(&self, _id: &str, _text: &str) -> Result<()> {
         Err(anyhow!("this session manager cannot send keys"))
@@ -379,6 +383,18 @@ impl SessionBackend for TmuxBackend {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     }
 
+    async fn capture_styled(&self, id: &str) -> Result<String> {
+        if !valid_name(id) {
+            return Err(anyhow!("Unknown session"));
+        }
+        let args = ["capture-pane", "-e", "-p", "-t", &format!("={id}:")].map(String::from);
+        let out = self.runner.run("tmux", &args).await?;
+        if !out.status.success() {
+            return Err(anyhow!("the pane cannot be read"));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    }
+
     async fn send_text(&self, id: &str, text: &str) -> Result<()> {
         if !valid_name(id) {
             return Err(anyhow!("Unknown session"));
@@ -581,6 +597,13 @@ impl SessionBackend for CompositeBackend {
             .split_once(':')
             .ok_or_else(|| anyhow!("Unknown session"))?;
         self.part(kind)?.capture(name).await
+    }
+
+    async fn capture_styled(&self, id: &str) -> Result<String> {
+        let (kind, name) = id
+            .split_once(':')
+            .ok_or_else(|| anyhow!("Unknown session"))?;
+        self.part(kind)?.capture_styled(name).await
     }
 
     async fn send_text(&self, id: &str, text: &str) -> Result<()> {
@@ -1021,5 +1044,43 @@ mod tests {
         let _ = std::process::Command::new("tmux")
             .args(["kill-session", "-t", &format!("={name}")])
             .output();
+    }
+
+    /// Real tmux: the styled capture keeps the colour codes the plain one drops.
+    #[tokio::test]
+    async fn tmux_styled_capture_keeps_colour_codes() {
+        if std::process::Command::new("tmux")
+            .arg("-V")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+        let b = TmuxBackend::default();
+        let name = format!("sty{}", &uuid::Uuid::new_v4().simple().to_string()[..6]);
+        b.create(&name).await.unwrap();
+        b.send_text(&name, "printf '\\033[31mredword\\033[0m\\n'\r")
+            .await
+            .unwrap();
+        let mut styled = String::new();
+        for _ in 0..20 {
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            styled = b.capture_styled(&name).await.unwrap();
+            if styled.contains("redword") {
+                break;
+            }
+        }
+        let plain = b.capture(&name).await.unwrap();
+        let _ = std::process::Command::new("tmux")
+            .args(["kill-session", "-t", &format!("={name}")])
+            .output();
+        assert!(
+            styled.contains("\x1b[31m") && styled.contains("redword"),
+            "{styled:?}"
+        );
+        assert!(
+            !plain.contains("\x1b["),
+            "the plain capture has no escape codes"
+        );
     }
 }

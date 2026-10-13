@@ -4,6 +4,7 @@ export type ClientMessage =
   | { type: 'revoke_device'; device: string }
   | { type: 'uninstall'; confirm_name: string; delete_user?: boolean; remove_tmux?: boolean; kill_sessions?: boolean }
   | { type: 'agent_sync'; after: Record<string, number> }
+  | { type: 'peek'; session: string; hash?: string }
   | { type: 'answer'; session: string; prompt_id: string; seq: number; choice: number }
   | { type: 'reply'; session: string; text: string }
   | { type: 'list_sessions' }
@@ -21,6 +22,7 @@ export type ServerMessage =
   | { type: 'sessions'; sessions: SessionInfo[] }
   | { type: 'session_attached'; session_id: string }
   | { type: 'output'; data: string }
+  | { type: 'snapshot'; session: string; text: string; hash: string; unchanged?: boolean }
   | { type: 'agent_snapshot'; states: SessionAgentState[] }
   | { type: 'agent_events'; events: AgentEvent[] }
   | { type: 'agent_event'; event: AgentEventType; agent: string; session_id: string }

@@ -681,6 +681,50 @@ async fn a_burst_of_input_messages_does_not_drop_the_connection(kind: Kind) {
     c.recv_type("pong").await;
 }
 
+/// `peek` returns what is on a session's screen without attaching, and says unchanged for a hash it already gave.
+async fn peek_shows_a_session_screen_without_attaching(kind: Kind) {
+    if std::process::Command::new("tmux")
+        .arg("-V")
+        .output()
+        .is_err()
+    {
+        eprintln!("tmux not installed; skipping");
+        return;
+    }
+    let f = fixture().await;
+    let name = format!("pk{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
+    let alice = f.who(1, "alice");
+    let mut c = Conn::open(kind, &f).await;
+    c.login(&f, &alice, &f.claim).await;
+    c.recv_type("auth_ok").await;
+    c.send(json!({"type":"new_session","name":name})).await;
+    c.recv_type("sessions").await;
+    c.send(json!({"type":"reply","session":name,"text":"echo peeked$((40+2))"}))
+        .await;
+    let mut snap = json!(null);
+    for _ in 0..20 {
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        c.send(json!({"type":"peek","session":name})).await;
+        snap = c.recv_type("snapshot").await;
+        if snap["text"].as_str().unwrap_or("").contains("peeked42") {
+            break;
+        }
+    }
+    assert!(
+        snap["text"].as_str().unwrap().contains("peeked42"),
+        "{snap}"
+    );
+    let hash = snap["hash"].as_str().unwrap().to_string();
+    c.send(json!({"type":"peek","session":name,"hash":hash}))
+        .await;
+    let again = c.recv_type("snapshot").await;
+    assert_eq!(again["unchanged"], true);
+    assert_eq!(again["text"], "");
+    let _ = std::process::Command::new("tmux")
+        .args(["kill-session", "-t", &name])
+        .output();
+}
+
 macro_rules! over_both_transports {
     ($($name:ident),*) => {$(
         mod $name {
@@ -697,7 +741,8 @@ over_both_transports!(
     nothing_is_served_before_auth,
     reconnect_resumes_the_tmux_session_with_its_screen,
     agent_events_flow_from_a_session_tool_to_the_client,
-    a_burst_of_input_messages_does_not_drop_the_connection
+    a_burst_of_input_messages_does_not_drop_the_connection,
+    peek_shows_a_session_screen_without_attaching
 );
 
 // --- WebRTC-specific ----------------------------------------------------------------------------
