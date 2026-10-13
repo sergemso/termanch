@@ -247,6 +247,8 @@ try {
   // 7. The real app on a phone: connect, open a session, go back to the server list and connect again.
   // Each lap used to risk a hang or a broken screen, so run several and fail on any page error.
   {
+    const paneClients = () => execFileSync('tmux', ['list-clients', '-F', '#{client_pid}'], { env: { ...process.env, TMUX_TMPDIR: home }, encoding: 'utf8' }).trim().split('\n').filter(Boolean).length;
+    const backgroundClients = paneClients();
     const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true, permissions: ['clipboard-read', 'clipboard-write'] });
     // A counting stand-in for Web Audio, so the bell can be checked without a sound card.
     await ctx.addInitScript(() => {
@@ -524,6 +526,7 @@ try {
       await page.getByRole('button', { name: 'Sessions' }).click();
       await page.getByRole('button', { name: '← Servers' }).click();
       await page.getByText('Your Servers').waitFor({ timeout: 5000 });
+      await waitFor(() => paneClients() === backgroundClients, 'no background PTY stream in Servers', 5000);
       console.log(`    lap ${lap}: connect, session, back to servers`);
     }
     if (errors.length) fail(`app flow raised errors: ${errors.slice(0, 3).join(' | ')}`);
