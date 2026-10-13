@@ -71,7 +71,12 @@
     },
     onSaved: server => saveServers(servers.map(s => serverKey(s) === serverKey(server) ? server : s)),
     onReady: (id, _msg, reconnect) => {
-      if (reconnect && id === activeServerId && activeKey) hub.sendToSession(activeKey, { type: 'attach', session_id: activeKey });
+      if (!reconnect || id !== activeServerId || !activeKey) return;
+      const key = activeKey;
+      // Retry and Resume replace the connection: mount its terminal before accepting a repaint.
+      void tick().then(() => {
+        if (id === activeServerId && key === activeKey) hub.sendToSession(key, { type: 'attach', session_id: key });
+      });
     },
     onDrop: (_id, reason, upMs) => noteError(`connection lost after ${Math.round(upMs / 1000)} s: ${reason}`),
     onMessage: (_id, msg) => { if (msg.type === 'error') showToast(msg.message, 'error'); },
