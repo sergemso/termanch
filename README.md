@@ -36,7 +36,7 @@ Some mobile and corporate networks block UDP. Those clients cannot connect until
 
 ### Where your agents run
 
-Add Server offers two choices (decisions 0058 and 0075):
+Add Server offers two places (decisions 0058, 0075 and 0078):
 
 **In an isolated container** (the default). Sessions run inside a Docker container, in `/opt/termanch/home` (mounted as the container's home, so it survives restarts and upgrades). Docker is installed if missing. The container cannot see the rest of your VPS. The image has tmux, git, curl and Node. Install your agents in a Termanch session, for example:
 
@@ -44,39 +44,36 @@ Add Server offers two choices (decisions 0058 and 0075):
 npm install -g @anthropic-ai/claude-code @openai/codex
 ```
 
-**On the machine itself** (no Docker). The server is a single static binary run as a systemd service, and sessions run directly on your VPS, where your repositories and agent tools already are. You choose between a dedicated unprivileged user `termanch` (created for you, recommended) and `root`. This gives your browser a shell on the server itself, so the app shows a warning and asks you to confirm. Requirements: systemd, `curl`, `ssh-keygen` (package `openssh-client`), x86_64 or aarch64; `tmux` is installed if missing.
+**On the machine itself** (no Docker). The server is a single static binary run as a systemd service, and sessions run directly on your VPS, where your repositories and agent tools already are. You choose who the sessions run as: a dedicated unprivileged user `termanch` (created for you, recommended), the user who runs the install command (sessions open on your behalf, in your home, with your repositories, keys and agent logins; nothing is created), or `root`. This gives your browser a shell on the server itself, so the app shows a warning and asks you to confirm. Requirements: systemd, `curl`, `ssh-keygen` (package `openssh-client`), x86_64 or aarch64; `tmux` is installed if missing.
 
 The installer also sets up a daily update check that runs as root, separately from the server (which can stay an unprivileged user). Before anything is installed, and before every update, the release is checked: its manifest must carry a valid signature by the project's release key, and the binary must match the signed SHA-256 (see `SECURITY.md`). It lists every change it will make, records each one in a journal in `/var/lib/termanch-root` before making it, and can undo them.
 
 ### Updating and removing
 
-Isolated container:
+Remove the server from the machine with one command. Without `--yes` it only shows what it would do:
 
 ```bash
-# update: run the install command again (any new secret works)
-# remove:
-docker rm -f termanch && sudo rm -rf /opt/termanch
+curl -fsSL https://app.termanch.vivantel.dev/uninstall.sh | sudo sh            # preview, changes nothing
+curl -fsSL https://app.termanch.vivantel.dev/uninstall.sh | sudo sh -s -- --yes
 ```
 
-On the machine itself:
+It handles both install kinds. For the container it removes the container and `/opt/termanch`. On the machine itself it stops the service and the updater, deletes the server's state and undoes every journaled change (binary, units, firewall rule, and the `termanch` user and tmux only if the installer added them). It never touches your repositories, or the home of the user your sessions run as. Add `--keep-state` to keep the server's keys and owner, `--delete-home` to also delete the home of a `termanch` user the installer created. Running tmux sessions are left alone. Then use **Remove server** in the app to drop it from your list; you can also uninstall from there while connected.
 
-```bash
-# see what the installer changed, and what removing it would undo:
-sudo termanch-server --revert --dry-run
-# remove (stop the service and delete its state first; your repositories and the termanch user's home are never touched):
-sudo systemctl stop termanch && sudo rm -rf /var/lib/termanch && sudo termanch-server --revert
-# updates: a root-owned timer checks for a new signed release every day and applies it; if the new server does not
-# come up healthy it puts the old one back. Check now: sudo termanch-server --root-helper update
-# (older installs get the timer by running the install command again)
-```
+Updates: the container updates when you run the install command again. On the machine itself a root-owned timer checks for a new signed release every day; if the new server does not come up healthy the old one is put back. Check now: `sudo termanch-server --root-helper update`.
 
-## Security model
+## Is it safe to use?
 
-- Terminal traffic goes browser ↔ your server only, over DTLS. Neither the directory nor Cloudflare carries it.
-- The directory stores your server's public key, public address, port and certificate fingerprint, signed by the server. A tampered record is rejected because the client pins the key when you add the server.
-- Your browser holds a device key that cannot be exported; after GitHub login the hosted function signs a 7-day certificate for it, and the GitHub token is dropped. Servers verify the certificate and a signature over a per-connection challenge that names the server, so a server cannot replay your login elsewhere. Only the owner's GitHub account is accepted (0062).
-- Root on the VPS can always re-claim the server (it can read the same files).
-- Details: `docs/decisions/` (0053, 0056, 0057) and `docs/facts/`.
+What a stranger on the internet can and cannot do, and what you accept by installing:
+
+- **Only you can open a session.** The first GitHub account to connect owns the server; everyone else is refused. Your browser holds a device key that cannot be exported, and the server checks a certificate for it on every connection.
+- **Your terminal traffic never touches our servers.** It goes from your browser to your machine, encrypted. The free directory only maps your server's public key to its address.
+- **Your GitHub token is not kept.** It is used once to sign the certificate and dropped.
+- **Host install = a shell on your machine, for your browser.** Whoever controls your GitHub account and an enrolled browser can run commands as the user the sessions run as. That is the product; choose the narrowest option you can live with: the isolated container, then a dedicated `termanch` user, then your own user, then root. Turn on two-factor authentication on GitHub.
+- **Nothing is installed silently.** The installer lists every change first, records each in a journal before making it, and can undo all of them. Binaries are checked against a signature by the release key before they run, on install and on every update; a signed freeze can stop updates.
+- **Nothing else runs as root.** The server runs as an unprivileged user; root work (updates, removal) is done by a separate small helper that accepts only a fixed list of requests.
+- **What we cannot protect against:** a compromised machine, a stolen unlocked phone with an enrolled browser (remove the device in the app), or a malicious agent you run in a session.
+
+Full model and how to report a problem: [SECURITY.md](SECURITY.md).
 
 ## Hosting your own client
 

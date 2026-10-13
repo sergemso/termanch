@@ -20,9 +20,11 @@
   let secret = prefillSecret ?? randomClaimSecret();
   /** Where sessions run. The host choices give this browser a shell on the machine itself, so they need consent. */
   let where: 'container' | 'host' = 'container';
-  let hostAs: 'user' | 'root' = 'user';
+  type HostAs = 'user' | 'me' | 'root';
+  const hostMode: Record<HostAs, RunChoice> = { user: 'host-user', me: 'host-me', root: 'host' };
+  let hostAs: HostAs = 'user';
   let consent = false;
-  $: mode = (where === 'container' ? 'container' : hostAs === 'root' ? 'host' : 'host-user') as RunChoice;
+  $: mode = where === 'container' ? 'container' : hostMode[hostAs];
   $: if (where === 'container' || hostAs) consent = false; // each choice of a host mode is agreed to on its own
   $: allowed = mode === 'container' || consent;
   $: command = installCommand(origin, secret, mode);
@@ -172,18 +174,22 @@
             <span>As a dedicated user <code>termanch</code> (recommended)<br /><small>Created for you. It can only touch its own files and what you give it access to.</small></span>
           </label>
           <label class="choice">
+            <input type="radio" bind:group={hostAs} value="me" />
+            <span>As the user who runs the command<br /><small>Sessions open as you, in your home, with your repos, keys and agent logins. Nothing new is created.</small></span>
+          </label>
+          <label class="choice">
             <input type="radio" bind:group={hostAs} value="root" />
             <span>As <code>root</code><br /><small>Full control of the machine.</small></span>
           </label>
         </div>
         <div class="warning" role="note">
           <strong>This gives your browser a shell on your server.</strong>
-          Anything you run in a session can read and change this machine's files and run programs as {hostAs === 'root' ? 'root, so it can change anything' : 'the termanch user'}.
+          Anything you run in a session can read and change this machine's files and run programs as {hostAs === 'root' ? 'root, so it can change anything' : hostAs === 'me' ? 'you, with access to everything you can reach, including your SSH keys and agent logins' : 'the termanch user'}.
           Only continue on a machine you own. The installer lists every change it makes first and can undo them all.
         </div>
         <label class="choice">
           <input type="checkbox" bind:checked={consent} />
-          <span>I understand and want sessions to run on this machine{hostAs === 'root' ? ' as root' : ''}.</span>
+          <span>I understand and want sessions to run on this machine{hostAs === 'root' ? ' as root' : hostAs === 'me' ? ' as my own user' : ''}.</span>
         </label>
       {/if}
     </fieldset>

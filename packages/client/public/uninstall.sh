@@ -1,0 +1,72 @@
+#!/bin/sh
+# Termanch uninstaller. Served by the client at /uninstall.sh.
+#
+#   curl -fsSL https://app.termanch.vivantel.dev/uninstall.sh | sudo sh                 shows what would be removed, changes nothing
+#   curl -fsSL https://app.termanch.vivantel.dev/uninstall.sh | sudo sh -s -- --yes     removes it
+#
+# Options (after --yes): --delete-home  also delete the home of the `termanch` user, only if the installer created it
+#                        --keep-state   keep the server's keys and owner (re-installing then keeps the same server)
+# Never touched: your repositories, the home of the user your sessions run as (unless --delete-home and we created it),
+# and tmux sessions already running (the service is built so that stopping it leaves them alive).
+# This removes the server from this machine. To also drop it from your server list, use Remove server in the app.
+set -eu
+
+YES=""; KEEP_STATE=""; DELETE_HOME=""
+for a in "$@"; do
+  case "$a" in
+    --yes) YES=1 ;;
+    --keep-state) KEEP_STATE=1 ;;
+    --delete-home) DELETE_HOME=1 ;;
+    *) printf 'termanch: unknown option %s\n' "$a" >&2; exit 1 ;;
+  esac
+done
+
+say() { printf '%s\n' "$*"; }
+die() { printf 'termanch: %s\n' "$*" >&2; exit 1; }
+[ "$(id -u)" -eq 0 ] || die "run this as root: curl -fsSL <client>/uninstall.sh | sudo sh"
+
+NAME="${TERMANCH_CONTAINER:-termanch}"
+ROOT="${TERMANCH_DATA:-/opt/termanch}"
+case "$ROOT" in /|/opt|/home|/root|/usr|/var|/etc|"") die "refusing to use $ROOT as the data directory" ;; esac
+BIN=/usr/local/bin/termanch-server
+STATE=/var/lib/termanch
+JOURNAL=/var/lib/termanch-root
+UNIT_NAME=termanch
+
+found=""
+
+# Isolated container install.
+if command -v docker >/dev/null 2>&1 && docker inspect "$NAME" >/dev/null 2>&1; then
+  found=1
+  say "Isolated container install:"
+  say "  - the container   $NAME"
+  say "  - its data        $ROOT (the sessions' home, keys and owner; repositories and agent logins inside it are deleted too)"
+  if [ -n "$YES" ]; then
+    docker rm -f "$NAME" >/dev/null
+    if [ -n "$KEEP_STATE" ]; then say "Removed the container (kept $ROOT)."; else rm -rf "$ROOT"; say "Removed the container and $ROOT."; fi
+  fi
+fi
+
+# Native host install.
+if [ -x "$BIN" ] || [ -d "$JOURNAL" ]; then
+  found=1
+  say "Host install:"
+  if [ -x "$BIN" ] && [ -d "$JOURNAL" ]; then
+    "$BIN" --journal-dir "$JOURNAL" --revert --dry-run | sed 's/^/  /'
+  fi
+  [ -n "$KEEP_STATE" ] || say "  - the server's state   $STATE (keys, owner)"
+  if [ -n "$YES" ]; then
+    systemctl disable --now termanch-update.timer termanch-request.path "$UNIT_NAME" >/dev/null 2>&1 || true
+    if [ -x "$BIN" ] && [ -d "$JOURNAL" ]; then
+      "$BIN" --journal-dir "$JOURNAL" --revert ${DELETE_HOME:+--delete-home} || die "some changes could not be undone; see the lines above. The server's state was kept."
+    elif [ -d "$JOURNAL" ]; then
+      die "$BIN is missing, so the journaled changes in $JOURNAL cannot be undone. Nothing was removed."
+    fi
+    [ -n "$KEEP_STATE" ] || rm -rf "$STATE"
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    say "Removed. Sessions already running in tmux were not stopped (list them with: tmux ls, as their user)."
+  fi
+fi
+
+[ -n "$found" ] || { say "Termanch is not installed on this machine."; exit 0; }
+[ -n "$YES" ] || { say ""; say "Nothing was changed. Run again with --yes to remove it."; }
