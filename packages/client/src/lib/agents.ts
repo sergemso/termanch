@@ -11,7 +11,10 @@ export interface SessionAgent {
   /** Server time (ms) of the last event. */
   ts: number;
   tool?: { name: string; summary: string; phase: string };
-  prompt?: { id: string; kind: string; choices: string[] };
+  /** `seq` and `confidence` are the prompt event's: a one-tap answer carries the seq and needs `high`. */
+  prompt?: { id: string; kind: string; choices: string[]; seq: number; confidence: string };
+  /** The last tool events, oldest first (capped). */
+  timeline?: { name: string; summary: string; phase: string; ts: number }[];
   plan?: { text: string; status: string }[];
   message?: string;
 }
@@ -19,6 +22,7 @@ export interface SessionAgent {
 export type AgentMap = Record<string, SessionAgent>;
 
 export const STALE_AFTER_MS = 60_000;
+export const TIMELINE_CAP = 10;
 
 export const agents = writable<AgentMap>({});
 
@@ -56,9 +60,10 @@ export function applyEvents(map: AgentMap, events: AgentEvent[]): { map: AgentMa
         break;
       case 'tool':
         a.tool = { name: String(ev.name ?? ''), summary: String(ev.summary ?? ''), phase: String(ev.phase ?? '') };
+        a.timeline = [...(a.timeline ?? []), { ...a.tool, ts: e.ts }].slice(-TIMELINE_CAP);
         break;
       case 'prompt':
-        a.prompt = { id: String(ev.id ?? ''), kind: String(ev.prompt_kind ?? ''), choices: Array.isArray(ev.choices) ? ev.choices.map(String) : [] };
+        a.prompt = { id: String(ev.id ?? ''), kind: String(ev.prompt_kind ?? ''), choices: Array.isArray(ev.choices) ? ev.choices.map(String) : [], seq: e.seq, confidence: e.confidence };
         break;
       case 'plan':
         a.plan = Array.isArray(ev.items) ? ev.items.map((i: { text?: unknown; status?: unknown }) => ({ text: String(i.text ?? ''), status: String(i.status ?? '') })) : [];

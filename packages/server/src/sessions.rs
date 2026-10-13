@@ -167,6 +167,38 @@ impl SessionManager {
                 send_r(tx, &ServerMessage::DeviceRevoked { device }).await?;
             }
             ClientMessage::Ping => send_r(tx, &ServerMessage::Pong).await?,
+            ClientMessage::Answer {
+                session,
+                prompt_id,
+                seq,
+                choice,
+            } => {
+                let hub = self
+                    .events
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Answers are not available"))?;
+                answer(
+                    self.backend.as_ref(),
+                    hub,
+                    &session,
+                    &prompt_id,
+                    seq,
+                    choice,
+                )
+                .await?;
+                info!(target: "audit", event = "answer_sent", github_id = identity.id, session = %session, choice);
+            }
+            ClientMessage::Reply { session, text } => {
+                // One line, no control characters: it is typed, then Enter.
+                let line: String = text.chars().filter(|c| !c.is_control()).take(500).collect();
+                if line.trim().is_empty() {
+                    return Ok(());
+                }
+                self.backend
+                    .send_text(&session, &format!("{line}\r"))
+                    .await?;
+                info!(target: "audit", event = "reply_sent", github_id = identity.id, session = %session);
+            }
             ClientMessage::AgentSync { after } => {
                 let Some(hub) = &self.events else {
                     return Ok(());
@@ -260,4 +292,175 @@ async fn next_events(
         }
     }
     Some(out)
+}
+
+const PROMPT_CHANGED: &str = "That prompt changed";
+
+/// A one-tap answer (plan v8, K.4). It acts only on the prompt the user saw: the session's current prompt, with
+/// the same id and event number, confirmed by the agent's own hook (`confidence=high`), and still on the pane.
+/// The keys are the ones the screen's own choice list defines, never text from the client.
+pub async fn answer(
+    backend: &dyn SessionBackend,
+    hub: &EventHub,
+    session: &str,
+    prompt_id: &str,
+    seq: u64,
+    choice: u8,
+) -> Result<()> {
+    use termanch_core::events::{Confidence, EventKind};
+    let current = hub
+        .current_prompt(session)
+        .ok_or_else(|| anyhow::anyhow!(PROMPT_CHANGED))?;
+    let EventKind::Prompt { id, .. } = &current.kind else {
+        return Err(anyhow::anyhow!(PROMPT_CHANGED));
+    };
+    if id != prompt_id || current.seq != seq {
+        return Err(anyhow::anyhow!(PROMPT_CHANGED));
+    }
+    if current.confidence != Confidence::High {
+        return Err(anyhow::anyhow!(
+            "This prompt is not confirmed by the agent; open the terminal to answer"
+        ));
+    }
+    let screen = backend.capture(session).await?;
+    let info = crate::adapters::parse_prompt(&screen)
+        .filter(|i| id.ends_with(&crate::agentwatch::hex8(&i.question)))
+        .ok_or_else(|| anyhow::anyhow!(PROMPT_CHANGED))?;
+    let (_, keys) = info
+        .choices
+        .get(choice as usize)
+        .ok_or_else(|| anyhow::anyhow!("No such choice"))?;
+    backend.send_text(session, keys).await
+}
+
+#[cfg(test)]
+mod answer_tests {
+    use super::*;
+    use crate::agentwatch::hex8;
+    use std::sync::Mutex;
+    use termanch_core::events::{AgentState, Confidence, EventKind, Source};
+
+    struct Fake {
+        screen: Mutex<String>,
+        sent: Mutex<Vec<String>>,
+    }
+    #[async_trait::async_trait]
+    impl SessionBackend for Fake {
+        fn name(&self) -> &str {
+            "fake"
+        }
+        async fn list(&self) -> Result<Vec<termanch_core::protocol::SessionInfo>> {
+            Ok(vec![])
+        }
+        async fn create(&self, _: &str) -> Result<()> {
+            Ok(())
+        }
+        fn attach(&self, _: &str, _: u16, _: u16) -> Result<Attachment> {
+            Err(anyhow::anyhow!("no"))
+        }
+        async fn capture(&self, _: &str) -> Result<String> {
+            Ok(self.screen.lock().unwrap().clone())
+        }
+        async fn send_text(&self, _: &str, text: &str) -> Result<()> {
+            self.sent.lock().unwrap().push(text.to_string());
+            Ok(())
+        }
+    }
+
+    const SCREEN: &str =
+        "Edit file?\n Do you want to proceed?\n ❯ 1. Yes\n   2. Yes, always\n   3. No\n";
+
+    fn setup(confidence: Confidence, screen: &str) -> (Fake, EventHub, String, u64) {
+        let hub = EventHub::new([3; 32]);
+        let question = crate::adapters::detect_prompt(SCREEN).unwrap();
+        let id = format!("1-{}", hex8(&question));
+        hub.push(
+            "s",
+            Source::Hook,
+            Confidence::High,
+            EventKind::State {
+                state: AgentState::NeedsInput,
+            },
+            1,
+        );
+        hub.push(
+            "s",
+            Source::Screen,
+            confidence,
+            EventKind::Prompt {
+                id: id.clone(),
+                prompt_kind: "choice".into(),
+                choices: vec![],
+            },
+            2,
+        );
+        let seq = hub.current_prompt("s").unwrap().seq;
+        (
+            Fake {
+                screen: Mutex::new(screen.into()),
+                sent: Mutex::default(),
+            },
+            hub,
+            id,
+            seq,
+        )
+    }
+
+    #[tokio::test]
+    async fn the_choice_sends_exactly_its_own_keys() {
+        for (choice, keys) in [(0u8, "1"), (1, "2"), (2, "3")] {
+            let (b, hub, id, seq) = setup(Confidence::High, SCREEN);
+            answer(&b, &hub, "s", &id, seq, choice).await.unwrap();
+            assert_eq!(*b.sent.lock().unwrap(), vec![keys.to_string()]);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_stale_wrong_changed_or_unconfirmed_prompt_is_refused_and_nothing_is_sent() {
+        let (b, hub, id, seq) = setup(Confidence::High, SCREEN);
+        for (pid, s) in [("9-ffffffff", seq), (id.as_str(), seq + 5)] {
+            let e = answer(&b, &hub, "s", pid, s, 0)
+                .await
+                .unwrap_err()
+                .to_string();
+            assert!(e.contains("changed"), "{e}");
+        }
+        assert!(answer(&b, &hub, "s", &id, seq, 7)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("No such choice"));
+        assert!(answer(&b, &hub, "other", &id, seq, 0).await.is_err());
+        // the pane no longer shows the question
+        *b.screen.lock().unwrap() = "$ ls\nfile\n".into();
+        assert!(answer(&b, &hub, "s", &id, seq, 0)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("changed"));
+        // the agent moved on
+        *b.screen.lock().unwrap() = SCREEN.into();
+        hub.push(
+            "s",
+            Source::Hook,
+            Confidence::High,
+            EventKind::State {
+                state: AgentState::Working,
+            },
+            3,
+        );
+        assert!(answer(&b, &hub, "s", &id, seq, 0)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("changed"));
+        // low confidence
+        let (b2, hub2, id2, seq2) = setup(Confidence::Low, SCREEN);
+        assert!(answer(&b2, &hub2, "s", &id2, seq2, 0)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("not confirmed"));
+        assert!(b.sent.lock().unwrap().is_empty() && b2.sent.lock().unwrap().is_empty());
+    }
 }

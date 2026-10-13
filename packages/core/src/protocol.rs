@@ -33,6 +33,19 @@ pub enum ClientMessage {
         #[serde(default)]
         after: std::collections::HashMap<String, u64>,
     },
+    /// A one-tap answer to a prompt the user saw: accepted only while that prompt (`prompt_id` at event `seq`) is
+    /// still the session's current one, reliable (hook-confirmed) and still on the pane (plan v8, K.4).
+    Answer {
+        session: String,
+        prompt_id: String,
+        seq: u64,
+        choice: u8,
+    },
+    /// Types a short reply into a session's pane without attaching to it (plan v8, K.5).
+    Reply {
+        session: String,
+        text: String,
+    },
     ListSessions,
     NewSession {
         name: String,
@@ -163,6 +176,15 @@ mod tests {
         .unwrap();
         assert_eq!(v["type"], "agent_sync");
         assert_eq!(v["after"]["a"], 4);
+        let v = serde_json::to_value(ClientMessage::Answer {
+            session: "s".into(),
+            prompt_id: "1-ab".into(),
+            seq: 3,
+            choice: 1,
+        })
+        .unwrap();
+        assert_eq!(v["type"], "answer");
+        assert_eq!(v["choice"], 1);
         let v = serde_json::to_value(ServerMessage::AgentSnapshot { states: vec![] }).unwrap();
         assert_eq!(v["type"], "agent_snapshot");
         let v = serde_json::to_value(ServerMessage::AgentEvents { events: vec![] }).unwrap();

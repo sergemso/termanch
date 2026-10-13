@@ -27,6 +27,14 @@ pub trait SessionBackend: Send + Sync {
     async fn create_in(&self, name: &str, _backend: Option<&str>) -> Result<()> {
         self.create(name).await
     }
+    /// The visible text of the session's pane, for checking what a one-tap answer would answer.
+    async fn capture(&self, _id: &str) -> Result<String> {
+        Err(anyhow!("this session manager cannot read a pane"))
+    }
+    /// Types `text` into the session's pane as if it was typed there.
+    async fn send_text(&self, _id: &str, _text: &str) -> Result<()> {
+        Err(anyhow!("this session manager cannot send keys"))
+    }
 }
 
 /// Session ids/names we accept from clients; they end up in argv, never in a shell.
@@ -359,6 +367,37 @@ impl SessionBackend for TmuxBackend {
         Ok(())
     }
 
+    async fn capture(&self, id: &str) -> Result<String> {
+        if !valid_name(id) {
+            return Err(anyhow!("Unknown session"));
+        }
+        let args = ["capture-pane", "-p", "-t", &format!("={id}:")].map(String::from);
+        let out = self.runner.run("tmux", &args).await?;
+        if !out.status.success() {
+            return Err(anyhow!("the pane cannot be read"));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    }
+
+    async fn send_text(&self, id: &str, text: &str) -> Result<()> {
+        if !valid_name(id) {
+            return Err(anyhow!("Unknown session"));
+        }
+        // `\r` is Enter; everything else is literal (`-l`), so no tmux key name can be smuggled in.
+        for (i, part) in text.split('\r').enumerate() {
+            if i > 0 {
+                let args = ["send-keys", "-t", &format!("={id}:"), "Enter"].map(String::from);
+                self.runner.run("tmux", &args).await?;
+            }
+            if !part.is_empty() {
+                let args =
+                    ["send-keys", "-t", &format!("={id}:"), "-l", "--", part].map(String::from);
+                self.runner.run("tmux", &args).await?;
+            }
+        }
+        Ok(())
+    }
+
     fn attach(&self, id: &str, cols: u16, rows: u16) -> Result<Attachment> {
         if !valid_name(id) {
             return Err(anyhow!("Unknown session"));
@@ -535,6 +574,20 @@ impl SessionBackend for CompositeBackend {
 
     fn kinds(&self) -> Vec<String> {
         self.parts.iter().map(|(k, _)| k.clone()).collect()
+    }
+
+    async fn capture(&self, id: &str) -> Result<String> {
+        let (kind, name) = id
+            .split_once(':')
+            .ok_or_else(|| anyhow!("Unknown session"))?;
+        self.part(kind)?.capture(name).await
+    }
+
+    async fn send_text(&self, id: &str, text: &str) -> Result<()> {
+        let (kind, name) = id
+            .split_once(':')
+            .ok_or_else(|| anyhow!("Unknown session"))?;
+        self.part(kind)?.send_text(name, text).await
     }
 }
 
@@ -939,5 +992,34 @@ mod tests {
             ])
             .output();
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Real tmux: text sent to a pane is typed there (with Enter for `\r`), and capture reads it back.
+    #[tokio::test]
+    async fn tmux_send_text_types_into_the_pane_and_capture_reads_it() {
+        if std::process::Command::new("tmux")
+            .arg("-V")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+        let b = TmuxBackend::default();
+        let name = format!("snd{}", &uuid::Uuid::new_v4().simple().to_string()[..6]);
+        b.create(&name).await.unwrap();
+        b.send_text(&name, "echo typed$((40+2))\r").await.unwrap();
+        let mut seen = String::new();
+        for _ in 0..20 {
+            tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+            seen = b.capture(&name).await.unwrap();
+            if seen.contains("typed42") {
+                break;
+            }
+        }
+        assert!(seen.contains("typed42"), "{seen}");
+        assert!(b.send_text("bad name", "x").await.is_err());
+        let _ = std::process::Command::new("tmux")
+            .args(["kill-session", "-t", &format!("={name}")])
+            .output();
     }
 }

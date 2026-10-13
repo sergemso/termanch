@@ -49,7 +49,7 @@ impl PromptTracker {
     }
 }
 
-fn hex8(s: &str) -> String {
+pub fn hex8(s: &str) -> String {
     Sha256::digest(s.as_bytes())[..4]
         .iter()
         .map(|b| format!("{b:02x}"))

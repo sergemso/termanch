@@ -4,6 +4,8 @@ export type ClientMessage =
   | { type: 'revoke_device'; device: string }
   | { type: 'uninstall'; confirm_name: string; delete_user?: boolean; remove_tmux?: boolean; kill_sessions?: boolean }
   | { type: 'agent_sync'; after: Record<string, number> }
+  | { type: 'answer'; session: string; prompt_id: string; seq: number; choice: number }
+  | { type: 'reply'; session: string; text: string }
   | { type: 'list_sessions' }
   | { type: 'new_session'; name: string; backend?: string }
   | { type: 'ping' }

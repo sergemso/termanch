@@ -207,6 +207,41 @@ pub fn detect_prompt(screen: &str) -> Option<String> {
         .map(|l| l.to_string())
 }
 
+/// What a screen question offers and the keys that answer each choice.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct PromptInfo {
+    pub question: String,
+    /// Label shown on the button and the exact keys sent for it.
+    pub choices: Vec<(String, String)>,
+}
+
+/// Like `detect_prompt`, with the choices: a numbered list answers with its digit, an inline (y/n) with the
+/// letter and Enter.
+pub fn parse_prompt(screen: &str) -> Option<PromptInfo> {
+    let question = detect_prompt(screen)?;
+    let lines: Vec<&str> = screen
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
+    let tail = &lines[lines.len().saturating_sub(14)..];
+    let mut choices = Vec::new();
+    for l in tail {
+        let l = l.trim_start_matches(|c: char| !c.is_ascii_alphanumeric());
+        let mut c = l.chars();
+        if let (Some(d @ '1'..='9'), Some('.' | ')')) = (c.next(), c.next()) {
+            let label: String = l[2..].trim().chars().take(40).collect();
+            if !label.is_empty() {
+                choices.push((label, d.to_string()));
+            }
+        }
+    }
+    if choices.is_empty() {
+        choices = vec![("Yes".into(), "y\r".into()), ("No".into(), "n\r".into())];
+    }
+    Some(PromptInfo { question, choices })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -316,6 +351,21 @@ mod tests {
             .join("testdata/screens")
             .join(name);
         std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("{p:?}: {e}"))
+    }
+
+    #[test]
+    fn the_numbered_choices_of_a_real_permission_screen_answer_with_their_digits() {
+        let info = parse_prompt(&fixture("claude-permission.txt")).unwrap();
+        let keys: Vec<_> = info.choices.iter().map(|(_, k)| k.as_str()).collect();
+        assert_eq!(keys, ["1", "2", "3", "4"]);
+        assert!(info.choices[0].0.starts_with("Yes"));
+        assert!(info.choices[3].0.starts_with("No"));
+        let inline = parse_prompt(&fixture("shell-yn.txt")).unwrap();
+        assert_eq!(
+            inline.choices,
+            vec![("Yes".into(), "y\r".into()), ("No".into(), "n\r".into())]
+        );
+        assert!(parse_prompt(&fixture("claude-idle.txt")).is_none());
     }
 
     #[test]

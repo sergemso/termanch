@@ -4,6 +4,7 @@
   import ServerList from './ServerList.svelte';
   import AddServerModal from './AddServerModal.svelte';
   import Toast from './Toast.svelte';
+  import SessionList from './SessionList.svelte';
   import type { ServerMessage, SessionInfo, ServerListItem } from './lib/protocol';
   import { parseClaim, parseServerLink } from './lib/onboard';
   import { Connection, type ConnState } from './lib/connection';
@@ -479,24 +480,7 @@
                 {/if}
               </div>
             {/if}
-            <ul style="list-style: none;">
-              {#each sessions as session}
-                <li style="padding: 12px; margin-bottom: 4px; border-radius: 6px; cursor: pointer; background: {activeSessionId === session.id ? 'var(--accent)' : 'transparent'}; color: {activeSessionId === session.id ? 'var(--bg)' : 'var(--fg)'};" on:click={() => attach(session.id)}>
-                  <div style="font-weight: 500;">{session.name}</div>
-                  {#if session.backend}
-                    <span style="font-size: 0.7rem; background: var(--border); color: var(--fg); padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block;">{session.backend}</span>
-                  {:else}
-                    <div style="font-size: 0.75rem; color: var(--fg-muted);">{session.id.slice(0, 12)}</div>
-                  {/if}
-                  {#if session.agent}
-                    <span style="font-size: 0.7rem; background: var(--border); padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block;">{session.agent}</span>
-                  {/if}
-                </li>
-              {/each}
-              {#if sessions.length === 0}
-                <li style="color: var(--fg-muted); text-align: center; padding: 24px;">No sessions yet</li>
-              {/if}
-            </ul>
+            <SessionList {sessions} {activeSessionId} onopen={attach} send={(m) => connection?.send(m)} />
           </aside>
 
           <div style="flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;">
