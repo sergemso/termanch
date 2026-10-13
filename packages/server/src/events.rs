@@ -425,6 +425,18 @@ impl EventHub {
             .map(|e| (e.source, e.confidence, e.ts))
     }
 
+    /// The agent's own hook reported `needs_input` within the last minute and nothing newer has changed the state.
+    pub fn hook_says_needs_input(&self, session: &str) -> bool {
+        let now = now_ms();
+        matches!(
+            self.last_state_event(session),
+            Some((Source::Hook, Confidence::High, ts)) if now.saturating_sub(ts) < STALE_AFTER_MS
+        ) && self
+            .snapshot_at(now)
+            .iter()
+            .any(|s| s.session == session && s.state == AgentState::NeedsInput)
+    }
+
     /// Events of `session` after `seq`, oldest first (only what the ring still holds).
     pub fn since(&self, session: &str, seq: u64) -> Vec<AgentEvent> {
         self.rings
