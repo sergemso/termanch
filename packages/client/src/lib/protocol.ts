@@ -11,6 +11,7 @@ export type ClientMessage =
   | { type: 'new_session'; name: string; backend?: string }
   | { type: 'ping' }
   | { type: 'attach'; session_id: string }
+  | { type: 'detach' }
   | { type: 'input'; data: string }
   | { type: 'resize'; cols: number; rows: number };
 
