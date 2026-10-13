@@ -1063,10 +1063,11 @@ mod tests {
             .await
             .unwrap();
         let mut styled = String::new();
-        for _ in 0..20 {
+        for _ in 0..40 {
             tokio::time::sleep(std::time::Duration::from_millis(150)).await;
             styled = b.capture_styled(&name).await.unwrap();
-            if styled.contains("redword") {
+            // The typed command line echoes the word too; the output is the part that carries the escape code.
+            if styled.contains("\x1b[31m") {
                 break;
             }
         }
