@@ -210,12 +210,13 @@
         }
         serverVersion = msg.version ?? '';
         backends = msg.backends ?? [];
-        showToast(isReconnect ? 'Reconnected' : `Connected to ${msg.server_name}`);
+        if (!isReconnect) showToast(`Connected to ${msg.server_name}`); // a reconnect is shown by the status line, not a toast each time
         connection?.send({ type: 'list_sessions' });
         if (connection) requestAgentSync((m) => connection?.send(m));
         // tmux kept the session alive; attaching again repaints it.
         if (activeSessionId) connection?.send({ type: 'attach', session_id: activeSessionId });
       },
+      onDrop: (reason, upMs) => noteError(`connection lost after ${Math.round(upMs / 1000)} s: ${reason}`),
       onFatal: (message) => {
         noteError(`connection: ${message}`);
         showToast(message, 'error');

@@ -8,7 +8,8 @@ export type ConnState = 'connecting' | 'connected' | 'reconnecting' | 'unreachab
 
 const BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 30000];
 const PING_EVERY_MS = 5000;
-const PONG_WITHIN_MS = 3000;
+/** One late reply on a mobile link is normal; this long without any message means the connection is half-open. */
+const PONG_WITHIN_MS = 12000;
 
 /** 1s, 2s, 4s, 8s, 16s, then 30s; +0..25% jitter so many tabs do not reconnect in lockstep. */
 export function backoffDelay(attempt: number, random = Math.random): number {
@@ -44,6 +45,8 @@ export interface ConnectionOptions {
   onState: (state: ConnState, detail?: string) => void;
   /** Called after every successful auth, including after a reconnect. */
   onReady: (msg: Extract<ServerMessage, { type: 'auth_ok' }>, isReconnect: boolean) => void;
+  /** The connection was lost: why, and how long it had been up (for the diagnostics and the status bar). */
+  onDrop?: (reason: string, upMs: number) => void;
   /** Auth errors are final: retrying with the same credentials would be rejected again. */
   onFatal: (message: string) => void;
 }
@@ -63,6 +66,9 @@ export class Connection {
   private stopped = false;
   private opening = false;
   private pingSentAt = 0;
+  private readyAt = 0;
+  /** How many times a live connection was lost since this one was created. */
+  drops = 0;
   /** Last measured round trip in ms (heartbeat ping to pong), for the status bar. */
   rtt: number | null = null;
 
@@ -150,6 +156,7 @@ export class Connection {
     transport.onmessage = (text) => this.onText(transport, text);
     transport.onclose = () => {
       if (this.transport !== transport || this.stopped) return;
+      this.dropped('the transport closed');
       this.clearTimers();
       this.authed = false;
       this.transport = null;
@@ -172,6 +179,7 @@ export class Connection {
       this.authed = true;
       this.everReady = true;
       this.attempt = 0;
+      this.readyAt = performance.now();
       this.startHeartbeat();
       this.opts.onState('connected');
       this.opts.onReady(msg, isReconnect);
@@ -224,10 +232,18 @@ export class Connection {
     // Any message counts as proof of life (see heard()); silence means a half-open connection.
     this.pongTimer = setTimeout(() => {
       this.pongTimer = null;
+      this.dropped(`no reply for ${PONG_WITHIN_MS / 1000} s`);
       this.transport?.close();
       // close() on our own transport does not notify; treat it as a drop.
       this.transport?.onclose?.();
     }, PONG_WITHIN_MS);
+  }
+
+  private dropped(reason: string) {
+    if (!this.authed) return; // a failed attempt is reported as `unreachable`, not as a drop
+    this.authed = false; // one loss is reported once, whichever path notices it first
+    this.drops++;
+    this.opts.onDrop?.(reason, Math.round(performance.now() - this.readyAt));
   }
 
   private heard() {
