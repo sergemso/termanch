@@ -72,7 +72,7 @@
 0067-change-journal-and-revert,"Every host change is journaled, previewed and revertible","safety, deployment, roadmap",active
 0068-user-data-in-r2-and-live-sync,"The owner's server list and settings are encrypted objects read from the CDN, with live sync through servers","directory, scale, sync, roadmap",draft
 0069-ui-foundation-tailwind-shadcn,"The client UI is built with Tailwind v4 and shadcn-svelte","client, build, mobile",active
-0070-session-navigation-and-connections,"Sessions of all servers are navigated in one place over simultaneous connections","client, mobile, protocol",active
+0070-session-navigation-and-connections,"Sessions of all servers are navigated in one place over simultaneous connections","client, mobile, protocol",superseded
 0071-context-aware-key-row,"The key row adapts to the detected multiplexer, with a sticky Prefix key","client, terminal, mobile, protocol",active
 0072-remote-uninstall,"Remove server can uninstall the server in two stages, with host cleanup opt-in","deployment, security, client, protocol",active
 0073-usage-tiers-on-device,"Usage tiers and a thank-you badge are computed on the device and never leave it","client, mobile, privacy",active
@@ -84,3 +84,6 @@
 0079-agent-hooks-are-opt-in,"Agent hooks are installed only on the owner's explicit request, and the layer works without them","agents, hooks, security, roadmap",draft
 0080-connector-credentials-from-a-root-owned-file,"Connector credentials come from a root-owned file read at start and are held in memory","security, secrets, notifications, roadmap",draft
 0081-server-name-defaults-to-the-hostname,"A server's display name defaults to the host's short hostname, and a name the owner types wins","server, client, deployment",draft
+0082-navigation-tabs-sheet-and-auto-connect,"Navigation is a tab strip and a session sheet over servers that connect by themselves","client, mobile, agents",active
+0083-cache-expiry-estimate-and-statusline-forwarder,"Prompt-cache expiry is an estimate, made exact by a wrapped status line forwarder","agents, hooks, privacy",active
+0084-tab-switch-shows-a-server-snapshot-first,"A tab switch shows a server snapshot at once, then attaches live","client, mobile, performance, protocol",active

@@ -2,9 +2,9 @@
 id: connections-warn-never-drop
 title: Connections are limited by warning, never by dropping
 status: active
-governed-by: 0070
-grounded-in: 0070
-derivation-note: The owner chose reminders over automatic disconnects for the soft limit of 6 servers.
+governed-by: 0082
+grounded-in: [0082]
+derivation-note: Servers now connect automatically (0082), so the soft limit of 6 must still warn and never drop.
 tags: [client, mobile, performance]
 ---
 

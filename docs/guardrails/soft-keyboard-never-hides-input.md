@@ -2,7 +2,7 @@
 id: soft-keyboard-never-hides-input
 title: The soft keyboard never hides the key row or terminal input
 status: active
-governed-by: 0070
+governed-by: 0082
 grounded-in: 0026
 derivation-note: The owner sees the iPhone keyboard cover the key row; a terminal without Ctrl, Esc and arrows is unusable on a phone.
 tags: [client, mobile, ios]

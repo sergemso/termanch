@@ -30,5 +30,6 @@
 | 0027 | What iOS fires on a swipe-typing correction in xterm's textarea | client, mobile, ios, terminal | active |
 | 0028 | The server binary and installer before the native host mode | server, deployment, build | active |
 | 0029 | What Claude Code, herdr and Codex expose for agent events | agents, hooks, server | active |
+| 0031 | Claude Code gives its status line command the prompt cache expiry | agents, hooks | active |
 
 <!-- bootstrap-generated: true -->

@@ -1,7 +1,8 @@
 ---
 id: 0070-session-navigation-and-connections
 title: Sessions of all servers are navigated in one place over simultaneous connections
-status: active
+status: superseded
+superseded-by: 0082-navigation-tabs-sheet-and-auto-connect
 date: 2026-10-12
 track: product
 accepted-by: Sergey Strebulaev <s@vivantel.dev>
