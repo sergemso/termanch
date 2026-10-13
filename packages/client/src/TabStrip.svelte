@@ -17,6 +17,7 @@
   let now = Date.now();
   let revision = 0;
   let shown: HubSession[] = [];
+  let live = new Set<string>();
   let strip: HTMLDivElement;
   let visibleActive: string | null = null;
   let press: { pointerId: number; key: string; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null = null;
@@ -29,6 +30,9 @@
   $: {
     revision;
     const order = frozen.order(tabIds(sessions, agents), {}, now);
+    // A tab opened during a hold still gets a tab; a removed one stays in place (disabled) until the hold ends.
+    if (activeKey && !order.includes(activeKey) && sessions.some(s => s.key === activeKey)) order.push(activeKey);
+    live = new Set(sessions.map(s => s.key));
     const known = new Map([...shown, ...sessions].map(s => [s.key, s]));
     shown = order.map(key => known.get(key)).filter((s): s is HubSession => !!s);
   }
@@ -79,7 +83,7 @@
       {@const server = servers.find(s => s.id === session.serverId)}
       <button type="button" role="tab" data-key={session.key} aria-selected={activeKey === session.key}
         aria-label={`${tabLabel(session, agent, servers.length, now)}${server && server.state !== 'connected' ? ' · ' + server.state + (server.reason ? ': ' + server.reason : '') : ''}`}
-        class:active={activeKey === session.key} class:degraded={server?.state !== 'connected'}
+        class:active={activeKey === session.key} class:degraded={server?.state !== 'connected'} disabled={!live.has(session.key)}
         on:pointerdown={(e) => down(e, session.key)} on:pointermove={move}
         on:click={(e) => {
           const suppress = e.detail > 0 && longPressed === session.key;

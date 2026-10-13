@@ -45,7 +45,7 @@
           <div class="answers" role="group" aria-label="Answer">
             {#each agent.prompt.choices as choice, i}
               <button type="button" class="answer" on:pointerdown={() => { if (agent.prompt) pressedAnswer = { choice: i, prompt: agent.prompt }; }} on:pointercancel={() => pressedAnswer = null}
-                on:click={() => { const answer = pressedAnswer ?? (agent.prompt ? { choice: i, prompt: agent.prompt } : null); pressedAnswer = null; if (answer) onanswer(answer.choice, answer.prompt); }}>{choice}</button>
+                on:click={() => { const answer = pressedAnswer?.choice === i ? pressedAnswer : (agent.prompt ? { choice: i, prompt: agent.prompt } : null); pressedAnswer = null; if (answer) onanswer(answer.choice, answer.prompt); }}>{choice}</button>
             {/each}
           </div>
         {:else}

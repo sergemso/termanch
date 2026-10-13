@@ -87,6 +87,12 @@ describe('free controls and adaptive default', () => {
     const sorted = applyView(same, {}, { ...presetView('recent'), sort: 'name' }, 0)[0].sessions;
     expect(sorted.map(s => s.key)).toEqual(['a/same', 'b/same']);
   });
+  it('sorts sessions without a response time or cache by name instead of failing on infinities', () => {
+    const none = [session('a', 'b'), session('a', 'a'), session('a', 'c')];
+    for (const sort of ['response', 'cache'] as const) {
+      expect(applyView(none, {}, { ...presetView('recent'), sort }, 0)[0].sessions.map(s => s.id)).toEqual(['a', 'b', 'c']);
+    }
+  });
   it('opens Needs me only for sessions that need a human, otherwise By server', () => {
     expect(adaptiveDefault(agents).preset).toBe('needs');
     expect(adaptiveDefault({ 'a': agent('working', 0) }).preset).toBe('server');

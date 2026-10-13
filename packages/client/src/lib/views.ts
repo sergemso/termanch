@@ -48,6 +48,9 @@ interface CacheOptions {
   remaining?: (agent: SessionAgent | undefined, key: string, now: number) => number | null;
 }
 /** Pure grouping, sorting and filtering. Global keys are retained all the way to the card's action. */
+/** Subtraction gives NaN for two equal infinities, which breaks sorting. */
+const cmp = (x: number, y: number) => (x === y ? 0 : x < y ? -1 : 1);
+
 export function applyView(sessions: HubSession[], agents: AgentMap, view: SessionView, now: number, cache: CacheOptions = {}): SessionGroup[] {
   const agentName = (s: HubSession) => agents[s.key]?.agent ?? s.agent ?? 'shell';
   const state = (s: HubSession) => agents[s.key]?.state ?? 'unknown';
@@ -74,8 +77,8 @@ export function applyView(sessions: HubSession[], agents: AgentMap, view: Sessio
       order = Number(needsYou(bb)) - Number(needsYou(aa));
       if (!order && needsYou(aa) && needsYou(bb)) order = (aa?.waitingSince ?? aa?.ts ?? now) - (bb?.waitingSince ?? bb?.ts ?? now);
     }
-    if (view.sort === 'response') order = (bb?.lastResponseAt ?? -Infinity) - (aa?.lastResponseAt ?? -Infinity);
-    if (view.sort === 'cache') order = (remaining(a) ?? Infinity) - (remaining(b) ?? Infinity);
+    if (view.sort === 'response') order = cmp(bb?.lastResponseAt ?? -Infinity, aa?.lastResponseAt ?? -Infinity);
+    if (view.sort === 'cache') order = cmp(remaining(a) ?? Infinity, remaining(b) ?? Infinity);
     return order || byName(a, b);
   });
   const groups = new Map<string, SessionGroup>();

@@ -22,10 +22,11 @@ class Fake implements HubConnection {
 function setup(target?: (server: ServerListItem, refresh: boolean) => Promise<Target>) {
   const connections: Fake[] = [];
   const ready: boolean[] = [];
-  const hub = new ServerHub({ target, credentials: async () => ({ cert: 'c', sign: async () => 's' }), onReady: (_id, _msg, reconnect) => ready.push(reconnect), factory: (opts) => {
+  const fatal: string[] = [];
+  const hub = new ServerHub({ target, onFatal: (id, reason) => fatal.push(`${id}: ${reason}`), credentials: async () => ({ cert: 'c', sign: async () => 's' }), onReady: (_id, _msg, reconnect) => ready.push(reconnect), factory: (opts) => {
     const c = new Fake(opts); connections.push(c); return c;
   } });
-  return { hub, connections, ready };
+  return { hub, connections, ready, fatal };
 }
 
 describe('ServerHub', () => {
@@ -68,6 +69,12 @@ describe('ServerHub', () => {
     expect(get(hub.allSessions)).toEqual([]);
     hub.retry('a'); expect(connections).toHaveLength(2); // Retry does not override Pause
     hub.resume('a'); expect(connections).toHaveLength(3);
+  });
+  it('reports a fatal connection error to the app', () => {
+    const { hub, connections, fatal } = setup(); hub.start([server('a')]);
+    connections[0].opts.onFatal?.('Not the owner');
+    expect(fatal).toEqual(['a: Not the owner']);
+    expect(get(hub.servers)[0]).toMatchObject({ state: 'closed', reason: 'Not the owner' });
   });
   it('a drop leaves other connections and the dropped server’s last sessions intact, with a reason and Retry', () => {
     const { hub, connections } = setup(); hub.start([server('a'), server('b')]); connections.forEach(c => c.ready());

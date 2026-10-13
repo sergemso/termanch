@@ -31,6 +31,7 @@
   let available = 0;
   let now = Date.now();
   let revision = 0;
+  let forceRender = false; // the user's own view changes apply at once; only unsolicited reorders wait
   let view = loadView();
   let expanded: string | null = null;
   let shown: ViewGroup[] = [];
@@ -64,7 +65,8 @@
     }
     frozen.order(proposed.flatMap(g => g.sessions.map(s => s.key)), {}, now);
     onheld(frozen.frozen(now));
-    if (!frozen.frozen(now) || !rendered) {
+    if (forceRender || !frozen.frozen(now) || !rendered) {
+      forceRender = false;
       shown = withServerStatus(proposed, servers);
       shownAgents = { ...agents }; shownServers = servers; shownNow = now; rendered = true;
       shownSessions = sessions; shownGroupBy = effectiveView.group;
@@ -77,7 +79,7 @@
     if (expanded) { frozen.sheet(true); onexpanded(true); }
     revision++;
   }
-  function choose(next: SessionView) { closeExpanded(); view = next; saveView(next); revision++; }
+  function choose(next: SessionView) { closeExpanded(); view = next; saveView(next); forceRender = true; revision++; }
   function change(patch: Partial<SessionView>) { choose({ ...effectiveView, ...patch, preset: undefined }); }
   function filter(patch: Partial<SessionView['filter']>) { change({ filter: { ...effectiveView.filter, ...patch } }); }
   function focusField(e: FocusEvent) {

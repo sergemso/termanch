@@ -31,6 +31,7 @@ interface Options {
   onReady?: (id: string, msg: Extract<ServerMessage, { type: 'auth_ok' }>, reconnect: boolean) => void;
   onMessage?: (id: string, msg: ServerMessage) => void;
   onDrop?: (id: string, reason: string, upMs: number) => void;
+  onFatal?: (id: string, reason: string) => void;
 }
 
 export const serverKey = (server: ServerListItem) => server.server_id || server.server_url;
@@ -135,7 +136,7 @@ export class ServerHub {
         if (!current()) return;
         e.reason = reason; this.publish(); this.opts.onDrop?.(e.id, reason, upMs);
       },
-      onFatal: reason => { if (current()) { e.state = 'closed'; e.reason = reason; this.publish(); } },
+      onFatal: reason => { if (current()) { e.state = 'closed'; e.reason = reason; this.publish(); this.opts.onFatal?.(e.id, reason); } },
     });
     e.connection = connection;
     e.unsubscribe = connection.subscribe(msg => {
