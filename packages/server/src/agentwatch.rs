@@ -49,7 +49,7 @@ impl PromptTracker {
     }
 }
 
-fn hex8(s: &str) -> String {
+pub fn hex8(s: &str) -> String {
     Sha256::digest(s.as_bytes())[..4]
         .iter()
         .map(|b| format!("{b:02x}"))
@@ -108,9 +108,26 @@ pub async fn scan_tmux_once(
             Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
             _ => String::new(),
         };
-        let matched = adapters::detect_prompt(&screen);
-        if let Some(id) = tracker.update(&p.session, matched.as_deref()) {
-            let choices = vec!["yes".to_string(), "no".to_string()];
+        let info = adapters::parse_prompt(&screen);
+        if let Some(id) = tracker.update(&p.session, info.as_ref().map(|i| i.question.as_str())) {
+            let info = info.expect("a new prompt has a screen");
+            // The screen says what the question is; only the agent's own hook says it is really waiting.
+            let confirmed = hub.hook_says_needs_input(&p.session);
+            let confidence = if confirmed {
+                Confidence::High
+            } else {
+                Confidence::Low
+            };
+            let prompt_kind = if info.choices.len() == 2 && info.choices[0].1.ends_with('\r') {
+                "yes_no"
+            } else {
+                "choice"
+            };
+            let choices = info
+                .choices
+                .iter()
+                .map(|(label, _)| label.clone())
+                .collect();
             hub.report(
                 &p.session,
                 Source::Screen,
@@ -122,10 +139,10 @@ pub async fn scan_tmux_once(
             hub.report(
                 &p.session,
                 Source::Screen,
-                Confidence::Low,
+                confidence,
                 EventKind::Prompt {
                     id,
-                    prompt_kind: "yes_no".into(),
+                    prompt_kind: prompt_kind.into(),
                     choices,
                 },
             );
@@ -215,16 +232,21 @@ mod tests {
     }
 
     /// A real tmux (private socket directory) running a program named `claude` that shows a question.
-    #[tokio::test]
-    async fn the_scan_sees_an_agent_process_and_its_question_in_a_real_tmux() {
+    async fn scan_a_question(
+        hook_said_needs_input: bool,
+    ) -> Option<Vec<(Source, Confidence, EventKind)>> {
         if std::process::Command::new("tmux")
             .arg("-V")
             .output()
             .is_err()
         {
-            return;
+            return None;
         }
-        let dir = std::env::temp_dir().join(format!("tm-scan-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "tm-scan-{}-{}",
+            std::process::id(),
+            hook_said_needs_input
+        ));
         std::fs::create_dir_all(&dir).unwrap();
         // A binary named like the agent (a copy of dash, which is not a multicall binary), started after the question is printed.
         let fake = dir.join("claude");
@@ -257,6 +279,16 @@ mod tests {
         ]);
         tokio::time::sleep(Duration::from_millis(600)).await;
         let hub = EventHub::new([1; 32]);
+        if hook_said_needs_input {
+            hub.report(
+                "tmux:scantest",
+                Source::Hook,
+                Confidence::High,
+                EventKind::State {
+                    state: AgentState::NeedsInput,
+                },
+            );
+        }
         let mut tracker = PromptTracker::default();
         scan_tmux_once(&hub, &runner, "tmux:", &mut tracker).await;
         let ev = hub.since("tmux:scantest", 0);
@@ -265,6 +297,15 @@ mod tests {
             .iter()
             .map(|e| (e.source, e.confidence, e.kind.clone()))
             .collect();
+        let _ = std::fs::remove_dir_all(&dir);
+        Some(kinds)
+    }
+
+    #[tokio::test]
+    async fn a_question_on_screen_alone_is_a_low_confidence_prompt() {
+        let Some(kinds) = scan_a_question(false).await else {
+            return;
+        };
         assert!(
             kinds.iter().any(|(s, c, k)| *s == Source::Screen
                 && *c == Confidence::Low
@@ -275,6 +316,18 @@ mod tests {
             == EventKind::State {
                 state: AgentState::NeedsInput
             }));
-        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn the_same_question_with_the_agents_own_hook_waiting_is_high_confidence() {
+        let Some(kinds) = scan_a_question(true).await else {
+            return;
+        };
+        assert!(
+            kinds.iter().any(|(s, c, k)| *s == Source::Screen
+                && *c == Confidence::High
+                && matches!(k, EventKind::Prompt { .. })),
+            "{kinds:?}"
+        );
     }
 }

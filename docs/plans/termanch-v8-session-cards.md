@@ -23,35 +23,44 @@ Name, tool icon, **state chip** (working, needs you, done, error, plus stale), *
 
 ## Steps
 
-### K.1 Design pass with real screenshots — [ ]
+### K.1 Design pass with real screenshots — [~] one variant built and screenshotted at 390 px; the owner has not picked
 Class: design · Needs: v6 P.1 sample events · Check: screenshots exist under `docs/plans/assets/cards/` and the owner picks one.
 Do: three card variants in the real client at 390 px wide (Playwright), in light and dark, with the states working, needs you, done, error and stale, including a long tool line and 20 sessions.
 Done-when: the owner names the variant; the choice is noted in this plan.
 
-### K.2 Card with state chip and current tool — [ ]
+### K.2 Card with state chip and current tool — [x]
 Class: implement · Needs: v6 P.6, v2 A.3, K.1 · Check: `cd packages/client && npx --yes pnpm@9 test`; e2e screenshot gate on a fake event stream.
 Do: 1. The collapsed card with the accessibility rules above. 2. The frozen-order sort. 3. The stale display. 4. A fallback when a session has no events yet: the existing plain row.
 Done-when: unit tests cover chip text and icon for every state, `aria-live` on change, order frozen during a touch and applied after, stale text; the e2e screenshot matches at phone width.
 
-### K.3 Plan panel and timeline — [ ]
+### K.3 Plan panel and timeline — [x]
 Class: implement · Needs: K.2 · Check: `cd packages/client && npx --yes pnpm@9 test`
 Do: expanded card with the read-only checklist from `plan` events with status marks, and the last 10 `tool` events as a capped timeline; everything rendered as text.
 Done-when: tests show plan items and tool events render escaped (a sample containing `<img onerror>` and control characters shows as plain text) and the lists stay capped.
 
-### K.4 One-tap answers with confidence rules — [ ]
+### K.4 One-tap answers with confidence rules — [x] (needs the agent hook connected, see below)
 Class: implement · Needs: v6 P.3 (reliable prompts), K.2 · Check: `cargo test -p termanch-server answer && cd packages/client && npx --yes pnpm@9 test`
 Do: 1. Server message `Answer { session, prompt_id, seq, choice }` that sends the matching keys only when the prompt is still current and the pane matches; otherwise a typed error. 2. Client shows buttons only for `confidence=high` prompts. Low-confidence prompts show the last screen lines (capped, scrubbed) and a single "Open terminal" button. 3. Tools without hooks therefore get no one-tap answers; the card says why.
 Done-when: tests prove a stale prompt id is refused, a changed pane is refused, a low-confidence prompt gets no answer buttons, and the keys sent for each choice are exactly the expected ones.
 
-### K.5 Quick replies and snippets — [ ]
+### K.5 Quick replies and snippets — [x]
 Class: implement · Needs: K.2 · Check: `cd packages/client && npx --yes pnpm@9 test`
 Do: a text field with saved snippets ("continue", "run the tests") stored in the user's settings; sends go to the chosen session; the field stays above the soft keyboard.
 Done-when: tests cover snippet save, delete and send; the phone check shows the input visible with the keyboard open.
 
-### K.6 Inbox view shared with connectors — [ ]
+### K.6 Inbox view shared with connectors — [ ] waits for v7 O.3 (the inbox store does not exist yet)
 Class: implement · Needs: v7 O.3, K.2 · Check: `cd packages/client && npx --yes pnpm@9 test`
 Do: an inbox list of events (needs you, done, error) with unread count and tap-to-open-session; the same store as the Web Push inbox.
 Done-when: tests show unread counts, mark-read on open, and the session opening from an item.
+
+## Status (2026-10-13)
+
+Built on tmux sessions and the v6 event stream; herdr is not a target (agreed). `SessionList.svelte` and `SessionCard.svelte` replace the plain rows; sessions with no events keep the plain row.
+
+- **Cards:** chip with word and icon (never colour alone), tool line, age, plan progress, stale text; `aria-live` announcement when a session starts needing you; 44 px targets (checked in `e2e/cards.mjs`); order frozen while a finger is down, a card is expanded, or for 2 s after a scroll (`FrozenOrder`, unit-tested).
+- **Answers (K.4):** `Answer {session, prompt_id, seq, choice}` is accepted only for the session's current prompt with the same id and event number, `confidence=high`, and the pane still showing the same question; the keys come from the screen's own choice list (digit, or `y`/`n` plus Enter), never from the client. A prompt is `high` only when the agent's own hook said `needs_input` within the last minute, so without `--connect-claude` the card says why there are no buttons. Tested with a fake backend for every refusal and a real tmux for capture and send.
+- **Quick replies (K.5):** `Reply {session, text}` types one cleaned line plus Enter into the chosen session's pane without attaching; snippets are kept in the browser.
+- **Not done:** K.6 (needs v7 O.3), a three-variant design pass for K.1, the unattached-pane limits of non-tmux managers (herdr has no capture or send).
 
 ## Open questions for the owner (recommended default first)
 

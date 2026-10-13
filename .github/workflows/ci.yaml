@@ -117,6 +117,14 @@ jobs:
         env:
           TERMANCH_BIN: ${{ github.workspace }}/bin/termanch-server
         run: node e2e/run.mjs
+
+      - name: Touch gestures and session cards in the browser
+        working-directory: packages/client
+        env:
+          TERMANCH_BIN: ${{ github.workspace }}/bin/termanch-server
+        run: |
+          node e2e/touch.mjs
+          node e2e/cards.mjs
   # The native host mode (decision 0075) ships one static musl binary per architecture: no glibc, no OpenSSL,
   # nothing to install. Build both on the native runners and fail if anything is linked dynamically.
   static:

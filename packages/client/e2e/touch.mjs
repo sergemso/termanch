@@ -150,4 +150,7 @@ try {
   await browser?.close();
   server.kill();
   try { herdr('--session', 'h1', 'server', 'stop'); } catch {}
+  statics.close();
+  // The static server and the Chrome pipes would otherwise keep this process (and the CI job) alive.
+  setTimeout(() => process.exit(process.exitCode ?? 0), 100);
 }

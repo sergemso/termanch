@@ -397,6 +397,46 @@ impl EventHub {
         out
     }
 
+    /// The prompt a one-tap answer may target: the session's latest `prompt` event, unless the agent has
+    /// moved on (a later state other than `needs_input`).
+    pub fn current_prompt(&self, session: &str) -> Option<AgentEvent> {
+        let rings = self.rings.lock().unwrap();
+        let ring = rings.get(session)?;
+        let prompt = ring
+            .events
+            .iter()
+            .rev()
+            .find(|e| matches!(e.kind, EventKind::Prompt { .. }))?;
+        let moved_on = ring.events.iter().any(|e| {
+            e.seq > prompt.seq
+                && matches!(e.kind, EventKind::State { state } if state != AgentState::NeedsInput)
+        });
+        (!moved_on).then(|| prompt.clone())
+    }
+
+    /// Source and confidence of the session's latest state event, and when it happened.
+    pub fn last_state_event(&self, session: &str) -> Option<(Source, Confidence, u64)> {
+        let rings = self.rings.lock().unwrap();
+        let ring = rings.get(session)?;
+        ring.events
+            .iter()
+            .rev()
+            .find(|e| matches!(e.kind, EventKind::State { .. }))
+            .map(|e| (e.source, e.confidence, e.ts))
+    }
+
+    /// The agent's own hook reported `needs_input` within the last minute and nothing newer has changed the state.
+    pub fn hook_says_needs_input(&self, session: &str) -> bool {
+        let now = now_ms();
+        matches!(
+            self.last_state_event(session),
+            Some((Source::Hook, Confidence::High, ts)) if now.saturating_sub(ts) < STALE_AFTER_MS
+        ) && self
+            .snapshot_at(now)
+            .iter()
+            .any(|s| s.session == session && s.state == AgentState::NeedsInput)
+    }
+
     /// Events of `session` after `seq`, oldest first (only what the ring still holds).
     pub fn since(&self, session: &str, seq: u64) -> Vec<AgentEvent> {
         self.rings
