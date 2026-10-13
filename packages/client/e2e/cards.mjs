@@ -173,6 +173,9 @@ try {
   await findField.dispatchEvent('pointerdown', { pointerId: 8, pointerType: 'touch', bubbles: true });
   await findField.focus();
   if (await page.locator('.session-sheet').getAttribute('data-height') !== 'half') fail('focusing a field moved the sheet before the finger lifted');
+  await page.locator('body').dispatchEvent('pointerup', { pointerId: 99, pointerType: 'touch' });
+  await page.waitForTimeout(30);
+  if (await page.locator('.session-sheet').getAttribute('data-height') !== 'half') fail('an unrelated pointer release moved the focused sheet under a finger');
   await findField.dispatchEvent('pointerup', { pointerId: 8, pointerType: 'touch', bubbles: true });
   await page.locator('.session-sheet[data-height=full]').waitFor();
   await page.getByLabel('Group', { exact: true }).selectOption('agent');

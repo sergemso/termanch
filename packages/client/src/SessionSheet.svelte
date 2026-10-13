@@ -112,11 +112,14 @@
     const measure = () => { available = parent.clientHeight; };
     const observer = new ResizeObserver(measure); observer.observe(parent); measure();
     const timer = setInterval(() => now = Date.now(), 250);
-    const release = () => setTimeout(() => {
-      frozen.touchUp(); touches = Math.max(0, touches - 1);
-      if (!touches && focusPending) { if (mobile) height = 'full'; focusPending = false; }
-      revision++;
-    }, 0);
+    const release = (e: PointerEvent) => {
+      if (!frozen.hasPointer(e.pointerId)) return;
+      setTimeout(() => {
+        frozen.touchUp(e.pointerId); touches = frozen.pointerCount;
+        if (!touches && focusPending) { if (mobile) height = 'full'; focusPending = false; }
+        revision++;
+      }, 0);
+    };
     window.addEventListener('pointerup', release); window.addEventListener('pointercancel', release);
     return () => { observer.disconnect(); clearInterval(timer); window.removeEventListener('pointerup', release); window.removeEventListener('pointercancel', release); onexpanded(false); onheld(false); };
   });
@@ -124,7 +127,7 @@
 
 <section bind:this={root} class="session-sheet" class:mobile class:docked={!mobile} class:peek={mobile && height === 'peek'} aria-label="Session views" data-height={mobile ? height : 'docked'}
   style={mobile ? `height: ${pixels}px; flex-basis: ${pixels}px;` : ''}
-  on:pointerdown|capture={() => { frozen.touchDown(); touches++; revision++; }} on:focusin={focusField}>
+  on:pointerdown|capture={(e) => { frozen.touchDown(e.pointerId); touches = frozen.pointerCount; revision++; }} on:focusin={focusField}>
   {#if mobile}
     <button class="handle" aria-label={`Resize sessions sheet, ${height}`} on:pointerdown={startDrag} on:pointermove={moveDrag} on:pointerup={(e) => endDrag(e)} on:pointercancel={(e) => endDrag(e, true)} on:click={cycle}
       on:keydown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); const i = HEIGHTS.indexOf(height); height = HEIGHTS[Math.max(0, Math.min(2, i + (e.key === 'ArrowUp' ? 1 : -1)))]; } }}><span aria-hidden="true"></span></button>
