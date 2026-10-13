@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import { ServerHub, serverKey, type HubConnection } from './hub';
+import { ServerHub, serverKey, sessionDestinations, type HubConnection } from './hub';
 import type { ConnectionOptions } from './connection';
 import type { ClientMessage, ServerListItem, ServerMessage } from './protocol';
 import type { Target } from './transport';
@@ -34,6 +34,30 @@ describe('ServerHub', () => {
     hub.start([server('a'), server('b')]); hub.start([server('a'), server('b')]); hub.add(server('a'));
     expect(connections.map(c => c.started)).toEqual([1, 1]);
     expect(get(hub.servers).map(s => s.state)).toEqual(['connecting', 'connecting']);
+  });
+  it('replaces a failed claim without dropping peers or overriding Pause', () => {
+    const { hub, connections } = setup();
+    hub.start([{ ...server('a'), claim: 'wrong' }, server('b')]);
+    connections[0].opts.onFatal?.('Wrong claim');
+    hub.add({ ...server('a'), claim: 'correct' });
+    expect(connections).toHaveLength(3);
+    expect(connections[2].opts.claim).toBe('correct');
+    expect(connections[1].closed).toBe(0);
+    hub.add({ ...server('a'), claim: 'correct' });
+    expect(connections).toHaveLength(3);
+    hub.pause('a'); hub.add({ ...server('a'), claim: 'new' });
+    expect(connections).toHaveLength(3);
+    expect(get(hub.servers)[0].state).toBe('paused');
+    hub.resume('a'); expect(connections[3].opts.claim).toBe('new');
+  });
+  it('requires a choice among connected peers when the selected server is unavailable', () => {
+    const { hub, connections } = setup(); hub.start([server('a'), server('b'), server('c')]);
+    connections.forEach(c => c.ready()); hub.pause('a');
+    const servers = get(hub.servers);
+    expect(sessionDestinations(servers, servers[0]).map(s => s.id)).toEqual(['b', 'c']);
+    expect(sessionDestinations(servers, servers[1]).map(s => s.id)).toEqual(['b']);
+    connections[1].opts.onState('unreachable');
+    expect(sessionDestinations(get(hub.servers), servers[0]).map(s => s.id)).toEqual(['c']);
   });
   it('pauses only that server, hides its sessions, and resumes with a fresh connection', () => {
     const { hub, connections } = setup(); hub.start([server('a'), server('b')]);

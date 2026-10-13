@@ -36,6 +36,11 @@ interface Options {
 export const serverKey = (server: ServerListItem) => server.server_id || server.server_url;
 export const sessionKey = (serverId: string, sessionId: string) => `${serverId}/${sessionId}`;
 
+/** A usable selection wins; otherwise the owner chooses among available peers. */
+export function sessionDestinations(servers: HubServer[], selected?: HubServer): HubServer[] {
+  return selected?.state === 'connected' ? [selected] : servers.filter(s => s.state === 'connected');
+}
+
 /** Owns connections for the device's saved servers. Only user actions pause/remove them; no cap drops a peer. */
 export class ServerHub {
   private entries = new Map<string, Entry>();
@@ -51,7 +56,13 @@ export class ServerHub {
   add(server: ServerListItem) {
     const id = serverKey(server);
     const existing = this.entries.get(id);
-    if (existing) { existing.server = server; this.publish(); return; }
+    if (existing) {
+      const changed = existing.server.claim !== server.claim || existing.server.server_url !== server.server_url;
+      existing.server = server;
+      if (changed && existing.state !== 'paused') { this.disconnect(existing); this.connect(existing); }
+      else this.publish();
+      return;
+    }
     const entry: Entry = { id, server, state: 'connecting', reason: '', version: '', backends: [], connection: null,
       sessions: [], agents: {}, refresh: !server.record && !!server.server_id, everReady: false };
     this.entries.set(id, entry);
