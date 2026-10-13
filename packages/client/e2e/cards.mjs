@@ -20,7 +20,7 @@ const browser = await chromium.launch({
   args: ['--no-sandbox'],
 });
 try {
-  const page = await (await browser.newContext({ viewport: { width: 390, height: 900 } })).newPage();
+  const page = await (await browser.newContext({ viewport: { width: 390, height: 900 }, isMobile: true, hasTouch: true })).newPage();
   page.on('pageerror', (e) => fail(`page error: ${e.message}`));
   await page.goto(`http://127.0.0.1:${srv.address().port}/cards.html`);
   await page.waitForSelector('[role=group]');
@@ -66,6 +66,17 @@ try {
     const strip = document.querySelector('[role=tablist]').getBoundingClientRect();
     return tab.left >= strip.left - 1 && tab.right <= strip.right + 1;
   });
+  // A narrower viewport must reveal the active tab again, even when it was visible before resize.
+  const activeInView = () => {
+    const tab = document.querySelector('[role=tab][aria-selected=true]').getBoundingClientRect();
+    const strip = document.querySelector('[role=tablist]').getBoundingClientRect();
+    return tab.left >= strip.left - 1 && tab.right <= strip.right + 1;
+  };
+  for (const width of [360, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(width => window.__vv?.({ width }), width);
+    await page.waitForFunction(activeInView);
+  }
   const tabs = page.getByRole('tab');
   if (!(await tabs.first().getAttribute('aria-label')).includes('Needs you')) fail('needs-you tabs are not first');
   if (await page.locator('[role=tab] .badge').count() !== 12) fail('tabs do not name all three servers');
