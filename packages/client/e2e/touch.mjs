@@ -114,6 +114,13 @@ try {
     if (process.env.HOLD) await sleep(Number(process.env.HOLD));
     throw new Error('done');
   }
+  // tmux and herdr ask the terminal for its 256-colour palette on attach; the replies used to flood the server and
+  // drop the connection every time, which showed as a reconnect every ~10 s. One connection, no reconnects:
+  await sleep(4000);
+  const readies = await page.evaluate(() => window.__e2e.ready);
+  if (readies !== 1) fail(`the connection was re-established ${readies - 1} time(s) within 4 s of attaching`);
+  else console.log('ok  attaching to a session does not drop the connection');
+
   // A stand-in for a mouse-first app: it switches on SGR mouse reporting and echoes what it receives.
   await sleep(1500);
   await page.evaluate(() => window.__e2e.type("printf '\\033[?1000h\\033[?1006h'; stty raw -echo; cat -v\r"));

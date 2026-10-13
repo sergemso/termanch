@@ -33,6 +33,10 @@ pub const SERVER_PWD: &str = "termanch-direct-v1-0123456789";
 pub const CHANNEL_ID: u16 = 0;
 /// A single message above this closes the connection; clients send small JSON.
 const MAX_MESSAGE: usize = 64 * 1024;
+/// Client messages the session has not read yet wait here, bounded by bytes: a terminal answers a palette query with
+/// one message per colour (about 260 at once after an attach), which must not cost the peer its connection.
+const BACKLOG_BYTES: usize = 256 * 1024;
+const BACKLOG_MESSAGES: usize = 4096;
 
 #[derive(Clone, Debug)]
 pub struct Limits {
@@ -149,6 +153,9 @@ struct Peer {
     created: Instant,
     last_rx: Instant,
     queue: VecDeque<String>,
+    /// Inbound messages the session had no room for yet.
+    backlog: VecDeque<String>,
+    backlog_bytes: usize,
     closing: bool,
     dirty: bool,
     timeout: Instant,
@@ -324,6 +331,8 @@ impl Server {
             created: now,
             last_rx: now,
             queue: VecDeque::new(),
+            backlog: VecDeque::new(),
+            backlog_bytes: 0,
             closing: false,
             dirty: true,
             timeout: now,
@@ -352,6 +361,8 @@ impl Peer {
             self.rtc.disconnect();
             return false;
         }
+
+        self.hand_over();
 
         // Session -> client, with backpressure: a full SCTP buffer leaves messages queued.
         if let (Some(cid), Some(end)) = (self.cid, self.end.as_mut()) {
@@ -406,6 +417,10 @@ impl Peer {
             }
         }
         let _ = transmits;
+        if !self.backlog.is_empty() {
+            // Look again soon: the session is reading, and these are waiting for it.
+            self.timeout = self.timeout.min(now + Duration::from_millis(5));
+        }
 
         // The session finished (for example after an auth error): let the last messages out first.
         if self.closing && self.queue.is_empty() {
@@ -421,6 +436,27 @@ impl Peer {
             self.timeout = now + Duration::from_millis(20);
         }
         true
+    }
+
+    /// Gives the session as many waiting client messages as it has room for.
+    fn hand_over(&mut self) {
+        let Some(end) = &self.end else { return };
+        while let Some(front) = self.backlog.pop_front() {
+            match end.to_session.try_send(front) {
+                Ok(()) => {}
+                Err(tokio::sync::mpsc::error::TrySendError::Full(text)) => {
+                    self.backlog.push_front(text);
+                    break;
+                }
+                Err(_) => {
+                    // The session ended: nothing will read these.
+                    self.backlog.clear();
+                    self.backlog_bytes = 0;
+                    return;
+                }
+            }
+        }
+        self.backlog_bytes = self.backlog.iter().map(String::len).sum();
     }
 
     /// False means drop this peer.
@@ -443,12 +479,13 @@ impl Peer {
                 let Ok(text) = String::from_utf8(d.data.to_vec()) else {
                     return false;
                 };
-                if let Some(end) = &self.end {
-                    // A full queue means the client floods faster than the session reads.
-                    if end.to_session.try_send(text).is_err() {
-                        return false;
-                    }
+                self.backlog_bytes += text.len();
+                self.backlog.push_back(text);
+                // More than this waiting means the client floods faster than the session reads.
+                if self.backlog_bytes > BACKLOG_BYTES || self.backlog.len() > BACKLOG_MESSAGES {
+                    return false;
                 }
+                self.hand_over();
             }
             Event::ChannelBufferedAmountLow(_) => self.dirty = true,
             _ => {}

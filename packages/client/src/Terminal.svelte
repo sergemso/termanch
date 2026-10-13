@@ -17,6 +17,7 @@
   import { setEnterKeyHint } from './lib/terminal/inputGuards';
   import { WordTracker } from './lib/terminal/wordTracker';
   import { PinchZoom } from './lib/terminal/pinch';
+  import { InputBatcher } from './lib/terminal/inputBatch';
   import { TouchScroll } from './lib/terminal/touchScroll';
   import { FONT_FAMILY, THEME } from './lib/terminal/theme';
   import { TouchSelection, type Selection } from './lib/terminal/touchSelection';
@@ -102,8 +103,11 @@
     fitAddon = null;
   }
 
-  function sendInput(data: string) {
+  const batch = new InputBatcher((data) => {
     if (activeSessionId) connection.send({ type: 'input', data: textToB64(data) });
+  });
+  function sendInput(data: string) {
+    batch.add(data);
   }
 
   /** Typed characters pass through the sticky Ctrl/Alt; key-row sequences are sent as they are. */
@@ -215,6 +219,7 @@
   }
 
   function sendResize(cols: number, rows: number) {
+    batch.flush(); // typed text goes out before the new size, as it was typed
     if (activeSessionId) connection.send({ type: 'resize', cols, rows });
   }
 
