@@ -296,7 +296,8 @@ try {
     );
     await page.reload();
     if (await page.getByText('Your Servers').count()) fail('saved servers opened the old Connect screen');
-    await page.getByRole('button', { name: 'Servers', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Menu', exact: true }).getByRole('button', { name: 'Servers', exact: true }).click();
     // Add Server: where sessions run. The container is the default; the host modes show a warning and need consent.
     await page.getByRole('button', { name: 'Add Server' }).first().click();
     const cmd = () => page.locator('pre.command').first().textContent();
@@ -319,6 +320,7 @@ try {
       window.__opened = [];
       window.open = (u) => (window.__opened.push(String(u)), null);
     });
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
     await page.getByRole('button', { name: 'Report a problem', exact: true }).click();
     const reportText = await page.locator('[role=dialog][aria-label="Report a problem"] textarea').inputValue();
     if (!reportText.includes('app:') || !reportText.includes('window: 390x')) fail(`report text is missing diagnostics: ${reportText.slice(0, 120)}`);
@@ -341,12 +343,11 @@ try {
       // The toast must clear the status bar area, and the title must not trigger double-tap zoom.
       const toastTop = await page.evaluate(() => document.querySelector('.toast')?.getBoundingClientRect().top ?? null);
       if (toastTop !== null && toastTop < 47) fail(`the toast is under the status bar: top ${toastTop}`);
-      const taps = await page.evaluate(() => [getComputedStyle(document.querySelector('h1')).touchAction, getComputedStyle(document.body).touchAction]);
+      const taps = await page.evaluate(() => [getComputedStyle(document.querySelector('button[aria-label=Menu]')).touchAction, getComputedStyle(document.body).touchAction]);
       if (taps.some((t) => t !== 'manipulation')) fail(`double-tap zoom is not disabled: ${taps}`);
       // Connecting lands in a live terminal: the hidden input has focus without any tap.
       await page.waitForFunction(() => document.activeElement?.classList.contains('xterm-helper-textarea'), null, { timeout: 5000 });
-      // The session chosen by the user is named in the top bar.
-      await page.waitForFunction(() => !document.querySelector('button[aria-label=Sessions]')?.textContent?.includes('Sessions'), null, { timeout: 5000 });
+      await page.getByRole('tab', { selected: true }).waitFor({ timeout: 5000 });
       await page.getByRole('button', { name: 'Sessions' }).click();
       const heights = await page.evaluate(() => [...document.querySelectorAll('aside button.icon')].map((b) => Math.round(b.getBoundingClientRect().height)));
       if (heights.length !== 2 || heights[0] !== heights[1]) fail(`Refresh and New differ in size: ${heights}`);

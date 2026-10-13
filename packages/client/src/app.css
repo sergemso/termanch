@@ -152,3 +152,18 @@ button.icon {
   font-size: 0.75rem;
   white-space: nowrap;
 }
+
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-secondary: #f0f3f6;
+  --fg: #1f2328;
+  --fg-muted: #59636e;
+  --accent: #0969da;
+  --accent-hover: #0550ae;
+  --border: #d1d9e0;
+  --border-hover: #818b98;
+  --danger: #cf222e;
+  --success: #1a7f37;
+  --terminal-bg: #ffffff;
+  --terminal-fg: #1f2328;
+}

@@ -56,11 +56,13 @@ describe('order', () => {
     expect(o.order(['x', 'y', 'z'], later, 2500)).toEqual(['x', 'y', 'z']); // two seconds after the scroll
   });
 
-  it('while held, new sessions go last and removed ones drop out', () => {
+  it('while held, neither insertion nor removal moves controls; both apply after release', () => {
     const o = new FrozenOrder();
     o.order(['x', 'y'], agents, 0);
     o.touchDown();
-    expect(o.order(['y', 'n', 'z'], agents, 10)).toEqual(['y', 'n', 'z']);
-    expect(o.order(['n', 'y'], agents, 20)).toEqual(['y', 'n']);
+    expect(o.order(['y', 'n', 'z'], agents, 10)).toEqual(['y', 'x']);
+    expect(o.order(['n', 'y'], agents, 20)).toEqual(['y', 'x']);
+    o.touchUp();
+    expect(o.order(['n', 'y'], agents, 21)).toEqual(['y', 'n']);
   });
 });
