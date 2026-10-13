@@ -5,7 +5,7 @@ export type ClientMessage =
   | { type: 'uninstall'; confirm_name: string; delete_user?: boolean; remove_tmux?: boolean; kill_sessions?: boolean }
   | { type: 'agent_sync'; after: Record<string, number> }
   | { type: 'list_sessions' }
-  | { type: 'new_session'; name: string }
+  | { type: 'new_session'; name: string; backend?: string }
   | { type: 'ping' }
   | { type: 'attach'; session_id: string }
   | { type: 'input'; data: string }
@@ -15,7 +15,7 @@ export type ServerMessage =
   | { type: 'challenge'; nonce: string; server_id: string }
   | { type: 'device_revoked'; device: string }
   | { type: 'uninstall_done'; mode: string }
-  | { type: 'auth_ok'; user: string; server_name: string; mode?: string; version?: string }
+  | { type: 'auth_ok'; user: string; server_name: string; mode?: string; version?: string; backends?: string[] }
   | { type: 'sessions'; sessions: SessionInfo[] }
   | { type: 'session_attached'; session_id: string }
   | { type: 'output'; data: string }
@@ -29,6 +29,8 @@ export interface SessionInfo {
   id: string;
   name: string;
   agent: 'herdr' | 'tmux' | 'codex' | null;
+  /** The session manager it lives in; set when the server runs more than one (`tmux`, `herdr`). */
+  backend?: string;
 }
 
 export type AgentState = 'idle' | 'working' | 'needs_input' | 'done' | 'error' | 'unknown';

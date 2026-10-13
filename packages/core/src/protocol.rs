@@ -36,6 +36,9 @@ pub enum ClientMessage {
     ListSessions,
     NewSession {
         name: String,
+        /// Which session manager to create it in (`tmux`, `herdr`); the first one when absent.
+        #[serde(default)]
+        backend: Option<String>,
     },
     Ping,
     Attach {
@@ -75,6 +78,9 @@ pub enum ServerMessage {
         /// Server version and build (`0.1.0+abc1234`); absent from older servers.
         #[serde(default)]
         version: String,
+        /// Session managers this server offers; more than one means "New session" asks which.
+        #[serde(default)]
+        backends: Vec<String>,
     },
     Sessions {
         sessions: Vec<SessionInfo>,
@@ -110,6 +116,9 @@ pub struct SessionInfo {
     pub id: String,
     pub name: String,
     pub agent: Option<String>,
+    /// The session manager it lives in (`tmux`, `herdr`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -144,6 +153,7 @@ mod tests {
             server_name: "s".into(),
             mode: "container".into(),
             version: "0.1.0+dev".into(),
+            backends: vec!["tmux".into()],
         })
         .unwrap();
         assert_eq!(v["type"], "auth_ok");
@@ -162,7 +172,11 @@ mod tests {
         })
         .unwrap();
         assert_eq!(v["type"], "session_attached");
-        let v = serde_json::to_value(ClientMessage::NewSession { name: "n".into() }).unwrap();
+        let v = serde_json::to_value(ClientMessage::NewSession {
+            name: "n".into(),
+            backend: None,
+        })
+        .unwrap();
         assert_eq!(v["type"], "new_session");
         let v = serde_json::to_value(ClientMessage::Hello).unwrap();
         assert_eq!(v["type"], "hello");
@@ -211,6 +225,7 @@ mod tests {
                 id: "1".into(),
                 name: "main".into(),
                 agent: Some("tmux".into()),
+                backend: None,
             }],
         };
         let json = serde_json::to_string(&msg).unwrap();

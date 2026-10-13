@@ -51,6 +51,7 @@
   let servers: ServerListItem[] = [];
   let selectedServer: ServerListItem | null = null;
   let sessions: SessionInfo[] = [];
+  let backends: string[] = [];
   let activeSessionId: string | null = null;
   let connection: Connection | null = null;
   let connState: ConnState = 'closed';
@@ -205,6 +206,7 @@
           addServer(server);
         }
         serverVersion = msg.version ?? '';
+        backends = msg.backends ?? [];
         showToast(isReconnect ? 'Reconnected' : `Connected to ${msg.server_name}`);
         connection?.send({ type: 'list_sessions' });
         if (connection) requestAgentSync((m) => connection?.send(m));
@@ -247,8 +249,19 @@
   }
 
   function newSession() {
-    const name = prompt('New tmux session name', `agent-${sessions.length + 1}`);
-    if (name) connection?.send({ type: 'new_session', name });
+    const name = prompt('New session name', `agent-${sessions.length + 1}`);
+    if (!name) return;
+    let backend: string | undefined;
+    if (backends.length > 1) {
+      const pick = prompt(`Create it in: ${backends.join(' or ')}?`, backends[0]);
+      if (!pick) return;
+      backend = backends.find((b) => b === pick.trim().toLowerCase());
+      if (!backend) {
+        showToast(`Pick one of: ${backends.join(', ')}`, 'error');
+        return;
+      }
+    }
+    connection?.send({ type: 'new_session', name, backend });
   }
 
   function handleServerMessage(msg: ServerMessage) {
@@ -458,14 +471,18 @@
               {#each sessions as session}
                 <li style="padding: 12px; margin-bottom: 4px; border-radius: 6px; cursor: pointer; background: {activeSessionId === session.id ? 'var(--accent)' : 'transparent'}; color: {activeSessionId === session.id ? 'var(--bg)' : 'var(--fg)'};" on:click={() => attach(session.id)}>
                   <div style="font-weight: 500;">{session.name}</div>
-                  <div style="font-size: 0.75rem; color: var(--fg-muted);">{session.id.slice(0, 12)}</div>
+                  {#if session.backend}
+                    <span style="font-size: 0.7rem; background: var(--border); color: var(--fg); padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block;">{session.backend}</span>
+                  {:else}
+                    <div style="font-size: 0.75rem; color: var(--fg-muted);">{session.id.slice(0, 12)}</div>
+                  {/if}
                   {#if session.agent}
                     <span style="font-size: 0.7rem; background: var(--border); padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block;">{session.agent}</span>
                   {/if}
                 </li>
               {/each}
               {#if sessions.length === 0}
-                <li style="color: var(--fg-muted); text-align: center; padding: 24px;">No tmux sessions found</li>
+                <li style="color: var(--fg-muted); text-align: center; padding: 24px;">No sessions yet</li>
               {/if}
             </ul>
           </aside>

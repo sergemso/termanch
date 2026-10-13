@@ -39,6 +39,11 @@ impl SessionManager {
         }
     }
 
+    /// The session managers a client may pick from when it creates a session.
+    pub fn backends(&self) -> Vec<String> {
+        self.backend.kinds()
+    }
+
     /// Serves the agent event stream (plan v6) to every connection.
     pub fn with_events(mut self, hub: EventHub) -> Self {
         self.events = Some(hub);
@@ -182,8 +187,8 @@ impl SessionManager {
                 let sessions = self.backend.list().await?;
                 send_r(tx, &ServerMessage::Sessions { sessions }).await?;
             }
-            ClientMessage::NewSession { name } => {
-                self.backend.create(&name).await?;
+            ClientMessage::NewSession { name, backend } => {
+                self.backend.create_in(&name, backend.as_deref()).await?;
                 let sessions = self.backend.list().await?;
                 send_r(tx, &ServerMessage::Sessions { sessions }).await?;
             }
