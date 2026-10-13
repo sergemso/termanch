@@ -2,6 +2,8 @@
 //! name the command that attaches a terminal to one, and survive a client detaching. tmux is built in;
 //! anything with a CLI that fits that shape (herdr, zellij, screen, ...) plugs in through `CommandBackend`;
 //! a server-native backend can implement `SessionBackend` directly (plan step 7.1).
+use std::sync::Arc;
+
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use termanch_core::protocol::SessionInfo;
@@ -17,6 +19,14 @@ pub trait SessionBackend: Send + Sync {
     async fn create(&self, name: &str) -> Result<()>;
     /// Starts a terminal attached to session `id`. Dropping it must only detach.
     fn attach(&self, id: &str, cols: u16, rows: u16) -> Result<Attachment>;
+    /// The session managers behind this backend, in the order "New session" offers them.
+    fn kinds(&self) -> Vec<String> {
+        vec![self.name().to_string()]
+    }
+    /// Creates in a named manager; a backend with a single manager ignores the name.
+    async fn create_in(&self, name: &str, _backend: Option<&str>) -> Result<()> {
+        self.create(name).await
+    }
 }
 
 /// Session ids/names we accept from clients; they end up in argv, never in a shell.
@@ -40,6 +50,7 @@ pub fn parse_list(output: &str) -> Vec<SessionInfo> {
                 id: id.to_string(),
                 name: name.to_string(),
                 agent: None,
+                backend: None,
             })
         })
         .collect()
@@ -279,6 +290,8 @@ impl RunMode {
 pub struct TmuxBackend {
     runner: Runner,
     events: Option<EventEnv>,
+    /// Added to the session name wherever events refer to it (`tmux:` when several managers run).
+    event_prefix: String,
 }
 
 impl TmuxBackend {
@@ -286,7 +299,13 @@ impl TmuxBackend {
         Self {
             runner,
             events: None,
+            event_prefix: String::new(),
         }
+    }
+
+    pub fn with_event_prefix(mut self, prefix: &str) -> Self {
+        self.event_prefix = prefix.to_string();
+        self
     }
 
     /// New sessions get the variables agent tools use to report events (plan v6).
@@ -323,7 +342,11 @@ impl SessionBackend for TmuxBackend {
             ));
         }
         let mut args: Vec<String> = ["new-session", "-d", "-s", name].map(String::from).into();
-        for var in self.events.iter().flat_map(|e| e.vars(name)) {
+        for var in self
+            .events
+            .iter()
+            .flat_map(|e| e.vars(&format!("{}{name}", self.event_prefix)))
+        {
             args.extend(["-e".to_string(), var]);
         }
         let out = self.runner.run_as(true, "tmux", &args).await?;
@@ -360,6 +383,7 @@ pub fn parse_herdr_list(json: &str) -> Result<Vec<SessionInfo>> {
             id: n.to_string(),
             name: n.to_string(),
             agent: None,
+            backend: None,
         })
         .collect())
 }
@@ -370,6 +394,7 @@ pub fn parse_herdr_list(json: &str) -> Result<Vec<SessionInfo>> {
 pub struct HerdrBackend {
     runner: Runner,
     events: Option<EventEnv>,
+    event_prefix: String,
 }
 
 impl HerdrBackend {
@@ -377,7 +402,13 @@ impl HerdrBackend {
         Self {
             runner,
             events: None,
+            event_prefix: String::new(),
         }
+    }
+
+    pub fn with_event_prefix(mut self, prefix: &str) -> Self {
+        self.event_prefix = prefix.to_string();
+        self
     }
 
     pub fn with_events(mut self, events: EventEnv) -> Self {
@@ -414,7 +445,11 @@ impl SessionBackend for HerdrBackend {
             return Err(anyhow!("Session {name} already exists"));
         }
         // The panes inherit the server's environment, so the event variables go through `env`.
-        let mut args: Vec<String> = self.events.iter().flat_map(|e| e.vars(name)).collect();
+        let mut args: Vec<String> = self
+            .events
+            .iter()
+            .flat_map(|e| e.vars(&format!("{}{name}", self.event_prefix)))
+            .collect();
         args.extend(["herdr", "--session", name, "server"].map(String::from));
         self.runner.spawn_detached("env", &args)?;
         // The server needs a moment to open its socket; attaching before that would start a second one.
@@ -433,6 +468,73 @@ impl SessionBackend for HerdrBackend {
         }
         let args = ["session", "attach", id].map(String::from);
         self.runner.attach("herdr", &args, cols, rows)
+    }
+}
+
+/// Several session managers at once. Session ids become `manager:name` so a tmux `work` and a herdr `work`
+/// stay apart; the client shows the manager next to the name.
+pub struct CompositeBackend {
+    parts: Vec<(String, Arc<dyn SessionBackend>)>,
+}
+
+impl CompositeBackend {
+    pub fn new(parts: Vec<(String, Arc<dyn SessionBackend>)>) -> Self {
+        Self { parts }
+    }
+
+    fn part(&self, kind: &str) -> Result<&Arc<dyn SessionBackend>> {
+        self.parts
+            .iter()
+            .find(|(k, _)| k == kind)
+            .map(|(_, b)| b)
+            .ok_or_else(|| anyhow!("Unknown session manager"))
+    }
+}
+
+#[async_trait]
+impl SessionBackend for CompositeBackend {
+    fn name(&self) -> &str {
+        "mixed"
+    }
+
+    /// A manager that fails to answer (herdr not installed, say) only hides its own sessions.
+    async fn list(&self) -> Result<Vec<SessionInfo>> {
+        let mut all = Vec::new();
+        for (kind, b) in &self.parts {
+            match b.list().await {
+                Ok(list) => all.extend(list.into_iter().map(|s| SessionInfo {
+                    id: format!("{kind}:{}", s.id),
+                    backend: Some(kind.clone()),
+                    ..s
+                })),
+                Err(e) => tracing::warn!("{kind}: cannot list sessions: {e}"),
+            }
+        }
+        Ok(all)
+    }
+
+    async fn create(&self, name: &str) -> Result<()> {
+        self.create_in(name, None).await
+    }
+
+    async fn create_in(&self, name: &str, backend: Option<&str>) -> Result<()> {
+        let (kind, b) = match backend {
+            Some(k) => (k, self.part(k)?),
+            None => (self.parts[0].0.as_str(), &self.parts[0].1),
+        };
+        let _ = kind;
+        b.create(name).await
+    }
+
+    fn attach(&self, id: &str, cols: u16, rows: u16) -> Result<Attachment> {
+        let (kind, name) = id
+            .split_once(':')
+            .ok_or_else(|| anyhow!("Unknown session"))?;
+        self.part(kind)?.attach(name, cols, rows)
+    }
+
+    fn kinds(&self) -> Vec<String> {
+        self.parts.iter().map(|(k, _)| k.clone()).collect()
     }
 }
 
@@ -564,6 +666,40 @@ mod tests {
         assert_eq!(ids, ["work"]);
         assert!(parse_herdr_list("nope").is_err());
         assert!(parse_herdr_list("{}").unwrap().is_empty());
+    }
+
+    /// Two fake managers sharing a session name stay apart.
+    #[tokio::test]
+    async fn the_composite_keeps_same_named_sessions_of_different_managers_apart() {
+        let a: Arc<dyn SessionBackend> = Arc::new(
+            CommandBackend::new("a", r"printf work|Work\n", "true {name}", "cat").unwrap(),
+        );
+        let b: Arc<dyn SessionBackend> = Arc::new(
+            CommandBackend::new("b", r"printf work|Work\nother\n", "true {name}", "cat").unwrap(),
+        );
+        let c = CompositeBackend::new(vec![("one".into(), a), ("two".into(), b)]);
+        let list = c.list().await.unwrap();
+        let ids: Vec<_> = list
+            .iter()
+            .map(|s| (s.id.as_str(), s.backend.as_deref().unwrap()))
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                ("one:work", "one"),
+                ("two:work", "two"),
+                ("two:other", "two")
+            ]
+        );
+        assert_eq!(c.kinds(), ["one", "two"]);
+        c.create_in("fresh", Some("two")).await.unwrap();
+        assert!(c.create_in("fresh", Some("nope")).await.is_err());
+        assert!(
+            c.attach("work", 80, 24).is_err(),
+            "an id without a manager is refused"
+        );
+        assert!(c.attach("zzz:work", 80, 24).is_err());
+        assert!(c.attach("two:work", 80, 24).is_ok());
     }
 
     #[test]
@@ -733,6 +869,71 @@ mod tests {
                 "herdr",
                 "--session",
                 "t-one",
+                "server",
+                "stop",
+            ])
+            .output();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Real tmux next to real herdr (private home), same session name in both.
+    #[tokio::test]
+    async fn tmux_and_herdr_sessions_with_one_name_live_side_by_side() {
+        let have = |bin: &str| {
+            std::process::Command::new(bin).arg("-V").output().is_ok()
+                || std::process::Command::new(bin)
+                    .arg("--version")
+                    .output()
+                    .is_ok()
+        };
+        if !have("tmux") || !have("herdr") {
+            return;
+        }
+        let name = format!("mix{}", &uuid::Uuid::new_v4().simple().to_string()[..6]);
+        let dir = std::env::temp_dir().join(format!("termanch-mix-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let d = dir.to_str().unwrap();
+        let herdr_env = [
+            ("HERDR_ENV", None),
+            ("HERDR_SOCKET_PATH", None),
+            ("HERDR_PANE_ID", None),
+            ("XDG_CONFIG_HOME", Some(d)),
+            ("HOME", Some(d)),
+        ];
+        let c = CompositeBackend::new(vec![
+            ("tmux".into(), Arc::new(TmuxBackend::new(Runner::default()))),
+            (
+                "herdr".into(),
+                Arc::new(HerdrBackend::new(Runner::default().with_env(&herdr_env))),
+            ),
+        ]);
+        c.create_in(&name, Some("tmux")).await.unwrap();
+        c.create_in(&name, Some("herdr")).await.unwrap();
+        let ids: Vec<String> = c.list().await.unwrap().into_iter().map(|s| s.id).collect();
+        assert!(
+            ids.contains(&format!("tmux:{name}")) && ids.contains(&format!("herdr:{name}")),
+            "{ids:?}"
+        );
+        for kind in ["tmux", "herdr"] {
+            let mut att = c.attach(&format!("{kind}:{name}"), 100, 30).unwrap();
+            let chunk = tokio::time::timeout(std::time::Duration::from_secs(5), att.rx.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(!chunk.is_empty(), "{kind} painted nothing");
+        }
+        let _ = std::process::Command::new("tmux")
+            .args(["kill-session", "-t", &format!("={name}")])
+            .output();
+        let _ = std::process::Command::new("env")
+            .args([
+                "-u",
+                "HERDR_ENV",
+                &format!("XDG_CONFIG_HOME={d}"),
+                &format!("HOME={d}"),
+                "herdr",
+                "--session",
+                &name,
                 "server",
                 "stop",
             ])

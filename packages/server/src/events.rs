@@ -197,6 +197,14 @@ struct Ring {
     last_event_at: u64,
 }
 
+/// A session id as events know it: a plain name, or `manager:name` when several managers run.
+pub fn valid_event_session(id: &str) -> bool {
+    match id.split_once(':') {
+        Some((kind, name)) => crate::backend::valid_name(kind) && crate::backend::valid_name(name),
+        None => crate::backend::valid_name(id),
+    }
+}
+
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -269,7 +277,7 @@ impl EventHub {
         confidence: Confidence,
         kinds: Vec<EventKind>,
     ) -> Result<()> {
-        if !crate::backend::valid_name(session) || !self.token_matches(session, token) {
+        if !valid_event_session(session) || !self.token_matches(session, token) {
             tracing::info!(target: "audit", event = "agent_event_refused", session = %session);
             return Err(anyhow!("token does not match the session"));
         }
@@ -360,8 +368,12 @@ impl EventHub {
     }
 
     /// Forget a session that no longer exists.
-    pub fn forget_except(&self, live: &[String]) {
-        self.rings.lock().unwrap().retain(|k, _| live.contains(k));
+    /// Only ids that start with `prefix` are considered (one per session manager when several run).
+    pub fn forget_except(&self, prefix: &str, live: &[String]) {
+        self.rings
+            .lock()
+            .unwrap()
+            .retain(|k, _| !k.starts_with(prefix) || live.contains(k));
     }
 
     pub fn snapshot(&self) -> Vec<SessionAgentState> {
@@ -560,6 +572,43 @@ mod tests {
         assert!(
             long.as_os_str().len() <= 100 && long.ends_with("events.sock"),
             "{long:?}"
+        );
+    }
+
+    #[test]
+    fn event_session_ids_may_carry_a_manager_prefix() {
+        assert!(valid_event_session("work") && valid_event_session("herdr:work"));
+        assert!(
+            !valid_event_session("a:b:c")
+                && !valid_event_session(":x")
+                && !valid_event_session("x:")
+        );
+    }
+
+    #[test]
+    fn forgetting_is_limited_to_one_managers_prefix() {
+        let h = hub();
+        h.push(
+            "tmux:a",
+            Source::Scan,
+            Confidence::Low,
+            state(AgentState::Idle),
+            1,
+        );
+        h.push(
+            "herdr:b",
+            Source::Herdr,
+            Confidence::High,
+            state(AgentState::Idle),
+            1,
+        );
+        h.forget_except("tmux:", &[]);
+        assert_eq!(
+            h.snapshot()
+                .iter()
+                .map(|s| s.session.as_str())
+                .collect::<Vec<_>>(),
+            ["herdr:b"]
         );
     }
 

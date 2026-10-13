@@ -61,7 +61,12 @@ fn now_s() -> u64 {
 }
 
 /// One scan cycle over tmux: states from the process scan, then prompts from the screens of agent sessions.
-pub async fn scan_tmux_once(hub: &EventHub, runner: &Runner, tracker: &mut PromptTracker) {
+pub async fn scan_tmux_once(
+    hub: &EventHub,
+    runner: &Runner,
+    prefix: &str,
+    tracker: &mut PromptTracker,
+) {
     let args = [
         "list-panes",
         "-a",
@@ -73,23 +78,32 @@ pub async fn scan_tmux_once(hub: &EventHub, runner: &Runner, tracker: &mut Promp
         return;
     };
     if !out.status.success() {
-        hub.forget_except(&[]);
+        hub.forget_except(prefix, &[]);
         tracker.retain(&HashSet::new());
         return;
     }
-    let panes = adapters::parse_panes(&String::from_utf8_lossy(&out.stdout), now_s());
+    let mut panes = adapters::parse_panes(&String::from_utf8_lossy(&out.stdout), now_s());
+    // Events know a session by the id clients see: the manager prefix plus tmux's name.
+    let names: HashMap<String, String> = panes
+        .iter()
+        .map(|p| (format!("{prefix}{}", p.session), p.session.clone()))
+        .collect();
+    for p in &mut panes {
+        p.session = format!("{prefix}{}", p.session);
+    }
     let live: HashSet<String> = panes.iter().map(|p| p.session.clone()).collect();
-    hub.forget_except(&live.iter().cloned().collect::<Vec<_>>());
+    hub.forget_except(prefix, &live.iter().cloned().collect::<Vec<_>>());
     tracker.retain(&live);
     let mut seen = HashSet::new();
     for p in panes
         .iter()
         .filter(|p| adapters::agent_name(&p.command).is_some())
     {
-        if !seen.insert(p.session.clone()) || !crate::backend::valid_name(&p.session) {
+        let tmux_name = names[&p.session].clone();
+        if !seen.insert(p.session.clone()) || !crate::backend::valid_name(&tmux_name) {
             continue;
         }
-        let capture = ["capture-pane", "-p", "-t", &format!("={}:", p.session)].map(String::from);
+        let capture = ["capture-pane", "-p", "-t", &format!("={tmux_name}:")].map(String::from);
         let screen = match runner.run("tmux", &capture).await {
             Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
             _ => String::new(),
@@ -131,18 +145,18 @@ pub async fn scan_tmux_once(hub: &EventHub, runner: &Runner, tracker: &mut Promp
     }
 }
 
-pub fn spawn_tmux_scan(hub: EventHub, runner: Runner) {
+pub fn spawn_tmux_scan(hub: EventHub, runner: Runner, prefix: String) {
     tokio::spawn(async move {
         let mut tracker = PromptTracker::default();
         loop {
-            scan_tmux_once(&hub, &runner, &mut tracker).await;
+            scan_tmux_once(&hub, &runner, &prefix, &mut tracker).await;
             tokio::time::sleep(SCAN_EVERY).await;
         }
     });
 }
 
 /// herdr reports agent status itself: one `agent list` per running herdr session.
-pub async fn poll_herdr_once(hub: &EventHub, runner: &Runner) {
+pub async fn poll_herdr_once(hub: &EventHub, runner: &Runner, prefix: &str) {
     let list = ["session", "list", "--json"].map(String::from);
     let Ok(out) = runner.run("herdr", &list).await else {
         return;
@@ -151,8 +165,11 @@ pub async fn poll_herdr_once(hub: &EventHub, runner: &Runner) {
     else {
         return;
     };
-    let ids: Vec<String> = sessions.iter().map(|s| s.id.clone()).collect();
-    hub.forget_except(&ids);
+    let ids: Vec<String> = sessions
+        .iter()
+        .map(|s| format!("{prefix}{}", s.id))
+        .collect();
+    hub.forget_except(prefix, &ids);
     for s in sessions {
         let agents = ["--session", &s.id, "agent", "list"].map(String::from);
         let Ok(out) = runner.run("herdr", &agents).await else {
@@ -170,10 +187,10 @@ pub async fn poll_herdr_once(hub: &EventHub, runner: &Runner) {
     }
 }
 
-pub fn spawn_herdr_poll(hub: EventHub, runner: Runner) {
+pub fn spawn_herdr_poll(hub: EventHub, runner: Runner, prefix: String) {
     tokio::spawn(async move {
         loop {
-            poll_herdr_once(&hub, &runner).await;
+            poll_herdr_once(&hub, &runner, &prefix).await;
             tokio::time::sleep(Duration::from_secs(3)).await;
         }
     });
@@ -241,8 +258,8 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(600)).await;
         let hub = EventHub::new([1; 32]);
         let mut tracker = PromptTracker::default();
-        scan_tmux_once(&hub, &runner, &mut tracker).await;
-        let ev = hub.since("scantest", 0);
+        scan_tmux_once(&hub, &runner, "tmux:", &mut tracker).await;
+        let ev = hub.since("tmux:scantest", 0);
         tmux(&["kill-server"]);
         let kinds: Vec<_> = ev
             .iter()

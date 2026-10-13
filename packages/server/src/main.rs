@@ -69,8 +69,8 @@ struct Args {
     )]
     client_url: String,
 
-    /// Session manager: `tmux` or `herdr` (built in) or `command` (any CLI, see TERMANCH_BACKEND_*).
-    #[arg(long, env = "TERMANCH_BACKEND", default_value = "tmux")]
+    /// Session manager: `tmux` or `herdr` (built in), a list such as `tmux,herdr`, `auto` (tmux plus herdr when installed) or `command` (any CLI, see TERMANCH_BACKEND_*).
+    #[arg(long, env = "TERMANCH_BACKEND", default_value = "auto")]
     backend: String,
 
     /// For `command`: a label shown in logs, e.g. herdr.
@@ -346,14 +346,50 @@ fn clean_server_name(raw: &str) -> String {
     }
 }
 
+/// `TERMANCH_BACKEND`: one manager (`tmux`, `herdr`, `command`), a comma list (`tmux,herdr`), or `auto`
+/// (tmux, plus herdr when it is installed).
+async fn resolve_backends(spec: &str, mode: &RunMode) -> anyhow::Result<Vec<String>> {
+    let mut kinds: Vec<String> = if spec == "auto" {
+        let mut k = vec!["tmux".to_string()];
+        let herdr = mode
+            .runner()
+            .run("herdr", &["--version".to_string()])
+            .await
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if herdr {
+            k.push("herdr".into());
+        }
+        k
+    } else {
+        spec.split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    };
+    kinds.dedup();
+    anyhow::ensure!(!kinds.is_empty(), "TERMANCH_BACKEND is empty");
+    anyhow::ensure!(
+        kinds.len() == 1 || kinds.iter().all(|k| k == "tmux" || k == "herdr"),
+        "several managers can be combined only from tmux and herdr"
+    );
+    Ok(kinds)
+}
+
 fn build_backend(
     args: &Args,
+    kind: &str,
     mode: &RunMode,
     env: events::EventEnv,
+    prefix: &str,
 ) -> anyhow::Result<Arc<dyn SessionBackend>> {
-    match args.backend.as_str() {
-        "tmux" => Ok(Arc::new(TmuxBackend::new(mode.runner()).with_events(env))),
-        "herdr" => Ok(Arc::new(HerdrBackend::new(mode.runner()).with_events(env))),
+    match kind {
+        "tmux" => Ok(Arc::new(
+            TmuxBackend::new(mode.runner()).with_events(env).with_event_prefix(prefix),
+        )),
+        "herdr" => Ok(Arc::new(
+            HerdrBackend::new(mode.runner()).with_events(env).with_event_prefix(prefix),
+        )),
         "command" => {
             let need = |v: &Option<String>, name: &str| {
                 v.clone()
@@ -368,7 +404,7 @@ fn build_backend(
             )?))
         }
         other => Err(anyhow::anyhow!(
-            "unknown TERMANCH_BACKEND `{other}` (tmux, herdr or command)"
+            "unknown TERMANCH_BACKEND `{other}` (tmux, herdr, command, a list like tmux,herdr, or auto)"
         )),
     }
 }
@@ -522,19 +558,38 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     });
-    match args.backend.as_str() {
-        "tmux" => agentwatch::spawn_tmux_scan(hub.clone(), mode.runner()),
-        "herdr" => agentwatch::spawn_herdr_poll(hub.clone(), mode.runner()),
-        _ => {}
+    let kinds = resolve_backends(&args.backend, &mode).await?;
+    // With several managers every session id is `manager:name`; with one it stays the plain name.
+    let prefix_of = |k: &str| {
+        if kinds.len() > 1 {
+            format!("{k}:")
+        } else {
+            String::new()
+        }
+    };
+    for k in &kinds {
+        match k.as_str() {
+            "tmux" => agentwatch::spawn_tmux_scan(hub.clone(), mode.runner(), prefix_of(k)),
+            "herdr" => agentwatch::spawn_herdr_poll(hub.clone(), mode.runner(), prefix_of(k)),
+            _ => {}
+        }
     }
-    let backend = build_backend(
-        &args,
-        &mode,
-        events::EventEnv {
-            hub: hub.clone(),
-            socket,
-        },
-    )?;
+    let env = events::EventEnv {
+        hub: hub.clone(),
+        socket,
+    };
+    let backend = if kinds.len() > 1 {
+        let mut parts: Vec<(String, Arc<dyn SessionBackend>)> = Vec::new();
+        for k in &kinds {
+            parts.push((
+                k.clone(),
+                build_backend(&args, k, &mode, env.clone(), &prefix_of(k))?,
+            ));
+        }
+        Arc::new(backend::CompositeBackend::new(parts)) as Arc<dyn SessionBackend>
+    } else {
+        build_backend(&args, &kinds[0], &mode, env, "")?
+    };
     info!("Session backend: {}", backend.name());
     let mut state = AppState {
         auth,

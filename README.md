@@ -81,7 +81,7 @@ By default everything uses the hosted client at app.termanch.vivantel.dev. To ru
 
 ## Session backends
 
-The default is tmux. `TERMANCH_BACKEND=herdr` uses [herdr](https://herdr.dev) (one herdr session per Termanch session; verified on 0.9.3, see `docs/facts/0029-agent-tool-surfaces.md`). To use another tool with a CLI, give three commands (no shell; `{name}` and `{id}` are replaced by a validated session name):
+The default (`TERMANCH_BACKEND=auto`) offers tmux, plus [herdr](https://herdr.dev) when it is installed: both kinds of session appear in one list (ids look like `tmux:work`, `herdr:work`) and "New" asks which to create. Set `tmux` or `herdr` to use one only, or a list such as `tmux,herdr`. One Termanch session is one herdr session (verified on 0.9.3, see `docs/facts/0029-agent-tool-surfaces.md`). To use another tool with a CLI, give three commands (no shell; `{name}` and `{id}` are replaced by a validated session name):
 
 ```
 TERMANCH_BACKEND=command
