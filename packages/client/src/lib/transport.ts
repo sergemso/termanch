@@ -26,7 +26,8 @@ export interface Openers {
   ws(url: string, timeoutMs: number): Promise<Transport>;
 }
 
-export const RTC_TIMEOUT_MS = 5000;
+/** ICE, DTLS and the data channel take several round trips; on a slow mobile link 5 s was too short and looped. */
+export const RTC_TIMEOUT_MS = 10000;
 export const WS_TIMEOUT_MS = 8000;
 
 /** The user-facing reason when WebRTC could not open: the UDP port is the thing to check. */
