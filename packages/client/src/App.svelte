@@ -1,20 +1,19 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import Terminal from './Terminal.svelte';
   import ServerList from './ServerList.svelte';
   import AddServerModal from './AddServerModal.svelte';
   import Toast from './Toast.svelte';
   import SessionList from './SessionList.svelte';
-  import type { ServerMessage, SessionInfo, ServerListItem } from './lib/protocol';
+  import type { ServerListItem } from './lib/protocol';
   import { parseClaim, parseServerLink } from './lib/onboard';
-  import { Connection, type ConnState } from './lib/connection';
-  import { lookup, type DirRecord } from './lib/directory';
+  import { ServerHub, serverKey } from './lib/hub';
+  import { lookup } from './lib/directory';
   import { deviceKey, publicKeyB64, signChallenge, certExpiry, certUserId, avatarUrl } from './lib/device';
   import AppShell from './AppShell.svelte';
   import ReportDialog from './ReportDialog.svelte';
   import { buildReport, noteError, recentErrors } from './lib/report';
   import { runningBundle } from './lib/update';
-  import { handleAgentMessage, requestAgentSync, resetAgents } from './lib/agents';
   import { startUsageMeter } from './lib/usageMeter';
   import { DEBUG_KEY, tapCounter } from './lib/viewport';
   import { updateAvailable, watchForUpdates } from './lib/update';
@@ -52,13 +51,42 @@
   /** Device certificate from the hosted function; the GitHub token itself is never kept (DECISION-0062). */
   let deviceCert: string | null = null;
   let servers: ServerListItem[] = [];
-  let selectedServer: ServerListItem | null = null;
-  let sessions: SessionInfo[] = [];
-  let backends: string[] = [];
-  let activeSessionId: string | null = null;
-  let connection: Connection | null = null;
-  let connState: ConnState = 'closed';
-  let connDetail = '';
+  let activeKey: string | null = null;
+  let activeServerId: string | null = null;
+  let serversPage = false;
+  const hub = new ServerHub({
+    credentials: async () => {
+      const pair = await deviceKey();
+      return { cert: deviceCert!, sign: (id, nonce) => signChallenge(pair, id, nonce) };
+    },
+    target: async (server, refresh) => {
+      if (refresh && server.server_id) {
+        try { server.record = (await lookup(location.origin, server.server_id)) ?? server.record; }
+        catch { /* Try the last verified address before reporting unreachable. */ }
+      }
+      return { record: server.record, wsUrl: server.server_url || undefined };
+    },
+    onSaved: server => saveServers(servers.map(s => serverKey(s) === serverKey(server) ? server : s)),
+    onReady: (id, _msg, reconnect) => {
+      if (reconnect && id === activeServerId && activeKey) hub.sendToSession(activeKey, { type: 'attach', session_id: activeKey });
+    },
+    onDrop: (_id, reason, upMs) => noteError(`connection lost after ${Math.round(upMs / 1000)} s: ${reason}`),
+    onMessage: (_id, msg) => { if (msg.type === 'error') showToast(msg.message, 'error'); },
+  });
+  const hubServers = hub.servers;
+  const allSessions = hub.allSessions;
+  const allAgents = hub.agents;
+  const connectedCount = hub.connectedCount;
+  const overLimit = hub.overLimit;
+  $: selected = $hubServers.find(s => s.id === activeServerId);
+  $: selectedServer = selected?.server ?? null;
+  $: sessions = $allSessions.map(s => ({ ...s, id: s.key }));
+  $: activeSessionId = $allSessions.find(s => s.key === activeKey)?.id ?? null;
+  $: connection = selected ? hub.connection(selected.id) : null;
+  $: connState = selected?.state ?? 'closed';
+  $: connDetail = selected?.reason ?? '';
+  $: backends = selected?.backends ?? [];
+  $: serverVersion = selected?.version ?? '';
   let narrow = false;
   let iosHint = isIosBrowser() && !localStorage.getItem('termanch_ios_hint');
   let drawerOpen = false;
@@ -115,6 +143,8 @@
   function addServer(server: ServerListItem) {
     const same = (s: ServerListItem) => (server.server_id ? s.server_id === server.server_id : !s.server_id && s.server_url === server.server_url);
     saveServers([...servers.filter((s) => !same(s)), server]);
+    hub.add(server);
+    serversPage = false;
   }
 
   async function handleOAuthCallback() {
@@ -156,103 +186,49 @@
       }
       const server: ServerListItem = { server_id: id, server_name: '', server_url: '', record, registered_at: Date.now() };
       addServer(server);
-      connectToServer(server);
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Could not add the server', 'error');
     }
   }
 
-  function connectToServer(server: ServerListItem) {
-    connection?.close();
-    selectedServer = server;
-    sessions = [];
-    activeSessionId = null;
-    connState = 'connecting';
-    // Use the stored record first; ask the directory only after a failure, to stay within its request budget.
-    let record = server.record;
-    let refresh = !record && !!server.server_id;
-    connection = new Connection({
-      target: async () => {
-        if (refresh && server.server_id) {
-          try {
-            record = (await lookup(location.origin, server.server_id)) ?? record;
-          } catch (e) {
-            console.warn('directory lookup failed', e);
-          }
-        }
-        return { record, wsUrl: server.server_url || undefined };
-      },
-      credentials: async () => {
-        const pair = await deviceKey();
-        return { cert: deviceCert!, sign: (id, nonce) => signChallenge(pair, id, nonce) };
-      },
-      serverId: server.server_id,
-      claim: server.claim,
-      onState: (s, detail) => {
-        connState = s;
-        connDetail = detail ?? '';
-        if (s === 'connected') {
-          refresh = false;
-          if (record && server.server_id) addServer({ ...server, record });
-        } else {
-          refresh = true;
-        }
-      },
-      onReady: (msg, isReconnect) => {
-        if (server.claim) {
-          // The claim token is single-use: the server now knows its owner.
-          const { claim, ...rest } = server;
-          server = rest;
-          addServer({ ...rest, server_name: rest.server_name || msg.server_name });
-        } else if (!server.server_name && msg.server_name) {
-          server = { ...server, server_name: msg.server_name };
-          addServer(server);
-        }
-        serverVersion = msg.version ?? '';
-        backends = msg.backends ?? [];
-        if (!isReconnect) showToast(`Connected to ${msg.server_name}`); // a reconnect is shown by the status line, not a toast each time
-        connection?.send({ type: 'list_sessions' });
-        if (connection) requestAgentSync((m) => connection?.send(m));
-        // tmux kept the session alive; attaching again repaints it.
-        if (activeSessionId) connection?.send({ type: 'attach', session_id: activeSessionId });
-      },
-      onDrop: (reason, upMs) => noteError(`connection lost after ${Math.round(upMs / 1000)} s: ${reason}`),
-      onFatal: (message) => {
-        noteError(`connection: ${message}`);
-        showToast(message, 'error');
-        selectedServer = null;
-      },
-    });
-    connection.subscribe(handleServerMessage);
-    connection.start();
-  }
-
-  const lastKey = () => `termanch_last_session_${selectedServer?.server_id || selectedServer?.server_url || ''}`;
-
-  function attach(id: string) {
+  async function attach(key: string) {
+    const session = hub.findSession(key);
+    if (!session) return;
+    if ($hubServers.find(s => s.id === session.serverId)?.state !== 'connected') {
+      showToast('This server is reconnecting. You can retry it in Servers.', 'error');
+      return;
+    }
     drawerOpen = false;
-    activeSessionId = id;
-    try {
-      localStorage.setItem(lastKey(), id);
-    } catch {
-      /* private mode */
-    }
-    connection?.send({ type: 'attach', session_id: id });
+    if (activeServerId && activeServerId !== session.serverId) hub.send(activeServerId, { type: 'detach' });
+    activeKey = key;
+    activeServerId = session.serverId;
+    // Mount the receiving terminal before attach can produce a repaint on another server.
+    await tick();
+    if (activeKey === key) hub.sendToSession(key, { type: 'attach', session_id: key });
   }
 
-  /** After connecting: open the session used last on this server, else the first one, so a tap on Connect lands in a terminal. */
-  function openDefaultSession(list: SessionInfo[]) {
-    if (activeSessionId || list.length === 0) return;
-    let last: string | null = null;
-    try {
-      last = localStorage.getItem(lastKey());
-    } catch {
-      /* private mode */
-    }
-    attach((list.find((x) => x.id === last) ?? list[0]).id);
+  function sendSession(m: import('./lib/protocol').ClientMessage) {
+    if ('session' in m) hub.sendToSession(m.session, m);
+  }
+
+  function removeServer(index: number) {
+    const id = serverKey(servers[index]);
+    hub.remove(id);
+    saveServers(servers.filter((_, i) => i !== index));
+    if (activeServerId === id) { activeKey = null; activeServerId = null; }
   }
 
   function newSession() {
+    const connected = $hubServers.filter(s => s.state === 'connected');
+    let destination = selected?.state === 'connected' ? selected : connected[0];
+    if (!destination) { showToast('Wait for a server to connect or retry it in Servers.', 'error'); return; }
+    if (connected.length > 1 && !selected) {
+      const pick = prompt('Create on which server? ' + connected.map((s, i) => `${i + 1}: ${s.server.server_name}`).join(', '), '1');
+      if (!pick) return;
+      destination = connected[Number(pick) - 1];
+      if (!destination) return;
+    }
+    const backends = destination.backends;
     const name = prompt('New session name', `agent-${sessions.length + 1}`);
     if (!name) return;
     let backend: string | undefined;
@@ -265,50 +241,20 @@
         return;
       }
     }
-    connection?.send({ type: 'new_session', name, backend });
-  }
-
-  function handleServerMessage(msg: ServerMessage) {
-    switch (msg.type) {
-      case 'sessions':
-        sessions = msg.sessions;
-        openDefaultSession(msg.sessions);
-        break;
-      case 'session_attached':
-        activeSessionId = msg.session_id;
-        break;
-      case 'agent_snapshot':
-      case 'agent_events':
-        handleAgentMessage(msg, (m) => connection?.send(m));
-        break;
-      case 'agent_event':
-        showToast(`Agent ${msg.agent} ${msg.event} in ${msg.session_id}`);
-        break;
-      case 'error':
-        showToast(msg.message, 'error');
-        break;
-    }
+    hub.send(destination.id, { type: 'new_session', name, backend });
   }
 
   function logout() {
     localStorage.removeItem('termanch_auth');
+    hub.close();
     user = null;
     deviceCert = null;
-    selectedServer = null;
-    sessions = [];
-    resetAgents();
-    activeSessionId = null;
-    connection?.close();
-    connection = null;
+    activeKey = null;
+    activeServerId = null;
   }
 
   function leaveServer() {
-    connection?.close();
-    connection = null;
-    selectedServer = null;
-    sessions = [];
-    resetAgents();
-    activeSessionId = null;
+    serversPage = true;
     drawerOpen = false;
   }
 
@@ -333,6 +279,7 @@
     window.addEventListener('unhandledrejection', report);
     return () => {
       stopUsage();
+      hub.close();
       window.removeEventListener('error', report);
       window.removeEventListener('unhandledrejection', report);
       mq.removeEventListener('change', media);
@@ -385,6 +332,7 @@
     if (!authed) return;
 
     loadServers();
+    hub.start(servers);
     const pendingServer = sessionStorage.getItem('termanch_pending_server');
     if (pendingServer) {
       sessionStorage.removeItem('termanch_pending_server');
@@ -400,7 +348,7 @@
   });
 </script>
 
-<AppShell pinned={!!selectedServer}>
+<AppShell pinned={!!user && servers.length > 0}>
   {#if !user}
     <div class="auth-screen">
       <div class="card" style="max-width: 400px; margin: auto; margin-top: 10vh;">
@@ -443,6 +391,9 @@
       </div>
     {/if}
 
+    {#if $overLimit}
+      <div class="connection-notice" role="status">{$connectedCount} servers connected. More than 6 may use extra battery. <button class="secondary" on:click={leaveServer}>Manage connections</button></div>
+    {/if}
     <main style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
       <svelte:boundary onerror={(e) => { console.error('screen failed', e); noteError(String((e as Error)?.message ?? e)); }}>
       {#snippet failed(_error, reset)}
@@ -452,8 +403,9 @@
           <button class="secondary" on:click={openReport}>Report a problem</button>
         </div>
       {/snippet}
-      {#if !selectedServer}
-        <ServerList {servers} onselect={connectToServer} onadd={() => { addPrefill = null; showAddServer = true; }} onremove={(i) => saveServers(servers.filter((_, n) => n !== i))} />
+      {#if serversPage || servers.length === 0}
+        {#if servers.length > 0}<button class="secondary" on:click={() => serversPage = false}>← Sessions</button>{/if}
+        <ServerList {servers} states={$hubServers} onpause={(id) => { hub.pause(id); }} onresume={(id) => hub.resume(id)} onretry={(id) => hub.retry(id)} onadd={() => { addPrefill = null; showAddServer = true; }} onremove={removeServer} />
       {:else}
         <div style="display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative;">
           {#if narrow && drawerOpen}
@@ -475,23 +427,35 @@
             {#if connState !== 'connected'}
               <!-- Own row, wrapped: a long diagnostic inside the flex header squeezed it into a tall narrow column. -->
               <div style="font-size: 0.75rem; margin: -8px 0 12px; padding: 8px; border-radius: 6px; background: var(--bg); overflow-wrap: anywhere;">
-                <div style="color: var(--fg-muted);">{{ unreachable: 'Server unreachable', reconnecting: 'Reconnecting…', connecting: 'Connecting…', closed: 'Disconnected' }[connState]}</div>
+                <div style="color: var(--fg-muted);">{{ unreachable: 'Server unreachable', reconnecting: 'Reconnecting…', connecting: 'Connecting…', closed: 'Disconnected', paused: 'Paused' }[connState]}</div>
                 {#if connDetail && connState === 'unreachable'}
                   <details style="margin-top: 4px; color: var(--danger);"><summary style="cursor: pointer;">Details</summary>{connDetail}</details>
                 {/if}
               </div>
             {/if}
-            <SessionList {sessions} {activeSessionId} onopen={attach} send={(m) => connection?.send(m)} />
+            {#each $hubServers as server (server.id)}
+              <div class="server-status" style="padding: 8px 0; font-size: 0.8rem; overflow-wrap: anywhere;">
+                {server.server.server_name || 'Server'} · {server.state}
+                {#if server.version}<span style="display: block;">server {server.version}</span>{/if}
+                {#if server.reason}<span style="display: block;">{server.reason}</span>{/if}
+                {#if server.state !== 'connected' && server.state !== 'paused'}<button class="secondary" on:click={() => hub.retry(server.id)}>Retry</button>{/if}
+              </div>
+            {/each}
+            <SessionList {sessions} activeSessionId={activeKey} agentMap={$allAgents} onopen={attach} send={sendSession} />
           </aside>
 
           <div style="flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;">
             {#if narrow}
               <div style="display: flex; gap: 6px; padding: 6px 8px; background: var(--bg-secondary); border-bottom: 1px solid var(--border);">
-                <button class="secondary" aria-label="Sessions" style="padding: 6px 10px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;" on:click={() => (drawerOpen = !drawerOpen)}>☰ {sessions.find((x) => x.id === activeSessionId)?.name ?? 'Sessions'}</button>
+                <button class="secondary" aria-label="Sessions" style="padding: 6px 10px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;" on:click={() => (drawerOpen = !drawerOpen)}>☰ {sessions.find((x) => x.id === activeKey)?.name ?? 'Sessions'}</button>
                 <button class="secondary" aria-label="Servers" style="padding: 6px 10px;" on:click={leaveServer}>Servers</button>
               </div>
             {/if}
-            {#if connection}<Terminal {connection} {activeSessionId} {connState} />{/if}
+            {#if connection && connState !== 'paused'}
+              {#key connection}<Terminal {connection} {activeSessionId} {connState} />{/key}
+            {:else}
+              <div class="card" style="margin: auto;">{activeKey ? 'This server is paused. Resume it in Servers.' : 'Choose a session to open its terminal.'}<button class="secondary" on:click={leaveServer}>Servers</button></div>
+            {/if}
           </div>
         </div>
       {/if}
@@ -504,7 +468,7 @@
   {/if}
 
   {#if showAddServer}
-    <AddServerModal origin={location.origin} prefillSecret={addPrefill} onserver={(id) => { showAddServer = false; void addServerById(id); }} onclose={() => showAddServer = false} onadd={(server) => { addServer(server); showAddServer = false; connectToServer(server); }} />
+    <AddServerModal origin={location.origin} prefillSecret={addPrefill} onserver={(id) => { showAddServer = false; void addServerById(id); }} onclose={() => showAddServer = false} onadd={(server) => { addServer(server); showAddServer = false;  }} />
   {/if}
 
   {#if toast}

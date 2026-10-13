@@ -5,7 +5,7 @@
   import { WebglAddon } from 'xterm-addon-webgl';
   import 'xterm/css/xterm.css';
 
-  import type { Connection, ConnState } from './lib/connection';
+  import type { HubConnection, ServerState } from './lib/hub';
   import { b64ToBytes, textToB64 } from './lib/connection';
   import { applyMods, bufferText, clampFont, FONT_DEFAULT, type Mods } from './lib/keys';
   import { beep, bellEnabled, installAudioUnlock, setBellEnabled, unlockAudio } from './lib/bell';
@@ -26,9 +26,9 @@
   import InputLog from './InputLog.svelte';
   import SelectView from './SelectView.svelte';
 
-  export let connection: Connection;
+  export let connection: HubConnection;
   export let activeSessionId: string | null = null;
-  export let connState: ConnState = 'connected';
+  export let connState: ServerState = 'connected';
 
   const FONT_KEY = 'termanch_font';
   let mods: Mods = { ctrl: false, alt: false };

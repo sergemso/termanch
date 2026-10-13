@@ -513,6 +513,38 @@ async fn nothing_is_served_before_auth(kind: Kind) {
         .contains("Authenticate first"));
 }
 
+async fn detach_preserves_the_connection_and_session(kind: Kind) {
+    let f = fixture().await;
+    let name = format!("detach{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
+    let alice = f.who(1, "alice");
+    let mut c = Conn::open(kind, &f).await;
+    c.login(&f, &alice, &f.claim).await;
+    c.recv_type("auth_ok").await;
+    c.send(json!({"type":"new_session","name":name})).await;
+    c.recv_type("sessions").await;
+    c.send(json!({"type":"attach","session_id":name})).await;
+    c.recv_type("session_attached").await;
+    c.send(json!({"type":"detach"})).await;
+    c.send(json!({"type":"input","data":B64.encode("echo DETACHED_INPUT_MUST_NOT_RUN\n")}))
+        .await;
+    c.send(json!({"type":"ping"})).await;
+    c.recv_type("pong").await;
+    c.send(json!({"type":"peek","session":name})).await;
+    let snapshot = c.recv_type("snapshot").await;
+    assert!(!snapshot["text"]
+        .as_str()
+        .unwrap()
+        .contains("DETACHED_INPUT_MUST_NOT_RUN"));
+    c.send(json!({"type":"attach","session_id":name})).await;
+    c.recv_type("session_attached").await;
+    c.send(json!({"type":"input","data":B64.encode("echo reattached$((40+2))\n")}))
+        .await;
+    assert!(c.output_contains("reattached42").await);
+    let _ = std::process::Command::new("tmux")
+        .args(["kill-session", "-t", &name])
+        .output();
+}
+
 async fn reconnect_resumes_the_tmux_session_with_its_screen(kind: Kind) {
     if std::process::Command::new("tmux")
         .arg("-V")
@@ -740,6 +772,7 @@ over_both_transports!(
     uninstall_needs_the_name_and_a_recent_login_then_wipes_the_config,
     nothing_is_served_before_auth,
     reconnect_resumes_the_tmux_session_with_its_screen,
+    detach_preserves_the_connection_and_session,
     agent_events_flow_from_a_session_tool_to_the_client,
     a_burst_of_input_messages_does_not_drop_the_connection,
     peek_shows_a_session_screen_without_attaching

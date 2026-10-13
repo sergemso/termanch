@@ -2,9 +2,12 @@
   import { onMount } from 'svelte';
   import SessionCard from './SessionCard.svelte';
   import type { ClientMessage, SessionInfo } from './lib/protocol';
-  import { agents } from './lib/agents';
+  import { agents, type AgentMap } from './lib/agents';
   import { chipFor, FrozenOrder } from './lib/cards';
   import * as snippets from './lib/snippets';
+
+  export let agentMap: AgentMap | undefined = undefined;
+  $: states = agentMap ?? $agents;
 
   export let sessions: SessionInfo[] = [];
   export let activeSessionId: string | null = null;
@@ -22,12 +25,12 @@
   const frozen = new FrozenOrder();
 
   $: byId = new Map(sessions.map((s) => [s.id, s]));
-  $: order = frozen.order(sessions.map((s) => s.id), $agents, now);
+  $: order = frozen.order(sessions.map((s) => s.id), states, now);
   $: replyTo = target && byId.has(target) ? target : (activeSessionId ?? sessions[0]?.id ?? null);
 
   // A change to "needs you" is announced to screen readers, once per change.
   $: for (const s of sessions) {
-    const a = $agents[s.id];
+    const a = states[s.id];
     const state = a ? a.state : '';
     if (state === 'needs_input' && known[s.id] !== 'needs_input') announcement = `${s.name} needs you`;
     known[s.id] = state;
@@ -45,7 +48,7 @@
   }
 
   function answer(id: string, choice: number) {
-    const p = $agents[id]?.prompt;
+    const p = states[id]?.prompt;
     if (p) send({ type: 'answer', session: id, prompt_id: p.id, seq: p.seq, choice });
   }
 
@@ -78,10 +81,10 @@
     {@const session = byId.get(id)}
     {#if session}
       <li>
-        {#if $agents[id]}
+        {#if states[id]}
           <SessionCard
             {session}
-            agent={$agents[id]}
+            agent={states[id]}
             {now}
             active={activeSessionId === id}
             expanded={expanded === id}

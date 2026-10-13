@@ -61,3 +61,5 @@ try {
   await browser.close();
   srv.close();
 }
+
+process.exit(process.exitCode ?? 0);

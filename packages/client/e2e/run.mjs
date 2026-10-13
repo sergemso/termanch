@@ -295,6 +295,8 @@ try {
       [mint(deviceKey, 1, 'alice'), { server_url: '', server_id: serverId, server_name: 'e2e-server', registered_at: Date.now(), record }],
     );
     await page.reload();
+    if (await page.getByText('Your Servers').count()) fail('saved servers opened the old Connect screen');
+    await page.getByRole('button', { name: 'Servers', exact: true }).first().click();
     // Add Server: where sessions run. The container is the default; the host modes show a warning and need consent.
     await page.getByRole('button', { name: 'Add Server' }).first().click();
     const cmd = () => page.locator('pre.command').first().textContent();
@@ -329,7 +331,9 @@ try {
     await page.getByRole('button', { name: 'Remove server' }).click();
     if (!(await page.getByText('e2e-server').isVisible())) fail('the server was removed without confirmation');
     for (let lap = 1; lap <= 3; lap++) {
-      await page.getByRole('button', { name: 'Connect', exact: true }).click();
+      await page.getByRole('button', { name: '← Sessions', exact: true }).click();
+      await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+      await page.getByText('s1', { exact: true }).first().click();
       await page.locator('.dot.ok').waitFor({ timeout: 20000 }).catch(async (e) => {
         console.log('page errors:', errors, '\n', (await page.locator('body').innerText()).slice(0, 400));
         throw e;
@@ -341,7 +345,7 @@ try {
       if (taps.some((t) => t !== 'manipulation')) fail(`double-tap zoom is not disabled: ${taps}`);
       // Connecting lands in a live terminal: the hidden input has focus without any tap.
       await page.waitForFunction(() => document.activeElement?.classList.contains('xterm-helper-textarea'), null, { timeout: 5000 });
-      // Connecting lands in a session by itself: the top bar names it instead of saying "Sessions".
+      // The session chosen by the user is named in the top bar.
       await page.waitForFunction(() => !document.querySelector('button[aria-label=Sessions]')?.textContent?.includes('Sessions'), null, { timeout: 5000 });
       await page.getByRole('button', { name: 'Sessions' }).click();
       const heights = await page.evaluate(() => [...document.querySelectorAll('aside button.icon')].map((b) => Math.round(b.getBoundingClientRect().height)));
