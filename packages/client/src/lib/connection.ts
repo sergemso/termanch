@@ -108,10 +108,16 @@ export class Connection {
   }
 
   private wake = () => {
-    if (this.stopped || document.visibilityState === 'hidden') return;
+    if (this.stopped) return;
+    if (document.visibilityState === 'hidden') {
+      if (this.pingTimer) clearInterval(this.pingTimer);
+      if (this.pongTimer) clearTimeout(this.pongTimer);
+      this.pingTimer = this.pongTimer = null;
+      return;
+    }
     if (this.transport && this.authed) {
+      this.startHeartbeat();
       this.ping(); // the heartbeat will drop it if it went stale while hidden
-      this.armPongTimeout();
     } else if (!this.opening) {
       this.reconnectNow();
     }
@@ -218,10 +224,12 @@ export class Connection {
   }
 
   private startHeartbeat() {
+    if (this.pingTimer || document.visibilityState === 'hidden') return;
     this.pingTimer = setInterval(() => this.ping(), PING_EVERY_MS);
   }
 
   private ping() {
+    if (this.stopped || document.visibilityState === 'hidden' || !this.authed) return;
     this.pingSentAt = performance.now();
     this.send({ type: 'ping' });
     this.armPongTimeout();

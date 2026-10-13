@@ -235,6 +235,9 @@ impl SessionManager {
                 *attachment = Some(self.backend.attach(&session_id, *cols, *rows)?);
                 send_r(tx, &ServerMessage::SessionAttached { session_id }).await?;
             }
+            ClientMessage::Detach => {
+                *attachment = None;
+            }
             ClientMessage::Input { data } => {
                 if let Some(att) = attachment.as_mut() {
                     att.write(&B64.decode(data)?)?;

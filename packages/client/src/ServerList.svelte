@@ -1,8 +1,12 @@
 <script lang="ts">
   import type { ServerListItem } from './lib/protocol';
+  import { serverKey, type HubServer } from './lib/hub';
 
   export let servers: ServerListItem[] = [];
-  export let onselect: (server: ServerListItem) => void;
+  export let states: HubServer[] = [];
+  export let onpause: (id: string) => void;
+  export let onresume: (id: string) => void;
+  export let onretry: (id: string) => void;
   export let onadd: () => void;
   export let onremove: (index: number) => void;
 </script>
@@ -30,6 +34,7 @@
     {:else}
       <div style="display: grid; gap: 16px;">
         {#each servers as server, index}
+          {@const status = states.find(s => s.id === serverKey(server))}
           <div class="server-card" style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px; transition: border-color 0.15s;" on:mouseenter={() => {}} on:mouseleave={() => {}}>
             <div style="width: 48px; height: 48px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), #a371f7); display: flex; align-items: center; justify-content: center;">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg>
@@ -37,9 +42,12 @@
             <div style="flex: 1; min-width: 0;">
               <h3 style="font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{server.server_name || 'Server'}</h3>
               <p style="font-size: 0.75rem; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{server.server_url || (server.record ? `${server.record.ip}:${server.record.udp_port}` : '')}</p>
+              <p class="state">{status?.state ?? 'connecting'}</p>
+              {#if status?.reason}<p class="reason">{status.reason}</p>{/if}
             </div>
             <div style="display: flex; gap: 8px;">
-              <button class="secondary" on:click={() => onselect(server)} style="padding: 8px 16px;">Connect</button>
+              <button class="secondary" aria-pressed={status?.state === 'paused'} on:click={() => status?.state === 'paused' ? onresume(serverKey(server)) : onpause(serverKey(server))}>{status?.state === 'paused' ? 'Resume' : 'Pause'}</button>
+              {#if status && status.state !== 'connected' && status.state !== 'paused'}<button class="secondary" on:click={() => onretry(serverKey(server))}>Retry</button>{/if}
               <button class="secondary" aria-label="Remove server" on:click={() => confirm(`Remove "${server.server_name}" from this browser? You can add it again with its link or QR.`) && onremove(index)} style="padding: 8px; color: var(--danger);">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               </button>
@@ -50,3 +58,11 @@
     {/if}
   </div>
 </div>
+
+<style>
+  .server-list { overflow-y: auto; }
+  .server-card { flex-wrap: wrap; }
+  .state { font-size: 0.8rem; text-transform: capitalize; }
+  .reason { font-size: 0.8rem; color: var(--fg-muted); overflow-wrap: anywhere; }
+  button { min-height: 44px; min-width: 44px; }
+</style>
