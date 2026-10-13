@@ -26,6 +26,7 @@ interface Opts {
 
 const decoder = new TextDecoder();
 let connection: Connection | null = null;
+let activeSession: string | null = null; // re-attached after a reconnect, as the app does
 let mounted = false; // the Terminal component sizes the session itself
 
 const api = {
@@ -55,7 +56,10 @@ const api = {
       onState: (s) => (api.state = s),
       onReady: (_msg, isReconnect) => {
         api.ready++;
-        if (isReconnect) connection?.send({ type: 'list_sessions' });
+        if (isReconnect) {
+          connection?.send({ type: 'list_sessions' });
+          if (activeSession) connection?.send({ type: 'attach', session_id: activeSession });
+        }
       },
       onFatal: (m) => (api.fatal = m),
     });
@@ -68,7 +72,10 @@ const api = {
     const realSend = connection.send.bind(connection);
     connection.send = (m: ClientMessage) => {
       if (m.type === 'input') api.sent.push(atob(m.data));
-      else api.control.push(JSON.stringify(m));
+      else {
+        api.control.push(JSON.stringify(m));
+        if (m.type === 'attach') activeSession = m.session_id;
+      }
       return realSend(m);
     };
     connection.start();

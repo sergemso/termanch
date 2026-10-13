@@ -111,6 +111,7 @@ try {
     await sleep(1200);
     if ((await screenText()) === before) fail('a tap on herdr\'s button changed nothing on screen');
     else console.log('ok  a tap clicks herdr\'s button');
+    if (process.env.HOLD) await sleep(Number(process.env.HOLD));
     throw new Error('done');
   }
   // A stand-in for a mouse-first app: it switches on SGR mouse reporting and echoes what it receives.
