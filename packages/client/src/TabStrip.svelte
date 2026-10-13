@@ -19,7 +19,7 @@
   let shown: HubSession[] = [];
   let strip: HTMLDivElement;
   let visibleActive: string | null = null;
-  let press: { key: string; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null = null;
+  let press: { pointerId: number; key: string; x: number; y: number; timer: ReturnType<typeof setTimeout> } | null = null;
   let longPressed: string | null = null;
   let left = false;
   let right = false;
@@ -47,18 +47,21 @@
   }
   function edges() { if (strip) { left = strip.scrollLeft > 1; right = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1; } }
   function down(e: PointerEvent, key: string) {
-    frozen.touchDown(); revision++;
+    frozen.touchDown(e.pointerId); revision++;
+    cancelPress();
     longPressed = null;
-    press = { key, x: e.clientX, y: e.clientY, timer: setTimeout(() => {
+    press = { pointerId: e.pointerId, key, x: e.clientX, y: e.clientY, timer: setTimeout(() => {
       longPressed = key; onactions(key); press = null;
     }, 550) };
   }
   function cancelPress() { if (press) clearTimeout(press.timer); press = null; }
-  function move(e: PointerEvent) { if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) cancelPress(); }
-  function up() {
-    cancelPress();
+  function move(e: PointerEvent) { if (press && press.pointerId === e.pointerId && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) cancelPress(); }
+  function up(e: PointerEvent) {
+    if (!frozen.hasPointer(e.pointerId)) return;
+    if (press?.pointerId === e.pointerId) cancelPress();
+    if (e.type === 'pointercancel') longPressed = null;
     // Click follows pointerup: keep the target stable through that click.
-    setTimeout(() => { frozen.touchUp(); revision++; }, 0);
+    setTimeout(() => { frozen.touchUp(e.pointerId); revision++; }, 0);
   }
   onMount(() => {
     const timer = setInterval(() => { now = Date.now(); edges(); }, 250);
@@ -78,7 +81,11 @@
         aria-label={`${tabLabel(session, agent, servers.length, now)}${server && server.state !== 'connected' ? ' · ' + server.state + (server.reason ? ': ' + server.reason : '') : ''}`}
         class:active={activeKey === session.key} class:degraded={server?.state !== 'connected'}
         on:pointerdown={(e) => down(e, session.key)} on:pointermove={move}
-        on:click={() => { if (longPressed !== session.key) onopen(session.key); }}
+        on:click={(e) => {
+          const suppress = e.detail > 0 && longPressed === session.key;
+          longPressed = null;
+          if (!suppress) onopen(session.key);
+        }}
         on:contextmenu|preventDefault={() => onactions(session.key)}>
         <span class="state-icon" aria-hidden="true">{chip.icon}</span><span class="session-name">{session.name}</span>
         {#if servers.length > 1}<span class="badge">{session.serverName}</span>{/if}

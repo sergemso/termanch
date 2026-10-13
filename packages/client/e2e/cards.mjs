@@ -87,8 +87,11 @@ try {
   console.log('ok  12 sessions on 3 servers scroll at 390px; active tab visible, badges, count and 44px controls');
 
   const keys = () => tabs.evaluateAll(els => els.map(e => e.dataset.key));
+  await page.waitForTimeout(2200);
   const before = await keys();
   await tabs.last().dispatchEvent('pointerdown', { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 20 });
+  await page.locator('body').dispatchEvent('pointerup', { pointerId: 99, pointerType: 'touch' });
+  await page.waitForTimeout(30);
   await page.evaluate(() => window.__navigation.change());
   await page.waitForTimeout(100);
   if (JSON.stringify(before) !== JSON.stringify(await keys())) fail('insertion/removal moved tabs under a finger');
@@ -98,12 +101,16 @@ try {
   console.log('ok  tab insertion and removal wait for the finger to lift and scroll hold to expire');
 
   const activeBefore = await page.evaluate(() => window.__navigation.active());
-  await tabs.last().dispatchEvent('pointerdown', { pointerId: 2, pointerType: 'touch', clientX: 200, clientY: 20 });
+  const actionTab = page.locator('[role=tab][data-key="alpha/session-1"]');
+  await actionTab.dispatchEvent('pointerdown', { pointerId: 2, pointerType: 'touch', clientX: 200, clientY: 20 });
   await page.getByRole('dialog', { name: 'Session actions' }).waitFor();
-  await tabs.last().dispatchEvent('pointerup', { pointerId: 2, pointerType: 'touch' });
-  await tabs.last().dispatchEvent('click');
+  await actionTab.dispatchEvent('pointerup', { pointerId: 2, pointerType: 'touch' });
+  await actionTab.dispatchEvent('click', { detail: 1 });
   if ((await page.evaluate(() => window.__navigation.active())) !== activeBefore) fail('long press also switched the session');
   await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await actionTab.focus();
+  await page.keyboard.press('Enter');
+  if ((await page.evaluate(() => window.__navigation.active())) !== 'alpha/session-1') fail('long press suppressed later keyboard activation');
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('Cache TTL').selectOption('3600000');
