@@ -21,6 +21,7 @@ interface Entry extends HubServer {
   sessions: SessionInfo[];
   agents: AgentMap;
   refresh: boolean;
+  everReady: boolean;
 }
 interface Options {
   credentials: ConnectionOptions['credentials'];
@@ -52,7 +53,7 @@ export class ServerHub {
     const existing = this.entries.get(id);
     if (existing) { existing.server = server; this.publish(); return; }
     const entry: Entry = { id, server, state: 'connecting', reason: '', version: '', backends: [], connection: null,
-      sessions: [], agents: {}, refresh: !server.record && !!server.server_id };
+      sessions: [], agents: {}, refresh: !server.record && !!server.server_id, everReady: false };
     this.entries.set(id, entry);
     this.connect(entry);
   }
@@ -107,13 +108,15 @@ export class ServerHub {
       },
       onReady: (msg, reconnect) => {
         if (!current()) return;
+        const restoring = reconnect || e.everReady;
+        e.everReady = true;
         const { claim, ...saved } = e.server;
         e.server = { ...saved, server_name: saved.server_name || msg.server_name };
         e.version = msg.version ?? ''; e.backends = msg.backends ?? [];
         this.publish(); this.opts.onSaved?.(e.server);
         connection.send({ type: 'list_sessions' });
         connection.send({ type: 'agent_sync', after: syncRequest(e.agents) });
-        this.opts.onReady?.(e.id, msg, reconnect);
+        this.opts.onReady?.(e.id, msg, restoring);
       },
       onDrop: (reason, upMs) => {
         if (!current()) return;
