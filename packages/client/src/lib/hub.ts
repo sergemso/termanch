@@ -104,7 +104,9 @@ export class ServerHub {
         e.state = state;
         if (detail !== undefined) e.reason = detail;
         if (state === 'connected') e.reason = '';
-        e.refresh = state !== 'connected'; this.publish();
+        if (state === 'connected') e.refresh = false;
+        else if (state === 'unreachable' || state === 'reconnecting') e.refresh = true;
+        this.publish();
       },
       onReady: (msg, reconnect) => {
         if (!current()) return;
