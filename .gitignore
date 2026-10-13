@@ -44,3 +44,8 @@ coverage/
 *.tfplan
 terraform.tfvars
 packages/client/wrangler.toml
+
+# go-getter: local state and the CLI copies (the runner falls back to npx)
+/.go-getter/state/
+/.go-getter/cli/
+/.agents/skills/go-getter-init/cli/
