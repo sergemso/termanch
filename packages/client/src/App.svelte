@@ -82,10 +82,9 @@
     },
     onDrop: (_id, reason, upMs) => noteError(`connection lost after ${Math.round(upMs / 1000)} s: ${reason}`),
     onFatal: (_id, reason) => { noteError(`connection: ${reason}`); showToast(reason, 'error'); },
-    onMessage: (id, msg) => {
+    onMessage: (_id, msg) => {
       if (msg.type === 'error') showToast(msg.message, 'error');
       else if (msg.type === 'agent_event') showToast(`Agent ${msg.agent} ${msg.event} in ${msg.session_id}`);
-      else if (msg.type === 'sessions') openDefaultSession(id, msg.sessions);
     },
   });
   const hubServers = hub.servers;
@@ -209,16 +208,6 @@
     }
   }
 
-  const LAST_KEY = 'termanch_last_session';
-
-  /** After connecting with nothing open: the session used last if this server has it, else its first, so a tap on Connect lands in a terminal. */
-  function openDefaultSession(serverId: string, list: { id: string }[]) {
-    if (activeKey || serversPage || list.length === 0) return;
-    let last: string | null = null;
-    try { last = localStorage.getItem(LAST_KEY); } catch { /* private mode */ }
-    void attach(sessionKey(serverId, (list.find(s => sessionKey(serverId, s.id) === last) ?? list[0]).id));
-  }
-
   async function attach(key: string) {
     const session = hub.findSession(key);
     if (!session) return;
@@ -231,7 +220,6 @@
     serversPage = false;
     activeKey = key;
     activeServerId = session.serverId;
-    try { localStorage.setItem(LAST_KEY, key); } catch { /* private mode */ }
     // Mount the receiving terminal before attach can produce a repaint on another server.
     await tick();
     if (activeKey === key) hub.sendToSession(key, { type: 'attach', session_id: key });
