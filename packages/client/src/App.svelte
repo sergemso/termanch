@@ -11,7 +11,7 @@
   import { settings, applyTheme } from './lib/settings';
   import type { ServerListItem } from './lib/protocol';
   import { parseClaim, parseServerLink } from './lib/onboard';
-  import { ServerHub, serverKey } from './lib/hub';
+  import { ServerHub, serverKey, sessionDestinations } from './lib/hub';
   import { lookup } from './lib/directory';
   import { deviceKey, publicKeyB64, signChallenge, certExpiry, certUserId, avatarUrl } from './lib/device';
   import AppShell from './AppShell.svelte';
@@ -232,10 +232,10 @@
   }
 
   function newSession() {
-    const connected = $hubServers.filter(s => s.state === 'connected');
-    let destination = selected?.state === 'connected' ? selected : connected[0];
+    const connected = sessionDestinations($hubServers, selected);
+    let destination = connected[0];
     if (!destination) { showToast('Wait for a server to connect or retry it in Servers.', 'error'); return; }
-    if (connected.length > 1 && !selected) {
+    if (connected.length > 1) {
       const pick = prompt('Create on which server? ' + connected.map((s, i) => `${i + 1}: ${s.server.server_name}`).join(', '), '1');
       if (!pick) return;
       destination = connected[Number(pick) - 1];
