@@ -6,6 +6,7 @@
   import { chipFor, FrozenOrder } from './lib/cards';
   import * as snippets from './lib/snippets';
 
+  export let onexpanded: (open: boolean) => void = () => {};
   export let agentMap: AgentMap | undefined = undefined;
   $: states = agentMap ?? $agents;
 
@@ -24,8 +25,13 @@
   let draft = '';
   const frozen = new FrozenOrder();
 
-  $: byId = new Map(sessions.map((s) => [s.id, s]));
-  $: order = frozen.order(sessions.map((s) => s.id), states, now);
+  let shown: SessionInfo[] = [];
+  $: {
+    order = frozen.order(sessions.map(s => s.id), states, now);
+    const cache = new Map([...shown, ...sessions].map(s => [s.id, s]));
+    shown = order.map(id => cache.get(id)).filter((s): s is SessionInfo => !!s);
+  }
+  $: byId = new Map(shown.map(s => [s.id, s]));
   $: replyTo = target && byId.has(target) ? target : (activeSessionId ?? sessions[0]?.id ?? null);
 
   // A change to "needs you" is announced to screen readers, once per change.
@@ -42,9 +48,10 @@
   });
 
   function toggle(id: string) {
-    frozen.sheet(expanded !== id); // a sheet is open while a card is expanded: nothing reorders
-    if (expanded && expanded !== id) frozen.sheet(false);
+    if (expanded) frozen.sheet(false);
     expanded = expanded === id ? null : id;
+    if (expanded) frozen.sheet(true);
+    onexpanded(!!expanded);
   }
 
   function answer(id: string, choice: number) {

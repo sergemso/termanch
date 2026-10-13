@@ -63,8 +63,7 @@ export function sortIds(ids: string[], agents: AgentMap): string[] {
 
 /**
  * The order cards are shown in. It is recomputed only when nothing could move under a finger: no touch is down, no
- * sheet is open and the list has not been scrolled for `holdMs`. Until then new sessions go to the end and gone ones
- * drop out, so a one-tap button never lands on a different card than the one the user read.
+ * card is expanded and the list has not been scrolled for `holdMs`. Inserts and removals also wait for release.
  */
 export class FrozenOrder {
   private shown: string[] = [];
@@ -93,10 +92,6 @@ export class FrozenOrder {
   order(ids: string[], agents: AgentMap, nowMs: number): string[] {
     if (!this.frozen(nowMs) || this.shown.length === 0) {
       this.shown = sortIds(ids, agents);
-    } else {
-      const live = new Set(ids);
-      const kept = this.shown.filter((id) => live.has(id));
-      this.shown = [...kept, ...ids.filter((id) => !kept.includes(id))];
     }
     return this.shown;
   }

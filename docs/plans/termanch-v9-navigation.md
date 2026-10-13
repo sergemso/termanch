@@ -37,11 +37,13 @@ Done-when: unit tests prove the five behaviours above; with two fake servers the
 
 Verification (2026-10-13): fake-connection unit tests cover all-start, pause/resume, isolated drops/retry, warning above six, and duplicate local session ids across servers. Real Chromium app flow verifies saved-server auto-connect without a Connect screen, session taps, and returning to Servers without disconnecting. WebSocket/WebRTC tests verify `detach` preserves the connection and session. Phone layout and keyboard checks are emulated Chrome only; iPhone Safari/PWA foreground recovery and keyboard behaviour remain for the owner.
 
-### G.4 Client: top bar, tab strip and menu — [ ]
+### G.4 Client: top bar, tab strip and menu — [x]
 Class: implement · Needs: G.3 · Check: `cd packages/client && npx --yes pnpm@9 test`
 Context: Decision 0082; guardrail `ui-never-moves-under-the-finger`. Today `App.svelte` shows ☰, the active session's name and a "Servers" button on phones, and Report, avatar and Logout in the header.
 Do: 1. `TabStrip.svelte`: one tab per session from the hub, server badge when more than one server, status icon plus an accessible state word, a dot for needs-you, horizontal scroll with edge fade and the active tab scrolled into view, needs-you tabs first only while untouched (reuse `FrozenOrder`). 2. `MenuSheet.svelte` (☰): Servers, Settings (cache TTL, theme), Report a problem, Install/Update, account with avatar, Log out. 3. The Sessions button with the needs-you count. 4. Long-press a tab opens the action menu (G.9). 5. Tests: tab order and freezing, badge text, 44 px targets (extend `e2e/cards.mjs`).
 Done-when: unit tests cover tab order with and without a touch down; the e2e shows 12 sessions on 3 fake servers as one scrolling strip with the active tab visible at 390 px and no control under 44 px.
+
+Verification (2026-10-13): 166 client tests, preview/harness builds and the bundle gate pass. Real Chromium at 390 px shows 12 sessions on 3 fake connections in one strip with server badges, the active tab visible, needs-you count, 44 px controls, deferred insert/remove, and long-press actions without changing the active session. The real-server app flow passes through the new menu and tabs. Rename/Kill remain G.9. iPhone inertial tab scrolling, safe areas, native long-press and menu/keyboard interaction are unverified; phone checks used emulated Chrome.
 
 ### G.5 Client: the sessions sheet and the views — [ ]
 Class: implement · Needs: G.1, G.3 · Check: `cd packages/client && npx --yes pnpm@9 test`

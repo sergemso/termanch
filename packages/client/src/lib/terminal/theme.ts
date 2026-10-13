@@ -23,3 +23,8 @@ export const THEME = {
   brightCyan: '#56d4dd',
   brightWhite: '#ffffff',
 } as const;
+
+/** Match the app theme while retaining the terminal's ANSI palette. */
+export function terminalTheme(light: boolean) {
+  return light ? { ...THEME, background: '#ffffff', foreground: '#1f2328', cursor: '#0969da', cursorAccent: '#ffffff', black: '#1f2328', white: '#59636e', brightWhite: '#1f2328', selectionBackground: 'rgba(9, 105, 218, 0.2)' } : THEME;
+}

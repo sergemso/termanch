@@ -5,6 +5,10 @@
   import AddServerModal from './AddServerModal.svelte';
   import Toast from './Toast.svelte';
   import SessionList from './SessionList.svelte';
+  import NavigationBar from './NavigationBar.svelte';
+  import MenuSheet from './MenuSheet.svelte';
+  import SessionActions from './SessionActions.svelte';
+  import { settings, applyTheme } from './lib/settings';
   import type { ServerListItem } from './lib/protocol';
   import { parseClaim, parseServerLink } from './lib/onboard';
   import { ServerHub, serverKey } from './lib/hub';
@@ -16,8 +20,8 @@
   import { runningBundle } from './lib/update';
   import { startUsageMeter } from './lib/usageMeter';
   import { DEBUG_KEY, tapCounter } from './lib/viewport';
-  import { updateAvailable, watchForUpdates } from './lib/update';
-  import { canInstall, promptInstall, isIosBrowser } from './lib/pwa';
+  import { watchForUpdates } from './lib/update';
+  import { isIosBrowser } from './lib/pwa';
 
   const titleTap = tapCounter();
   /** Five quick taps on the title switch the viewport overlay on or off; an installed PWA has no address bar for ?debug. */
@@ -46,7 +50,6 @@
   }
 
   let user: string | null = null;
-  let avatarBroken = false;
   $: avatar = deviceCert ? avatarUrl(certUserId(deviceCert)) : '';
   /** Device certificate from the hosted function; the GitHub token itself is never kept (DECISION-0062). */
   let deviceCert: string | null = null;
@@ -90,6 +93,10 @@
   let narrow = false;
   let iosHint = isIosBrowser() && !localStorage.getItem('termanch_ios_hint');
   let drawerOpen = false;
+  let menuOpen = false;
+  let actionKey: string | null = null;
+  let cardExpanded = false;
+  $: actionSession = $allSessions.find(s => s.key === actionKey);
   let showAddServer = false;
   let addPrefill: string | null = null;
   let toast: { message: string; type: 'success' | 'error' } | null = null;
@@ -264,6 +271,11 @@
     media();
     mq.addEventListener('change', media);
     watchForUpdates();
+    const themeMedia = window.matchMedia('(prefers-color-scheme: light)');
+    let currentTheme = 'dark' as 'dark' | 'light' | 'system';
+    const themeChanged = () => applyTheme(currentTheme, themeMedia.matches);
+    const stopTheme = settings.subscribe(value => { currentTheme = value.theme; themeChanged(); });
+    themeMedia.addEventListener('change', themeChanged);
     const stopUsage = startUsageMeter(() => !!selectedServer && connState === 'connected' && !!activeSessionId);
     // Last line of defence: an error nobody caught must not leave a dead screen without a word.
     let lastReport = 0;
@@ -278,6 +290,8 @@
     window.addEventListener('error', report);
     window.addEventListener('unhandledrejection', report);
     return () => {
+      stopTheme();
+      themeMedia.removeEventListener('change', themeChanged);
       stopUsage();
       hub.close();
       window.removeEventListener('error', report);
@@ -363,26 +377,7 @@
       </div>
     </div>
   {:else}
-    <header style="display: flex; justify-content: space-between; align-items: center; padding: {narrow ? '8px 12px' : '16px 24px'}; border-bottom: 1px solid var(--border); background: var(--bg-secondary);">
-      <h1 style="font-size: 1.25rem; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation;" on:click={titleTapped}>Termanch</h1>
-      <div style="display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 12px;">
-        <button class="secondary" on:click={openReport} aria-label="Report a problem" title="Report a problem" style="padding: 6px {narrow ? '8px' : '12px'}; display: inline-flex; align-items: center; gap: 6px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-          {#if !narrow}Report a problem{/if}
-        </button>
-        {#if $updateAvailable}<button on:click={() => location.reload()} style="padding: 6px 12px;">Update available</button>{/if}
-        {#if $canInstall}<button on:click={promptInstall} style="padding: 6px 12px;">Install app</button>{/if}
-        {#if avatar && !avatarBroken}
-          <img src={avatar} alt="@{user}" title="@{user}" width="28" height="28" referrerpolicy="no-referrer" on:error={() => (avatarBroken = true)} style="border-radius: 50%; display: block;" />
-        {:else}
-          <span title="@{user}" aria-label="@{user}" style="width: 28px; height: 28px; border-radius: 50%; background: var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; text-transform: uppercase;">{(user ?? '?').slice(0, 1)}</span>
-        {/if}
-        <button class="secondary" on:click={logout} aria-label="Log out" title="Log out" style="padding: 6px {narrow ? '8px' : '12px'}; display: inline-flex; align-items: center; gap: 6px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-          {#if !narrow}Logout{/if}
-        </button>
-      </div>
-    </header>
+    <NavigationBar sessions={$allSessions} agents={$allAgents} servers={$hubServers} {activeKey} held={!!actionSession || cardExpanded} onopen={attach} onactions={(key) => actionKey = key} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { serversPage = false; drawerOpen = !drawerOpen; }} />
 
     {#if iosHint && !selectedServer}
       <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); font-size: 0.85rem;">
@@ -441,16 +436,10 @@
                 {#if server.state !== 'connected' && server.state !== 'paused'}<button class="secondary" on:click={() => hub.retry(server.id)}>Retry</button>{/if}
               </div>
             {/each}
-            <SessionList {sessions} activeSessionId={activeKey} agentMap={$allAgents} onopen={attach} send={sendSession} />
+            <SessionList onexpanded={(open) => cardExpanded = open} {sessions} activeSessionId={activeKey} agentMap={$allAgents} onopen={attach} send={sendSession} />
           </aside>
 
           <div style="flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;">
-            {#if narrow}
-              <div style="display: flex; gap: 6px; padding: 6px 8px; background: var(--bg-secondary); border-bottom: 1px solid var(--border);">
-                <button class="secondary" aria-label="Sessions" style="padding: 6px 10px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;" on:click={() => (drawerOpen = !drawerOpen)}>☰ {sessions.find((x) => x.id === activeKey)?.name ?? 'Sessions'}</button>
-                <button class="secondary" aria-label="Servers" style="padding: 6px 10px;" on:click={leaveServer}>Servers</button>
-              </div>
-            {/if}
             {#if connection && connState !== 'paused'}
               {#key connection}<Terminal {connection} {activeSessionId} {connState} />{/key}
             {:else}
@@ -462,6 +451,9 @@
       </svelte:boundary>
     </main>
   {/if}
+
+  {#if menuOpen && user}<MenuSheet {user} {avatar} onservers={leaveServer} onreport={openReport} onlogout={logout} onclose={() => menuOpen = false} />{/if}
+  {#if actionSession}<SessionActions session={actionSession} onclose={() => actionKey = null} />{/if}
 
   {#if reportText !== null}
     <ReportDialog text={reportText} onclose={() => (reportText = null)} />
@@ -477,6 +469,8 @@
 </AppShell>
 
 <style>
+  .connection-notice { padding: 8px; font-size: 0.8rem; overflow-wrap: anywhere; }
+
   .auth-screen {
     min-height: 100vh;
     display: flex;
