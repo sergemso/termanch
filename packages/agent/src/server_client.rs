@@ -161,7 +161,8 @@ impl ServerClient {
             }
             ServerMessage::AgentSnapshot { .. }
             | ServerMessage::AgentEvents { .. }
-            | ServerMessage::Snapshot { .. } => {}
+            | ServerMessage::Snapshot { .. }
+            | ServerMessage::WindowList { .. } => {}
             ServerMessage::Error { message } => {
                 info!("Server error: {}", message);
             }

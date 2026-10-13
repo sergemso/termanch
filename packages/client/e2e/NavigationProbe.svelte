@@ -5,6 +5,11 @@
   import SessionActions from '../src/SessionActions.svelte';
   import SessionSheet from '../src/SessionSheet.svelte';
   import KeyRow from '../src/KeyRow.svelte';
+  import WindowMenu from '../src/WindowMenu.svelte';
+  import NeedsYouBanner from '../src/NeedsYouBanner.svelte';
+  import { openTabs } from '../src/lib/tabs';
+  import { waitingList } from '../src/lib/notify';
+  import type { WindowInfo } from '../src/lib/protocol';
   import type { SheetHeight } from '../src/lib/sheet';
   import { onMount } from 'svelte';
   import { ServerHub, type HubConnection } from '../src/lib/hub';
@@ -31,11 +36,17 @@
   }
   const hub = new ServerHub({ credentials: async () => ({ cert: '', sign: async () => '' }), factory: opts => { const peer = new Fake(opts); peers.set(opts.serverId!, peer); return peer; } });
   hub.start(['alpha', 'beta', 'gamma'].map(id => ({ server_id: id, server_name: id, server_url: '', registered_at: 0 })));
-  const sessions = hub.allSessions, agents = hub.agents, servers = hub.servers;
+  const sessions = hub.allSessions, agents = hub.agents, servers = hub.servers, wins = hub.windows;
+  let hidden = new Set<string>();
+  let menuKey: string | null = null;
+  let confirmClose = false;
+  $: tabs = openTabs($sessions, $agents, hidden);
+  $: waiting = waitingList($sessions, $agents);
+  $: menuSession = $sessions.find(s => s.key === menuKey);
   let activeKey = 'gamma/session-3';
   let menu = false;
   let actions: string | null = null;
-  let height: SheetHeight = 'peek';
+  let height: SheetHeight = 'closed';
   let mobile = true;
   let expanded = false;
   let sheetHeld = false;
@@ -50,6 +61,8 @@
     sent: () => messages,
     changePrompt: () => peers.get('alpha')!.emit({ type: 'agent_events', events: [{ session: 'session-1', seq: 3, ts: Date.now(), source: 'hook', confidence: 'high', kind: 'prompt', id: 'changed-alpha', prompt_kind: 'choice', choices: ['Different'] }] }),
     select: (key: string) => activeKey = key,
+    windows: (server: string, session: string, windows: WindowInfo[], representative: number | null) => peers.get(server)!.emit({ type: 'window_list', session, windows, representative }),
+    hidden: () => [...hidden],
     change: () => {
       const peer = peers.get('alpha')!;
       peer.list = [...peer.list.filter(s => s.id !== 'session-0'), { id: 'new', name: 'new', agent: null }];
@@ -59,12 +72,19 @@
   } });
 </script>
 <AppShell pinned>
-  <NavigationBar sessions={$sessions} agents={$agents} servers={$servers} {activeKey} held={!!actions || expanded || sheetHeld} onopen={key => { activeKey = key; height = 'peek'; }} onactions={key => actions = key} onmenu={() => menu = true} onsessions={() => height = height === 'peek' ? 'half' : 'peek'} />
+  <NavigationBar sessions={tabs} agents={$agents} servers={$servers} windows={$wins} ontabmenu={key => { menuKey = key; hub.sendToSession(key, { type: 'windows', session: key }); }} {activeKey} held={!!actions || expanded || sheetHeld} onopen={key => { activeKey = key; height = 'closed'; }} onactions={key => actions = key} onmenu={() => menu = true} onsessions={() => height = height === 'closed' ? 'half' : 'closed'} />
+  <NeedsYouBanner {waiting} now={Date.now()} onopen={key => { activeKey = key; }} onanswer={(key, choice, prompt) => hub.sendToSession(key, { type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} />
   <main class:mobile>
     <div class="terminal"><p>{activeKey}</p><div class="screen"></div><KeyRow bind:mods onkey={() => {}} onpaste={() => {}} oncopy={() => {}} /></div>
-    <SessionSheet sessions={$sessions} agents={$agents} servers={$servers} {activeKey} {mobile} bind:height held={!!actions} onexpanded={value => expanded = value} onheld={value => sheetHeld = value} onopen={key => { activeKey = key; height = 'peek'; }} onnew={() => {}} onrefresh={() => {}} onretry={id => hub.retry(id)} send={m => { if ('session' in m) hub.sendToSession(m.session, m); }} />
+    <SessionSheet sessions={$sessions} agents={$agents} servers={$servers} {activeKey} {mobile} bind:height held={!!actions} onexpanded={value => expanded = value} onheld={value => sheetHeld = value} onopen={key => { activeKey = key; height = 'closed'; }} onnew={() => {}} onrefresh={() => {}} onretry={id => hub.retry(id)} send={m => { if ('session' in m) hub.sendToSession(m.session, m); }} />
   </main>
   {#if menu}<MenuSheet user="test" onservers={() => {}} onreport={() => {}} onlogout={() => {}} onclose={() => menu = false} />{/if}
-  {#if actionSession}<SessionActions session={actionSession} onclose={() => actions = null} />{/if}
+  {#if actionSession}<SessionActions session={actionSession} confirmFirst={confirmClose} ondetach={() => { hidden = new Set(hidden).add(actionSession.key); }} onclosesession={() => hub.sendToSession(actionSession.key, { type: 'close_session', session: actionSession.key })} onclose={() => actions = null} />{/if}
+  {#if menuSession && menuKey}
+    <WindowMenu session={menuSession} data={$wins[menuSession.key]}
+      onselect={index => hub.sendToSession(menuSession.key, { type: 'select_window', session: menuSession.key, index })}
+      onclosewindow={index => hub.sendToSession(menuSession.key, { type: 'close_window', session: menuSession.key, index })}
+      ondetach={() => { hidden = new Set(hidden).add(menuSession.key); }} onclosesession={() => { confirmClose = true; actions = menuSession.key; }} onclose={() => menuKey = null} />
+  {/if}
 </AppShell>
 <style>main { display: flex; flex: 1; min-height: 0; overflow: hidden; } main.mobile { flex-direction: column; } .terminal { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; } .screen { flex: 1; min-height: 0; }</style>

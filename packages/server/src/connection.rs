@@ -97,6 +97,9 @@ pub async fn run(mut link: Link, state: AppState) {
         mode: state.mode.clone(),
         version: crate::version(),
         backends: state.sessions.backends(),
+        control_mode: state.sessions.control_mode(),
+        tmux_version: state.sessions.tmux_version().to_string(),
+        prefix: state.sessions.prefix().to_string(),
     };
     if !send(&link, &ok).await {
         return;

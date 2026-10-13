@@ -24,6 +24,7 @@
     <button class="secondary" aria-expanded={showSettings} on:click={() => showSettings = !showSettings}>Settings</button>
     {#if showSettings}
       <label>Cache TTL <select value={$settings.cacheTtlMs} on:change={(e) => changeSettings({ cacheTtlMs: Number(e.currentTarget.value) as 300000 | 3600000 })}><option value="300000">5 minutes</option><option value="3600000">1 hour</option></select></label>
+      <label>Keep warm text <input value={$settings.keepWarm} placeholder="empty hides the button" maxlength="200" autocapitalize="off" on:change={(e) => changeSettings({ keepWarm: e.currentTarget.value })} /></label>
       <label>Theme <select value={$settings.theme} on:change={(e) => changeSettings({ theme: e.currentTarget.value as 'dark' | 'light' | 'system' })}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></label>
     {/if}
     <button class="secondary" on:click={() => choose(onreport)}>Report a problem</button>

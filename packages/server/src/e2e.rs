@@ -503,6 +503,18 @@ async fn uninstall_needs_the_name_and_a_recent_login_then_wipes_the_config(kind:
     assert!(f.stopped.load(std::sync::atomic::Ordering::SeqCst));
 }
 
+/// Kills a test's tmux session when the test ends, also when it fails halfway (a failed assertion used to leave
+/// `detach…` sessions behind on the machine that ran the tests).
+struct KillOnDrop(String);
+
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        let _ = std::process::Command::new("tmux")
+            .args(["kill-session", "-t", &format!("={}", self.0)])
+            .output();
+    }
+}
+
 async fn nothing_is_served_before_auth(kind: Kind) {
     let f = fixture().await;
     let mut c = Conn::open(kind, &f).await;
@@ -516,6 +528,7 @@ async fn nothing_is_served_before_auth(kind: Kind) {
 async fn detach_preserves_the_connection_and_session(kind: Kind) {
     let f = fixture().await;
     let name = format!("detach{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
+    let _cleanup = KillOnDrop(name.clone());
     let alice = f.who(1, "alice");
     let mut c = Conn::open(kind, &f).await;
     c.login(&f, &alice, &f.claim).await;
@@ -556,6 +569,7 @@ async fn reconnect_resumes_the_tmux_session_with_its_screen(kind: Kind) {
     }
     let f = fixture().await;
     let name = format!("e2e{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
+    let _cleanup = KillOnDrop(name.clone());
 
     let alice = f.who(1, "alice");
     let mut c = Conn::open(kind, &f).await;
@@ -608,6 +622,7 @@ async fn agent_events_flow_from_a_session_tool_to_the_client(kind: Kind) {
     }
     let f = fixture().await;
     let name = format!("ev{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
+    let _cleanup = KillOnDrop(name.clone());
     let alice = f.who(1, "alice");
     let mut c = Conn::open(kind, &f).await;
     c.login(&f, &alice, &f.claim).await;
@@ -725,6 +740,7 @@ async fn peek_shows_a_session_screen_without_attaching(kind: Kind) {
     }
     let f = fixture().await;
     let name = format!("pk{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
+    let _cleanup = KillOnDrop(name.clone());
     let alice = f.who(1, "alice");
     let mut c = Conn::open(kind, &f).await;
     c.login(&f, &alice, &f.claim).await;
@@ -757,6 +773,63 @@ async fn peek_shows_a_session_screen_without_attaching(kind: Kind) {
         .output();
 }
 
+async fn windows_close_window_and_close_session_go_through_the_handlers(kind: Kind) {
+    if std::process::Command::new("tmux")
+        .arg("-V")
+        .output()
+        .is_err()
+    {
+        eprintln!("tmux not installed; skipping");
+        return;
+    }
+    let f = fixture().await;
+    let name = format!("cw{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
+    let _cleanup = KillOnDrop(name.clone());
+    let alice = f.who(1, "alice");
+    let mut c = Conn::open(kind, &f).await;
+    c.login(&f, &alice, &f.claim).await;
+    c.recv_type("auth_ok").await;
+    c.send(json!({"type":"new_session","name":name})).await;
+    c.recv_type("sessions").await;
+    c.send(json!({"type":"windows","session":name})).await;
+    let one = c.recv_type("window_list").await;
+    assert_eq!(one["windows"].as_array().unwrap().len(), 1);
+    assert!(std::process::Command::new("tmux")
+        .args(["new-window", "-t", &format!("={name}:"), "-n", "second"])
+        .status()
+        .unwrap()
+        .success());
+    c.send(json!({"type":"windows","session":name})).await;
+    let two = c.recv_type("window_list").await;
+    assert_eq!(two["windows"].as_array().unwrap().len(), 2);
+    assert_eq!(two["windows"][1]["name"], "second");
+    c.send(json!({"type":"close_window","session":name,"index":1}))
+        .await;
+    c.recv_type("sessions").await;
+    c.send(json!({"type":"windows","session":name})).await;
+    assert_eq!(
+        c.recv_type("window_list").await["windows"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    c.send(json!({"type":"close_session","session":name})).await;
+    let list = c.recv_type("sessions").await;
+    assert!(
+        !list["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|s| s["id"] == name),
+        "{list}"
+    );
+    // A name that is not a session is an error, not a crash.
+    c.send(json!({"type":"close_session","session":"no-such-session"}))
+        .await;
+    c.recv_type("error").await;
+}
+
 macro_rules! over_both_transports {
     ($($name:ident),*) => {$(
         mod $name {
@@ -775,7 +848,8 @@ over_both_transports!(
     detach_preserves_the_connection_and_session,
     agent_events_flow_from_a_session_tool_to_the_client,
     a_burst_of_input_messages_does_not_drop_the_connection,
-    peek_shows_a_session_screen_without_attaching
+    peek_shows_a_session_screen_without_attaching,
+    windows_close_window_and_close_session_go_through_the_handlers
 );
 
 // --- WebRTC-specific ----------------------------------------------------------------------------

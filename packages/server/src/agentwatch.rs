@@ -198,7 +198,6 @@ pub async fn poll_herdr_once(hub: &EventHub, runner: &Runner, prefix: &str) {
         if let Some(state) = adapters::herdr_state(&String::from_utf8_lossy(&out.stdout)) {
             // Events know the session by the id clients see (`herdr:name` when several managers run).
             let key = format!("{prefix}{}", s.id);
-            hub.set_agent(&key, "herdr");
             hub.report(
                 &key,
                 Source::Herdr,

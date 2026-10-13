@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyMods, clampFont, pinchFont, KEYS } from './keys';
+import { applyMods, clampFont, pinchFont, prefixBytes, KEYS } from './keys';
 
 describe('applyMods', () => {
   it('passes data through when no modifier is armed', () => {
@@ -64,5 +64,18 @@ describe('bufferText', () => {
     expect(bufferText((i) => lines[i], lines.length)).toBe('a\nb\n\nc');
     expect(bufferText((i) => lines[i], lines.length, 2)).toBe('');
     expect(bufferText((i) => lines[i], lines.length, 4)).toBe('\nc');
+  });
+});
+
+describe('tmux prefix notation', () => {
+  it('turns tmux notation into the bytes the terminal gets', () => {
+    expect(prefixBytes('C-b')).toBe('\x02');
+    expect(prefixBytes('C-a')).toBe('\x01');
+    expect(prefixBytes('C-Space')).toBe('\0');
+    expect(prefixBytes('M-x')).toBe('\x1bx');
+    expect(prefixBytes('`')).toBe('`');
+    expect(prefixBytes('None')).toBe('');
+    expect(prefixBytes('')).toBe('');
+    expect(prefixBytes('C-nonsense')).toBe('');
   });
 });

@@ -7,7 +7,7 @@
 
   import type { HubConnection, ServerState } from './lib/hub';
   import { b64ToBytes, textToB64 } from './lib/connection';
-  import { applyMods, bufferText, clampFont, FONT_DEFAULT, type Mods } from './lib/keys';
+  import { applyMods, bufferText, clampFont, FONT_DEFAULT, prefixBytes, type KeyProfile, type Mods } from './lib/keys';
   import { beep, bellEnabled, installAudioUnlock, setBellEnabled, unlockAudio } from './lib/bell';
   import { copyText } from './lib/clipboard';
   import { attachInputLogger } from './lib/inputlog';
@@ -30,11 +30,17 @@
   export let connection: HubConnection;
   export let activeSessionId: string | null = null;
   export let connState: ServerState = 'connected';
+  /** `tmux` adds the Prefix key to the key row; `prefix` is tmux's own notation for it (`C-b`). */
+  export let profile: KeyProfile = 'shell';
+  export let prefix = 'C-b';
+  /** The last screen seen for this session (a peek): drawn dimmed until the live repaint replaces it. */
+  export let preview: string | null = null;
 
   const FONT_KEY = 'termanch_font';
   let mods: Mods = { ctrl: false, alt: false };
   let fontSize = clampFont(Number(localStorage.getItem(FONT_KEY)) || FONT_DEFAULT);
-  let quality = '';
+  let prefixArmed = false;
+  let previewing = false;
   let selectText: string | null = null;
   let bell = bellEnabled();
   let fnOpen = false;
@@ -111,18 +117,40 @@
     batch.add(data);
   }
 
+  /** The sticky Prefix key: the next key goes out behind tmux's prefix, once. */
+  function withPrefix(data: string): string {
+    if (!prefixArmed) return data;
+    prefixArmed = false;
+    return prefixBytes(prefix) + data;
+  }
+
+  function combo(key: string) {
+    prefixArmed = false;
+    sendInput(prefixBytes(prefix) + key);
+  }
+
+  /** Draws a peeked screen at once, dimmed; the repaint after attach clears it (decision 0084). */
+  function paintPreview(text: string) {
+    if (!term || previewing) return;
+    previewing = true;
+    term.reset();
+    term.write(text.replace(/\r?\n/g, '\r\n'));
+  }
+  $: if (term && preview && !previewing) paintPreview(preview);
+  $: if (!preview) previewing = false;
+
   /** Typed characters pass through the sticky Ctrl/Alt; key-row sequences are sent as they are. */
   function typed(data: string) {
     const { out, used } = applyMods(data, mods);
     if (used) mods = { ctrl: false, alt: false };
     words.feed(out);
-    sendInput(out);
+    sendInput(withPrefix(out));
   }
 
   /** Key-row keys: sent as they are, but the word being typed must know about them. */
   function sendKey(data: string) {
     words.feed(data);
-    sendInput(data);
+    sendInput(withPrefix(data));
   }
 
   async function paste() {
@@ -306,18 +334,13 @@
           term?.write(b64ToBytes(msg.data));
         } else if (msg.type === 'session_attached') {
           // tmux repaints the screen on attach; start clean so a re-attach never doubles the content.
+          previewing = false;
           term?.reset();
           if (term) sendResize(term.cols, term.rows);
           term?.focus(); // connecting lands in a live terminal
         }
       }),
     );
-
-    const qualityTimer = setInterval(() => {
-      const kind = connection.kind;
-      quality = kind ? `${kind === 'rtc' ? 'direct' : 'relay'}${connection.rtt != null ? ` · ${connection.rtt} ms` : ''}` : '';
-    }, 1000);
-    cleanups.push(() => clearInterval(qualityTimer));
 
     return teardown;
   });
@@ -328,6 +351,7 @@
   <div class="screenbox">
     <div
       class="screen"
+      class:previewing
       bind:this={terminalContainer}
       on:click={() => (sel ? touch.clear() : keyboard.tap())}
       on:pointerdown={onPointerDown}
@@ -346,17 +370,10 @@
       {#if b}<button type="button" class="handle" aria-label="Selection end" style="left: {b.x}px; top: {b.y}px;" on:pointerdown={(e) => grabHandle('b', e)} on:pointermove={onPointerMove} on:pointerup={onPointerUp}></button>{/if}
     {/if}
     {#if selStatus}<div class="selstatus">{selStatus}</div>{/if}
+    {#if connState !== 'connected'}<div class="connstate" role="status">{connState}</div>{/if}
   </div>
-  <div class="status" aria-live="polite">
-    <span class="dot" class:ok={connState === 'connected'}></span>
-    {connState === 'connected' ? quality || 'connected' : connState}
-    <span class="spacer"></span>
-    <button class="font" aria-label="Show or hide the keyboard" on:pointerdown|preventDefault={() => keyboard.toggleSystem()}>⌨</button>
-    <button class="font" aria-label={bell ? 'Mute bell' : 'Unmute bell'} aria-pressed={bell} on:pointerdown|preventDefault={toggleBell}>{bell ? '🔔' : '🔕'}</button>
-    <button class="font" aria-label="Smaller text" on:pointerdown|preventDefault={() => setFont(fontSize - 1)}>A−</button>
-    <button class="font" aria-label="Larger text" on:pointerdown|preventDefault={() => setFont(fontSize + 1)}>A+</button>
-  </div>
-  <KeyRow bind:mods onkey={sendKey} onpaste={paste} oncopy={copy} onselect={openSelect} {fnOpen} onfn={() => keyboard.toggleFn()} />
+  <KeyRow bind:mods bind:prefixArmed {profile} {bell} oncombo={combo} onkey={sendKey} onpaste={paste} oncopy={copy} onselect={openSelect} {fnOpen} onfn={() => keyboard.toggleFn()}
+    onkeyboard={() => keyboard.toggleSystem()} onbell={toggleBell} onfont={(d) => setFont(fontSize + d)} />
   {#if fnOpen}<FnKeyboard bind:mods onkey={typed} onback={() => keyboard.closeFn()} />{/if}
   {#if selectText !== null}<SelectView text={selectText} onclose={() => { selectText = null; term?.focus(); }} />{/if}
 </div>
@@ -394,6 +411,17 @@
     min-height: 34px;
     padding: 4px 14px;
   }
+  .connstate {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    z-index: 5;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: var(--bg-secondary);
+    color: var(--danger);
+    font-size: 0.75rem;
+  }
   .selstatus {
     position: absolute;
     top: 6px;
@@ -417,34 +445,8 @@
     background: var(--accent);
     touch-action: none;
   }
-  .status {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 10px;
-    font-size: 0.7rem;
-    color: var(--fg-muted);
-    background: var(--bg-secondary);
-  }
-  .status .spacer {
-    flex: 1;
-  }
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--danger);
-  }
-  .dot.ok {
-    background: var(--success);
-  }
-  .font {
-    padding: 2px 8px;
-    min-height: 26px;
-    background: var(--bg);
-    color: var(--fg);
-    border: 1px solid var(--border);
-    font-size: 0.7rem;
+  .screen.previewing {
+    opacity: 0.55;
   }
   :global(.xterm) {
     height: 100% !important;

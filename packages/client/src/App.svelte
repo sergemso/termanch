@@ -9,10 +9,17 @@
   import NavigationBar from './NavigationBar.svelte';
   import MenuSheet from './MenuSheet.svelte';
   import SessionActions from './SessionActions.svelte';
+  import WindowMenu from './WindowMenu.svelte';
+  import NeedsYouBanner from './NeedsYouBanner.svelte';
+  import NewSessionSheet from './NewSessionSheet.svelte';
+  import { SnapshotStore } from './lib/snapshots';
+  import { loadHidden, openTabs, saveHidden } from './lib/tabs';
+  import { announce, waitingList } from './lib/notify';
+  import { cacheRemaining, expiringSoon } from './lib/cache';
   import { settings, applyTheme } from './lib/settings';
   import type { ServerListItem } from './lib/protocol';
   import { parseClaim, parseServerLink } from './lib/onboard';
-  import { ServerHub, serverKey, sessionDestinations, sessionKey } from './lib/hub';
+  import { ServerHub, serverKey, sessionDestinations, sessionKey, type HubServer } from './lib/hub';
   import { lookup } from './lib/directory';
   import { deviceKey, publicKeyB64, signChallenge, certExpiry, certUserId, avatarUrl } from './lib/device';
   import AppShell from './AppShell.svelte';
@@ -83,11 +90,19 @@
     onDrop: (_id, reason, upMs) => noteError(`connection lost after ${Math.round(upMs / 1000)} s: ${reason}`),
     onFatal: (_id, reason) => { noteError(`connection: ${reason}`); showToast(reason, 'error'); },
     onMessage: (_id, msg) => {
+      const id = _id;
+      if (msg.type === 'snapshot') snapshots.apply(sessionKey(_id, msg.session), msg);
+      else if (msg.type === 'session_attached') preview = null;
+      else if (msg.type === 'sessions') openPending(_id, msg.sessions);
       if (msg.type === 'error') showToast(msg.message, 'error');
       else if (msg.type === 'agent_event') showToast(`Agent ${msg.agent} ${msg.event} in ${msg.session_id}`);
     },
   });
+  const snapshots = new SnapshotStore();
+  /** The last screen seen for the session being opened, dimmed in the terminal until the live repaint replaces it. */
+  let preview: string | null = null;
   const hubServers = hub.servers;
+  const allWindows = hub.windows;
   const allSessions = hub.allSessions;
   const allAgents = hub.agents;
   const connectedCount = hub.connectedCount;
@@ -102,11 +117,29 @@
   let narrow = false;
   let iosHint = isIosBrowser() && !localStorage.getItem('termanch_ios_hint');
   let sheetHeight: SheetHeight = 'half';
+  let now = Date.now();
+  let hidden = loadHidden();
+  let menuKey: string | null = null;
+  let actionConfirm = false;
+  let showNew = false;
+  let pendingOpen: { serverId: string; name: string } | null = null;
+  let quality = '';
+  let keyboardOpen = false;
   let sheetHeld = false;
   let menuOpen = false;
   let actionKey: string | null = null;
   let cardExpanded = false;
   $: actionSession = $allSessions.find(s => s.key === actionKey);
+  $: menuSession = $allSessions.find(s => s.key === menuKey);
+  const backendOf = (s: { backend?: string; serverId: string } | undefined) => s ? (s.backend ?? $hubServers.find(h => h.id === s.serverId)?.backends[0] ?? '') : '';
+  $: tabSessions = openTabs($allSessions, $allAgents, hidden);
+  $: waiting = waitingList($allSessions, $allAgents);
+  $: announce(waiting.length);
+  $: expiring = new Set($allSessions.filter(s => expiringSoon(cacheRemaining($allAgents[s.key], now, $settings.cacheTtlMs))).map(s => s.key));
+  $: activeSession = $allSessions.find(s => s.key === activeKey);
+  $: profile = backendOf(activeSession) === 'tmux' ? 'tmux' as const : 'shell' as const;
+  $: link = selected ? { ok: connState === 'connected', text: connState === 'connected' ? quality || 'connected' : connState } : null;
+  $: if (hidden.size) { const live = new Set($allSessions.map(s => s.key)); if ([...hidden].some(k => !live.has(k)) && $allSessions.length) { hidden = new Set([...hidden].filter(k => live.has(k))); saveHidden(hidden); } }
   let showAddServer = false;
   let addPrefill: string | null = null;
   let toast: { message: string; type: 'success' | 'error' } | null = null;
@@ -215,14 +248,60 @@
       showToast('This server is reconnecting. You can retry it in Servers.', 'error');
       return;
     }
-    sheetHeight = 'peek';
+    sheetHeight = 'closed';
+    if (hidden.has(key)) { hidden.delete(key); hidden = new Set(hidden); saveHidden(hidden); }
     if (activeServerId && activeServerId !== session.serverId) hub.send(activeServerId, { type: 'detach' });
     serversPage = false;
+    preview = key === activeKey ? null : snapshots.text(key);
     activeKey = key;
     activeServerId = session.serverId;
     // Mount the receiving terminal before attach can produce a repaint on another server.
     await tick();
     if (activeKey === key) hub.sendToSession(key, { type: 'attach', session_id: key });
+  }
+
+  /** Fetches a session's screen while the finger is still going down on its tab or card (decision 0084). */
+  function peek(key: string) {
+    if (key === activeKey) return;
+    hub.sendToSession(key, { type: 'peek', session: key, hash: snapshots.hash(key) });
+  }
+
+  /** Detach: the tab closes and the stream stops; the session keeps running and stays in the Sessions sheet. */
+  function detach(key: string) {
+    hidden = new Set(hidden).add(key); saveHidden(hidden);
+    if (key === activeKey) {
+      if (activeServerId) hub.send(activeServerId, { type: 'detach' });
+      activeKey = null; activeServerId = null; preview = null;
+      sheetHeight = 'half';
+    }
+  }
+
+  /** Close session: it and everything in it ends (the dialog has asked first). */
+  function closeSession(key: string) {
+    hub.sendToSession(key, { type: 'close_session', session: key });
+    if (key === activeKey) { activeKey = null; activeServerId = null; preview = null; sheetHeight = 'half'; }
+  }
+
+  function openWindowMenu(key: string) {
+    menuKey = key;
+    hub.sendToSession(key, { type: 'windows', session: key });
+  }
+
+  function createSession(req: { serverId: string; backend?: string; dir?: string; template?: string; name: string }) {
+    pendingOpen = { serverId: req.serverId, name: req.name };
+    hub.send(req.serverId, { type: 'new_session', name: req.name, backend: req.backend, dir: req.dir, template: req.template });
+  }
+  /** The session the user just created opens by itself once the server lists it. */
+  function openPending(serverId: string, list: import('./lib/protocol').SessionInfo[]) {
+    if (!pendingOpen || pendingOpen.serverId !== serverId) return;
+    const made = list.find(s => s.name === pendingOpen!.name);
+    if (!made) return;
+    pendingOpen = null;
+    void attach(sessionKey(serverId, made.id));
+  }
+
+  function keepWarm(key: string) {
+    if ($settings.keepWarm) hub.sendToSession(key, { type: 'reply', session: key, text: $settings.keepWarm });
   }
 
   function sendSession(m: import('./lib/protocol').ClientMessage) {
@@ -237,29 +316,8 @@
   }
 
   function newSession() {
-    const connected = sessionDestinations($hubServers, selected);
-    let destination = connected[0];
-    if (!destination) { showToast('Wait for a server to connect or retry it in Servers.', 'error'); return; }
-    if (connected.length > 1) {
-      const pick = prompt('Create on which server? ' + connected.map((s, i) => `${i + 1}: ${s.server.server_name}`).join(', '), '1');
-      if (!pick) return;
-      destination = connected[Number(pick) - 1];
-      if (!destination) return;
-    }
-    const backends = destination.backends;
-    const name = prompt('New session name', `agent-${sessions.length + 1}`);
-    if (!name) return;
-    let backend: string | undefined;
-    if (backends.length > 1) {
-      const pick = prompt(`Create it in: ${backends.join(' or ')}?`, backends[0]);
-      if (!pick) return;
-      backend = backends.find((b) => b === pick.trim().toLowerCase());
-      if (!backend) {
-        showToast(`Pick one of: ${backends.join(', ')}`, 'error');
-        return;
-      }
-    }
-    hub.send(destination.id, { type: 'new_session', name, backend });
+    if (!sessionDestinations($hubServers, selected).length) { showToast('Wait for a server to connect or retry it in Servers.', 'error'); return; }
+    showNew = true;
   }
 
   function logout() {
@@ -284,7 +342,7 @@
   function leaveServer() {
     if (activeServerId) hub.send(activeServerId, { type: 'detach' });
     serversPage = true;
-    sheetHeight = 'peek';
+    sheetHeight = 'closed';
   }
 
   onMount(() => {
@@ -293,6 +351,15 @@
     media();
     mq.addEventListener('change', media);
     watchForUpdates();
+    const clock = setInterval(() => {
+      now = Date.now();
+      const c = connection;
+      const kind = c?.kind;
+      quality = kind ? `${kind === 'rtc' ? 'direct' : 'relay'}${c?.rtt != null ? ` · ${c.rtt} ms` : ''}` : '';
+    }, 1000);
+    const vv = window.visualViewport;
+    const kb = () => { keyboardOpen = !!vv && window.innerHeight - vv.height > 150; };
+    vv?.addEventListener('resize', kb); kb();
     const themeMedia = window.matchMedia('(prefers-color-scheme: light)');
     let currentTheme = 'dark' as 'dark' | 'light' | 'system';
     const themeChanged = () => applyTheme(currentTheme, themeMedia.matches);
@@ -312,6 +379,8 @@
     window.addEventListener('error', report);
     window.addEventListener('unhandledrejection', report);
     return () => {
+      clearInterval(clock);
+      vv?.removeEventListener('resize', kb);
       stopTheme();
       themeMedia.removeEventListener('change', themeChanged);
       stopUsage();
@@ -399,7 +468,9 @@
       </div>
     </div>
   {:else}
-    <NavigationBar sessions={$allSessions} agents={$allAgents} servers={$hubServers} {activeKey} held={!!actionSession || cardExpanded || sheetHeld} onopen={attach} onactions={(key) => actionKey = key} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { showWorkspace(); sheetHeight = sheetHeight === 'peek' ? 'half' : 'peek'; }} />
+    <NavigationBar sessions={tabSessions} agents={$allAgents} servers={$hubServers} windows={$allWindows} {expiring} {link} {activeKey} held={!!actionSession || !!menuSession || cardExpanded || sheetHeld} onopen={attach} onpeek={peek} ontabmenu={openWindowMenu} onactions={(key) => { actionConfirm = false; actionKey = key; }}
+      onlink={() => link && showToast(link.text, link.ok ? 'success' : 'error')} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { showWorkspace(); sheetHeight = sheetHeight === 'closed' ? 'half' : 'closed'; }} />
+    <NeedsYouBanner {waiting} {now} collapsed={keyboardOpen} onopen={attach} onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} />
 
     {#if iosHint && !selectedServer}
       <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); font-size: 0.85rem;">
@@ -427,12 +498,12 @@
         <div class="workspace" class:mobile={narrow}>
           <div class="terminal-pane">
             {#if connection && connState !== 'paused'}
-              {#key connection}<Terminal {connection} {activeSessionId} {connState} />{/key}
+              {#key connection}<Terminal {connection} {activeSessionId} {connState} {profile} prefix={selected?.prefix || 'C-b'} {preview} />{/key}
             {:else}
               <div class="card" style="margin: auto;">{activeKey ? 'This server is paused. Resume it in Servers.' : 'Choose a session to open its terminal.'}<button class="secondary" on:click={leaveServer}>Servers</button></div>
             {/if}
           </div>
-          <SessionSheet sessions={$allSessions} agents={$allAgents} servers={$hubServers} {activeKey} mobile={narrow} bind:height={sheetHeight} held={!!actionSession}
+          <SessionSheet sessions={$allSessions} agents={$allAgents} servers={$hubServers} windows={$allWindows} onpeek={peek} onwarm={keepWarm} {activeKey} mobile={narrow} bind:height={sheetHeight} held={!!actionSession}
             onexpanded={(open) => cardExpanded = open} onheld={(held) => sheetHeld = held} onopen={attach} onnew={newSession} onrefresh={() => { for (const s of $hubServers) hub.send(s.id, { type: 'list_sessions' }); }} onretry={(id) => hub.retry(id)} send={sendSession} />
         </div>
       {/if}
@@ -441,7 +512,16 @@
   {/if}
 
   {#if menuOpen && user}<MenuSheet {user} {avatar} onservers={leaveServer} onreport={openReport} onlogout={logout} onclose={() => menuOpen = false} />{/if}
-  {#if actionSession}<SessionActions session={actionSession} onclose={() => actionKey = null} />{/if}
+  {#if actionSession}<SessionActions session={actionSession} canClose={backendOf(actionSession) === 'tmux'} confirmFirst={actionConfirm} ondetach={() => detach(actionSession.key)} onclosesession={() => closeSession(actionSession.key)} onclose={() => actionKey = null} />{/if}
+  {#if menuSession && menuKey}
+    <WindowMenu session={menuSession} data={$allWindows[menuSession.key]} supported={backendOf(menuSession) === 'tmux'}
+      onselect={(index) => hub.sendToSession(menuSession.key, { type: 'select_window', session: menuSession.key, index })}
+      onclosewindow={(index) => hub.sendToSession(menuSession.key, { type: 'close_window', session: menuSession.key, index })}
+      ondetach={() => detach(menuSession.key)} onclosesession={() => { actionConfirm = true; actionKey = menuSession.key; }} onclose={() => menuKey = null} />
+  {/if}
+  {#if showNew}
+    <NewSessionSheet servers={sessionDestinations($hubServers, selected)} sessions={$allSessions} windows={$allWindows} oncreate={createSession} onclose={() => showNew = false} />
+  {/if}
 
   {#if reportText !== null}
     <ReportDialog text={reportText} onclose={() => (reportText = null)} />

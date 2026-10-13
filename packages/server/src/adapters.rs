@@ -157,10 +157,26 @@ pub fn parse_panes(output: &str, now_s: u64) -> Vec<PaneScan> {
 
 pub fn agent_name(command: &str) -> Option<&'static str> {
     let c = command.to_ascii_lowercase();
-    ["claude", "codex", "herdr"]
+    AGENTS
         .into_iter()
         .find(|n| c == *n || c.starts_with(&format!("{n}-")))
 }
+
+/// Coding agents the scan recognises by the pane's foreground command. herdr is not one: it is a session
+/// manager that hosts agents.
+pub const AGENTS: [&str; 11] = [
+    "claude",
+    "codex",
+    "copilot",
+    "opencode",
+    "kilo",
+    "gemini",
+    "aider",
+    "cursor-agent",
+    "amp",
+    "goose",
+    "qwen",
+];
 
 /// Output in the last few seconds means busy; the floor, so always low confidence.
 pub fn scan_state(p: &PaneScan) -> Option<AgentState> {
@@ -244,6 +260,32 @@ pub fn parse_prompt(screen: &str) -> Option<PromptInfo> {
 
 #[cfg(test)]
 mod tests {
+    use super::agent_name;
+
+    #[test]
+    fn well_known_agents_are_found_and_herdr_is_a_manager_not_an_agent() {
+        for a in [
+            "claude",
+            "codex",
+            "copilot",
+            "opencode",
+            "kilo",
+            "gemini",
+            "aider",
+            "cursor-agent",
+            "amp",
+            "goose",
+            "qwen",
+        ] {
+            assert_eq!(agent_name(a), Some(a));
+            assert_eq!(agent_name(&format!("{}-1.2", a)), Some(a));
+        }
+        assert_eq!(agent_name("CLAUDE"), Some("claude"));
+        assert_eq!(agent_name("herdr"), None);
+        assert_eq!(agent_name("bash"), None);
+        assert_eq!(agent_name("ampersand"), None);
+    }
+
     use super::*;
     use serde_json::json;
 
