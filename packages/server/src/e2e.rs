@@ -666,6 +666,21 @@ async fn agent_events_flow_from_a_session_tool_to_the_client(kind: Kind) {
         .output();
 }
 
+/// xterm answers tmux's colour-palette query with one `input` message per colour, about 260 in a burst right
+/// after attach. The connection must survive that (it used to be dropped when 32 messages queued up).
+async fn a_burst_of_input_messages_does_not_drop_the_connection(kind: Kind) {
+    let f = fixture().await;
+    let alice = f.who(1, "alice");
+    let mut c = Conn::open(kind, &f).await;
+    c.login(&f, &alice, &f.claim).await;
+    c.recv_type("auth_ok").await;
+    for i in 0..300 {
+        c.send(json!({"type":"input","data":B64.encode(format!("\x1b]4;{i};rgb:eeee/eeee/eeee\x1b\\"))})).await;
+    }
+    c.send(json!({"type":"ping"})).await;
+    c.recv_type("pong").await;
+}
+
 macro_rules! over_both_transports {
     ($($name:ident),*) => {$(
         mod $name {
@@ -681,7 +696,8 @@ over_both_transports!(
     uninstall_needs_the_name_and_a_recent_login_then_wipes_the_config,
     nothing_is_served_before_auth,
     reconnect_resumes_the_tmux_session_with_its_screen,
-    agent_events_flow_from_a_session_tool_to_the_client
+    agent_events_flow_from_a_session_tool_to_the_client,
+    a_burst_of_input_messages_does_not_drop_the_connection
 );
 
 // --- WebRTC-specific ----------------------------------------------------------------------------
