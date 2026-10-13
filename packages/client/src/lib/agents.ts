@@ -6,6 +6,10 @@ import type { AgentEvent, AgentState, ClientMessage, ServerMessage, SessionAgent
 export interface SessionAgent {
   state: AgentState;
   seq: number;
+  /** The agent in the session, when the server's scan found one. */
+  agent?: string;
+  /** When the agent last answered (ms): the server's value, advanced by `done` and `message` events as they arrive. */
+  lastResponseAt?: number;
   /** As the server saw it at the snapshot; use `isStale` for the live answer. */
   stale: boolean;
   /** Server time (ms) of the last event. */
@@ -38,7 +42,7 @@ export function applySnapshot(map: AgentMap, states: SessionAgentState[]): Agent
     const old = map[s.session];
     // A lower seq than ours means the server restarted its counters: what we hold is from before, drop it.
     const keep = old && old.seq <= s.seq ? old : {};
-    next[s.session] = { ...keep, state: s.state, seq: s.seq, stale: s.stale, ts: s.ts };
+    next[s.session] = { ...keep, state: s.state, seq: s.seq, stale: s.stale, ts: s.ts, agent: s.agent, lastResponseAt: s.last_response_at };
   }
   return next;
 }
@@ -55,6 +59,7 @@ export function applyEvents(map: AgentMap, events: AgentEvent[]): { map: AgentMa
     const ev = e as Record<string, unknown>;
     switch (e.kind) {
       case 'state':
+        if (ev.state === 'done' || (a.state === 'working' && (ev.state === 'idle' || ev.state === 'needs_input'))) a.lastResponseAt = e.ts;
         a.state = ev.state as AgentState;
         if (a.state !== 'needs_input') delete a.prompt;
         break;
@@ -70,6 +75,7 @@ export function applyEvents(map: AgentMap, events: AgentEvent[]): { map: AgentMa
         break;
       case 'message':
         a.message = String(ev.summary ?? '');
+        a.lastResponseAt = e.ts;
         break;
       default:
         break; // a kind this client does not know

@@ -99,6 +99,14 @@ pub struct SessionAgentState {
     /// No event for a while although the state is `working`: the state may be out of date.
     pub stale: bool,
     pub ts: u64,
+    /// The agent in the session (`claude`, `codex`, `herdr`), from the process scan; absent for a plain shell and
+    /// from older servers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+    /// When the agent last answered (ms since the epoch): a finished turn, a reply message, or a working-to-idle
+    /// change. Absent until it has.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_response_at: Option<u64>,
 }
 
 #[cfg(test)]
@@ -124,6 +132,26 @@ mod tests {
         assert_eq!(v["phase"], "started");
         assert_eq!(v["source"], "hook");
         assert_eq!(serde_json::from_value::<AgentEvent>(v).unwrap(), e);
+    }
+
+    #[test]
+    fn a_snapshot_from_an_older_server_still_parses_and_the_new_fields_stay_off_the_wire_when_empty(
+    ) {
+        let old: SessionAgentState =
+            serde_json::from_str(r#"{"session":"s","state":"idle","seq":1,"stale":false,"ts":5}"#)
+                .unwrap();
+        assert_eq!((old.agent, old.last_response_at), (None, None));
+        let v = serde_json::to_value(&SessionAgentState {
+            session: "s".into(),
+            state: AgentState::Idle,
+            seq: 1,
+            stale: false,
+            ts: 5,
+            agent: None,
+            last_response_at: None,
+        })
+        .unwrap();
+        assert!(v.get("agent").is_none() && v.get("last_response_at").is_none());
     }
 
     #[test]

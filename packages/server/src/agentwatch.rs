@@ -108,6 +108,9 @@ pub async fn scan_tmux_once(
             Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
             _ => String::new(),
         };
+        if let Some(agent) = adapters::agent_name(&p.command) {
+            hub.set_agent(&p.session, agent);
+        }
         let info = adapters::parse_prompt(&screen);
         if let Some(id) = tracker.update(&p.session, info.as_ref().map(|i| i.question.as_str())) {
             let info = info.expect("a new prompt has a screen");
@@ -193,8 +196,11 @@ pub async fn poll_herdr_once(hub: &EventHub, runner: &Runner, prefix: &str) {
             continue;
         };
         if let Some(state) = adapters::herdr_state(&String::from_utf8_lossy(&out.stdout)) {
+            // Events know the session by the id clients see (`herdr:name` when several managers run).
+            let key = format!("{prefix}{}", s.id);
+            hub.set_agent(&key, "herdr");
             hub.report(
-                &s.id,
+                &key,
                 Source::Herdr,
                 Confidence::High,
                 EventKind::State { state },
@@ -292,6 +298,16 @@ mod tests {
         let mut tracker = PromptTracker::default();
         scan_tmux_once(&hub, &runner, "tmux:", &mut tracker).await;
         let ev = hub.since("tmux:scantest", 0);
+        let agent = hub
+            .snapshot()
+            .into_iter()
+            .find(|s| s.session == "tmux:scantest")
+            .and_then(|s| s.agent);
+        assert_eq!(
+            agent.as_deref(),
+            Some("claude"),
+            "the scan names the agent it found"
+        );
         tmux(&["kill-server"]);
         let kinds: Vec<_> = ev
             .iter()
