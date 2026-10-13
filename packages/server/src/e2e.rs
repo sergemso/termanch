@@ -57,7 +57,37 @@ impl Fixture {
     }
 }
 
+static KEEPER: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+extern "C" fn kill_keeper() {
+    if let Some(name) = KEEPER.get() {
+        let _ = std::process::Command::new("tmux")
+            .args(["kill-session", "-t", &format!("={name}")])
+            .output();
+    }
+}
+
+/// These tests share the machine's default tmux server, which exits as soon as its last session is closed; a test
+/// starting a session at that moment fails. One idle session, started once and killed when the test process exits,
+/// keeps the server up for all of them.
+fn keep_tmux_alive() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let name = format!("e2ekeep{}", std::process::id());
+        let started = std::process::Command::new("tmux")
+            .args(["new-session", "-d", "-s", &name])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if started && KEEPER.set(name).is_ok() {
+            // SAFETY: registers a plain function that only runs a child process.
+            unsafe { libc::atexit(kill_keeper) };
+        }
+    });
+}
+
 async fn fixture() -> Fixture {
+    keep_tmux_alive();
     let dir = std::env::temp_dir().join(format!("termanch-e2e-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     let signer = Signer::new("k1");
