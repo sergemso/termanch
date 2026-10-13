@@ -3,6 +3,7 @@ import { get } from 'svelte/store';
 import { ServerHub, serverKey, type HubConnection } from './hub';
 import type { ConnectionOptions } from './connection';
 import type { ClientMessage, ServerListItem, ServerMessage } from './protocol';
+import type { Target } from './transport';
 
 const server = (id: string): ServerListItem => ({ server_id: id, server_url: '', server_name: id, registered_at: 0 });
 class Fake implements HubConnection {
@@ -18,10 +19,10 @@ class Fake implements HubConnection {
   ready(reconnect = false) { this.opts.onState('connected'); this.opts.onReady({ type: 'auth_ok', user: 'u', server_name: 'host', backends: ['tmux'] }, reconnect); }
   emit(m: ServerMessage) { this.listener?.(m); }
 }
-function setup() {
+function setup(target?: (server: ServerListItem, refresh: boolean) => Promise<Target>) {
   const connections: Fake[] = [];
   const ready: boolean[] = [];
-  const hub = new ServerHub({ credentials: async () => ({ cert: 'c', sign: async () => 's' }), onReady: (_id, _msg, reconnect) => ready.push(reconnect), factory: (opts) => {
+  const hub = new ServerHub({ target, credentials: async () => ({ cert: 'c', sign: async () => 's' }), onReady: (_id, _msg, reconnect) => ready.push(reconnect), factory: (opts) => {
     const c = new Fake(opts); connections.push(c); return c;
   } });
   return { hub, connections, ready };
@@ -90,5 +91,14 @@ describe('ServerHub', () => {
     hub.retry('a'); connections[1].ready();
     hub.pause('a'); hub.resume('a'); connections[2].ready();
     expect(ready).toEqual([false, true, true]);
+  });
+  it('tries a saved address before refreshing the directory, then refreshes only after a failure', async () => {
+    const refreshes: boolean[] = [];
+    const { hub, connections } = setup(async (_s, refresh) => { refreshes.push(refresh); return {}; });
+    hub.start([{ ...server('a'), record: { ip: '127.0.0.1', udp_port: 1, fingerprint: 'test' } as ServerListItem['record'] }]);
+    await connections[0].opts.target();
+    connections[0].opts.onState('unreachable', 'offline'); await connections[0].opts.target();
+    connections[0].ready(); await connections[0].opts.target();
+    expect(refreshes).toEqual([false, true, false]);
   });
 });
