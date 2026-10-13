@@ -173,7 +173,7 @@ try {
     // A dialog opened while the view is panned must sit inside the visible area as well.
     await page.evaluate(() => window.__showDialog());
     const card = await page.evaluate(() => {
-      const r = document.querySelector('[aria-label="Report a problem"] .card').getBoundingClientRect();
+      const r = document.querySelector('[role=dialog][aria-label="Report a problem"] .card').getBoundingClientRect();
       const vv = window.visualViewport;
       return { top: r.top, bottom: r.bottom, viewTop: vv.offsetTop, viewBottom: vv.offsetTop + vv.height };
     });
@@ -317,13 +317,13 @@ try {
       window.__opened = [];
       window.open = (u) => (window.__opened.push(String(u)), null);
     });
-    await page.getByRole('button', { name: 'Report a problem' }).click();
-    const reportText = await page.locator('[aria-label="Report a problem"] textarea').inputValue();
+    await page.getByRole('button', { name: 'Report a problem', exact: true }).click();
+    const reportText = await page.locator('[role=dialog][aria-label="Report a problem"] textarea').inputValue();
     if (!reportText.includes('app:') || !reportText.includes('window: 390x')) fail(`report text is missing diagnostics: ${reportText.slice(0, 120)}`);
     await page.getByRole('button', { name: 'Open GitHub issue' }).click();
     const opened = await page.evaluate(() => window.__opened[0] ?? '');
     if (!opened.startsWith('https://github.com/sergemso/termanch/issues/new?template=problem.yml&diagnostics=')) fail(`unexpected report URL: ${opened.slice(0, 120)}`);
-    if (await page.locator('[aria-label="Report a problem"]').count()) fail('the report dialog stayed open');
+    if (await page.locator('[role=dialog][aria-label="Report a problem"]').count()) fail('the report dialog stayed open');
     // Removing a server asks first; declining keeps it.
     page.once('dialog', (d) => d.dismiss());
     await page.getByRole('button', { name: 'Remove server' }).click();

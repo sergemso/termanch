@@ -8,7 +8,7 @@
   import { parseClaim, parseServerLink } from './lib/onboard';
   import { Connection, type ConnState } from './lib/connection';
   import { lookup, type DirRecord } from './lib/directory';
-  import { deviceKey, publicKeyB64, signChallenge, certExpiry } from './lib/device';
+  import { deviceKey, publicKeyB64, signChallenge, certExpiry, certUserId, avatarUrl } from './lib/device';
   import AppShell from './AppShell.svelte';
   import ReportDialog from './ReportDialog.svelte';
   import { buildReport, noteError, recentErrors } from './lib/report';
@@ -46,11 +46,14 @@
   }
 
   let user: string | null = null;
+  let avatarBroken = false;
+  $: avatar = deviceCert ? avatarUrl(certUserId(deviceCert)) : '';
   /** Device certificate from the hosted function; the GitHub token itself is never kept (DECISION-0062). */
   let deviceCert: string | null = null;
   let servers: ServerListItem[] = [];
   let selectedServer: ServerListItem | null = null;
   let sessions: SessionInfo[] = [];
+  let backends: string[] = [];
   let activeSessionId: string | null = null;
   let connection: Connection | null = null;
   let connState: ConnState = 'closed';
@@ -205,6 +208,7 @@
           addServer(server);
         }
         serverVersion = msg.version ?? '';
+        backends = msg.backends ?? [];
         showToast(isReconnect ? 'Reconnected' : `Connected to ${msg.server_name}`);
         connection?.send({ type: 'list_sessions' });
         if (connection) requestAgentSync((m) => connection?.send(m));
@@ -247,8 +251,19 @@
   }
 
   function newSession() {
-    const name = prompt('New tmux session name', `agent-${sessions.length + 1}`);
-    if (name) connection?.send({ type: 'new_session', name });
+    const name = prompt('New session name', `agent-${sessions.length + 1}`);
+    if (!name) return;
+    let backend: string | undefined;
+    if (backends.length > 1) {
+      const pick = prompt(`Create it in: ${backends.join(' or ')}?`, backends[0]);
+      if (!pick) return;
+      backend = backends.find((b) => b === pick.trim().toLowerCase());
+      if (!backend) {
+        showToast(`Pick one of: ${backends.join(', ')}`, 'error');
+        return;
+      }
+    }
+    connection?.send({ type: 'new_session', name, backend });
   }
 
   function handleServerMessage(msg: ServerMessage) {
@@ -401,11 +416,21 @@
     <header style="display: flex; justify-content: space-between; align-items: center; padding: {narrow ? '8px 12px' : '16px 24px'}; border-bottom: 1px solid var(--border); background: var(--bg-secondary);">
       <h1 style="font-size: 1.25rem; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: manipulation;" on:click={titleTapped}>Termanch</h1>
       <div style="display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 12px;">
-        <button class="secondary" on:click={openReport} style="padding: 6px 12px;">Report a problem</button>
+        <button class="secondary" on:click={openReport} aria-label="Report a problem" title="Report a problem" style="padding: 6px {narrow ? '8px' : '12px'}; display: inline-flex; align-items: center; gap: 6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          {#if !narrow}Report a problem{/if}
+        </button>
         {#if $updateAvailable}<button on:click={() => location.reload()} style="padding: 6px 12px;">Update available</button>{/if}
         {#if $canInstall}<button on:click={promptInstall} style="padding: 6px 12px;">Install app</button>{/if}
-        <span style="color: var(--fg-muted);">@{user}</span>
-        <button class="secondary" on:click={logout}>Logout</button>
+        {#if avatar && !avatarBroken}
+          <img src={avatar} alt="@{user}" title="@{user}" width="28" height="28" referrerpolicy="no-referrer" on:error={() => (avatarBroken = true)} style="border-radius: 50%; display: block;" />
+        {:else}
+          <span title="@{user}" aria-label="@{user}" style="width: 28px; height: 28px; border-radius: 50%; background: var(--border); display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; text-transform: uppercase;">{(user ?? '?').slice(0, 1)}</span>
+        {/if}
+        <button class="secondary" on:click={logout} aria-label="Log out" title="Log out" style="padding: 6px {narrow ? '8px' : '12px'}; display: inline-flex; align-items: center; gap: 6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          {#if !narrow}Logout{/if}
+        </button>
       </div>
     </header>
 
@@ -458,14 +483,18 @@
               {#each sessions as session}
                 <li style="padding: 12px; margin-bottom: 4px; border-radius: 6px; cursor: pointer; background: {activeSessionId === session.id ? 'var(--accent)' : 'transparent'}; color: {activeSessionId === session.id ? 'var(--bg)' : 'var(--fg)'};" on:click={() => attach(session.id)}>
                   <div style="font-weight: 500;">{session.name}</div>
-                  <div style="font-size: 0.75rem; color: var(--fg-muted);">{session.id.slice(0, 12)}</div>
+                  {#if session.backend}
+                    <span style="font-size: 0.7rem; background: var(--border); color: var(--fg); padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block;">{session.backend}</span>
+                  {:else}
+                    <div style="font-size: 0.75rem; color: var(--fg-muted);">{session.id.slice(0, 12)}</div>
+                  {/if}
                   {#if session.agent}
                     <span style="font-size: 0.7rem; background: var(--border); padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block;">{session.agent}</span>
                   {/if}
                 </li>
               {/each}
               {#if sessions.length === 0}
-                <li style="color: var(--fg-muted); text-align: center; padding: 24px;">No tmux sessions found</li>
+                <li style="color: var(--fg-muted); text-align: center; padding: 24px;">No sessions yet</li>
               {/if}
             </ul>
           </aside>

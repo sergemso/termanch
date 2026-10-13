@@ -88,6 +88,21 @@ export interface Credentials {
   sign: (serverId: string, nonce: string) => Promise<string>;
 }
 
+/** The GitHub account id in the certificate (`sub`), used for the avatar URL; 0 when unreadable. */
+export function certUserId(cert: string): number {
+  try {
+    const body = cert.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+    return Number(JSON.parse(atob(body)).sub) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** The account's avatar by id: one host, no redirect, and it works without a token. */
+export function avatarUrl(id: number, size = 64): string {
+  return id > 0 ? `https://avatars.githubusercontent.com/u/${id}?s=${size}&v=4` : '';
+}
+
 /** Certificate expiry (unix seconds), read from its payload; the signature is the server's business. */
 export function certExpiry(cert: string): number {
   try {
