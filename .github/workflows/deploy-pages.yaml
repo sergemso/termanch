@@ -3,6 +3,8 @@ name: Deploy to Cloudflare Pages
 on:
   push:
     branches: [master]
+    # Docs, server and image changes do not change what is deployed to Pages.
+    paths: ['packages/client/**', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.github/workflows/deploy-pages.yaml']
   workflow_dispatch:
 
 permissions:
