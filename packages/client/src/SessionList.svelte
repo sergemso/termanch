@@ -54,9 +54,8 @@
     onexpanded(!!expanded);
   }
 
-  function answer(id: string, choice: number) {
-    const p = states[id]?.prompt;
-    if (p) send({ type: 'answer', session: id, prompt_id: p.id, seq: p.seq, choice });
+  function answer(id: string, choice: number, p: NonNullable<import('./lib/agents').SessionAgent['prompt']>) {
+    send({ type: 'answer', session: id, prompt_id: p.id, seq: p.seq, choice });
   }
 
   function sendReply(text: string) {
@@ -97,7 +96,7 @@
             expanded={expanded === id}
             onopen={() => onopen(id)}
             ontoggle={() => toggle(id)}
-            onanswer={(c) => answer(id, c)}
+            onanswer={(c, p) => answer(id, c, p)}
           />
         {:else}
           <button type="button" class="plain" class:active={activeSessionId === id} on:click={() => onopen(id)}>

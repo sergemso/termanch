@@ -4,7 +4,8 @@
   import ServerList from './ServerList.svelte';
   import AddServerModal from './AddServerModal.svelte';
   import Toast from './Toast.svelte';
-  import SessionList from './SessionList.svelte';
+  import SessionSheet from './SessionSheet.svelte';
+  import type { SheetHeight } from './lib/sheet';
   import NavigationBar from './NavigationBar.svelte';
   import MenuSheet from './MenuSheet.svelte';
   import SessionActions from './SessionActions.svelte';
@@ -92,12 +93,11 @@
   $: activeSessionId = $allSessions.find(s => s.key === activeKey)?.id ?? null;
   $: connection = selected ? hub.connection(selected.id) : null;
   $: connState = selected?.state ?? 'closed';
-  $: connDetail = selected?.reason ?? '';
-  $: backends = selected?.backends ?? [];
   $: serverVersion = selected?.version ?? '';
   let narrow = false;
   let iosHint = isIosBrowser() && !localStorage.getItem('termanch_ios_hint');
-  let drawerOpen = false;
+  let sheetHeight: SheetHeight = 'half';
+  let sheetHeld = false;
   let menuOpen = false;
   let actionKey: string | null = null;
   let cardExpanded = false;
@@ -210,7 +210,7 @@
       showToast('This server is reconnecting. You can retry it in Servers.', 'error');
       return;
     }
-    drawerOpen = false;
+    sheetHeight = 'peek';
     if (activeServerId && activeServerId !== session.serverId) hub.send(activeServerId, { type: 'detach' });
     serversPage = false;
     activeKey = key;
@@ -279,7 +279,7 @@
   function leaveServer() {
     if (activeServerId) hub.send(activeServerId, { type: 'detach' });
     serversPage = true;
-    drawerOpen = false;
+    sheetHeight = 'peek';
   }
 
   onMount(() => {
@@ -394,7 +394,7 @@
       </div>
     </div>
   {:else}
-    <NavigationBar sessions={$allSessions} agents={$allAgents} servers={$hubServers} {activeKey} held={!!actionSession || cardExpanded} onopen={attach} onactions={(key) => actionKey = key} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { showWorkspace(); drawerOpen = !drawerOpen; }} />
+    <NavigationBar sessions={$allSessions} agents={$allAgents} servers={$hubServers} {activeKey} held={!!actionSession || cardExpanded || sheetHeld} onopen={attach} onactions={(key) => actionKey = key} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { showWorkspace(); sheetHeight = sheetHeight === 'peek' ? 'half' : 'peek'; }} />
 
     {#if iosHint && !selectedServer}
       <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); font-size: 0.85rem;">
@@ -419,50 +419,16 @@
         {#if servers.length > 0}<button class="secondary" on:click={showWorkspace}>← Sessions</button>{/if}
         <ServerList {servers} states={$hubServers} onpause={(id) => { hub.pause(id); }} onresume={(id) => hub.resume(id)} onretry={(id) => hub.retry(id)} onadd={() => { addPrefill = null; showAddServer = true; }} onremove={removeServer} />
       {:else}
-        <div style="display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative;">
-          {#if narrow && drawerOpen}
-            <div style="position: absolute; inset: 0; background: rgba(0,0,0,0.5); z-index: 25;" on:click={() => (drawerOpen = false)}></div>
-          {/if}
-          <aside style="{narrow ? 'position: absolute; top: 0; bottom: 0; left: 0; z-index: 30; width: min(85vw, 320px); transform: translateX(' + (drawerOpen ? '0' : '-105%') + '); transition: transform 0.15s;' : 'width: 280px;'} border-right: 1px solid var(--border); background: var(--bg-secondary); padding: 16px; overflow-y: auto;">
-            <button class="secondary" style="padding: 4px 8px; font-size: 0.75rem; margin-bottom: 12px;" on:click={leaveServer}>← Servers</button>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-              <h3 style="font-size: 0.875rem; text-transform: uppercase; color: var(--fg-muted);">Sessions · {connState}{#if serverVersion}<span style="display:block; text-transform:none; font-size:0.65rem; font-weight:400;">server {serverVersion}</span>{/if}</h3>
-              <button class="secondary icon" on:click={() => connection?.send({ type: 'list_sessions' })}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
-                Refresh
-              </button>
-              <button class="secondary icon" on:click={newSession}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                New
-              </button>
-            </div>
-            {#if connState !== 'connected'}
-              <!-- Own row, wrapped: a long diagnostic inside the flex header squeezed it into a tall narrow column. -->
-              <div style="font-size: 0.75rem; margin: -8px 0 12px; padding: 8px; border-radius: 6px; background: var(--bg); overflow-wrap: anywhere;">
-                <div style="color: var(--fg-muted);">{{ unreachable: 'Server unreachable', reconnecting: 'Reconnecting…', connecting: 'Connecting…', closed: 'Disconnected', paused: 'Paused' }[connState]}</div>
-                {#if connDetail && connState === 'unreachable'}
-                  <details style="margin-top: 4px; color: var(--danger);"><summary style="cursor: pointer;">Details</summary>{connDetail}</details>
-                {/if}
-              </div>
-            {/if}
-            {#each $hubServers as server (server.id)}
-              <div class="server-status" style="padding: 8px 0; font-size: 0.8rem; overflow-wrap: anywhere;">
-                {server.server.server_name || 'Server'} · {server.state}
-                {#if server.version}<span style="display: block;">server {server.version}</span>{/if}
-                {#if server.reason}<span style="display: block;">{server.reason}</span>{/if}
-                {#if server.state !== 'connected' && server.state !== 'paused'}<button class="secondary" on:click={() => hub.retry(server.id)}>Retry</button>{/if}
-              </div>
-            {/each}
-            <SessionList onexpanded={(open) => cardExpanded = open} {sessions} activeSessionId={activeKey} agentMap={$allAgents} onopen={attach} send={sendSession} />
-          </aside>
-
-          <div style="flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;">
+        <div class="workspace" class:mobile={narrow}>
+          <div class="terminal-pane">
             {#if connection && connState !== 'paused'}
               {#key connection}<Terminal {connection} {activeSessionId} {connState} />{/key}
             {:else}
               <div class="card" style="margin: auto;">{activeKey ? 'This server is paused. Resume it in Servers.' : 'Choose a session to open its terminal.'}<button class="secondary" on:click={leaveServer}>Servers</button></div>
             {/if}
           </div>
+          <SessionSheet sessions={$allSessions} agents={$allAgents} servers={$hubServers} {activeKey} mobile={narrow} bind:height={sheetHeight} held={!!actionSession}
+            onexpanded={(open) => cardExpanded = open} onheld={(held) => sheetHeld = held} onopen={attach} onnew={newSession} onrefresh={() => { for (const s of $hubServers) hub.send(s.id, { type: 'list_sessions' }); }} onretry={(id) => hub.retry(id)} send={sendSession} />
         </div>
       {/if}
       </svelte:boundary>
@@ -486,6 +452,9 @@
 </AppShell>
 
 <style>
+  .workspace { display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative; }
+  .workspace.mobile { flex-direction: column; }
+  .terminal-pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
   .connection-notice { padding: 8px; font-size: 0.8rem; overflow-wrap: anywhere; }
 
   .auth-screen {

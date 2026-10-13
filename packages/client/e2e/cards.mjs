@@ -20,7 +20,15 @@ const browser = await chromium.launch({
   args: ['--no-sandbox'],
 });
 try {
-  const page = await (await browser.newContext({ viewport: { width: 390, height: 900 }, isMobile: true, hasTouch: true })).newPage();
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 900 }, isMobile: true, hasTouch: true });
+  await ctx.addInitScript(() => {
+    const vv = Object.assign(new EventTarget(), { height: innerHeight, width: innerWidth, offsetTop: 0, offsetLeft: 0, scale: 1 });
+    Object.defineProperty(window, 'visualViewport', { value: vv });
+    window.__vv = patch => { Object.assign(vv, patch); vv.dispatchEvent(new Event('resize')); vv.dispatchEvent(new Event('scroll')); };
+    // The init script runs before the mobile viewport meta tag is parsed.
+    document.addEventListener('DOMContentLoaded', () => { vv.height = innerHeight; vv.width = innerWidth; vv.dispatchEvent(new Event('resize')); });
+  });
+  const page = await ctx.newPage();
   page.on('pageerror', (e) => fail(`page error: ${e.message}`));
   await page.goto(`http://127.0.0.1:${srv.address().port}/cards.html`);
   await page.waitForSelector('[role=group]');
@@ -112,6 +120,91 @@ try {
   if (stored.cacheTtlMs !== 3600000 || stored.theme !== 'light') fail('settings did not persist together');
   await page.getByRole('button', { name: 'Close menu', exact: true }).click();
   console.log('ok  long press opens actions without switching; menu settings persist');
+
+  // G.5: adaptive view, real drag/snaps, server status, controls, persistence and keyboard-safe layout.
+  await page.getByRole('button', { name: 'Sessions, 3 need you' }).click();
+  await page.locator('.session-sheet[data-height=half]').waitFor();
+  await page.getByRole('button', { name: 'Needs me', exact: true }).waitFor();
+  if (await page.getByRole('button', { name: 'Needs me', exact: true }).getAttribute('aria-pressed') !== 'true') fail('adaptive default did not choose Needs me');
+  await page.getByRole('button', { name: 'Resize sessions sheet, half', exact: true }).click();
+  await page.locator('.session-sheet[data-height=full]').waitFor();
+  const fullBox = await page.locator('.session-sheet').boundingBox();
+  const handle = await page.locator('.handle').boundingBox();
+  const x = handle.x + handle.width / 2, y = handle.y + handle.height / 2;
+  await page.mouse.move(x, y); await page.mouse.down();
+  await page.mouse.move(x, y + fullBox.height / 2, { steps: 12 }); await page.mouse.up();
+  await page.locator('.session-sheet[data-height=half]').waitFor();
+  await page.getByRole('button', { name: 'Minimize sessions', exact: true }).click();
+  await page.locator('.session-sheet[data-height=peek]').waitFor();
+  console.log('ok  sheet has peek, half and full heights; a drag snaps to half');
+
+  await page.getByRole('button', { name: 'Sessions, 3 need you' }).click();
+  await page.getByRole('button', { name: 'By server', exact: true }).click();
+  await page.locator('[data-group="server:beta"]').waitFor();
+  await page.evaluate(() => window.__navigation.degrade());
+  await page.locator('[data-group="server:beta"] .server-status').getByText('unreachable', { exact: true }).waitFor();
+  if (!(await page.locator('[data-group="server:beta"]').innerText()).includes('Test server offline')) fail('group header lost the server reason');
+  await page.locator('[data-group="server:beta"]').getByRole('button', { name: 'Retry', exact: true }).click();
+  await page.locator('[data-group="server:beta"] .server-status').getByText('connected', { exact: true }).waitFor();
+  console.log('ok  group headers carry server state/reason and Retry reconnects only that server');
+
+  // Freeze the whole group layout while a card is expanded, including an arriving prompt.
+  await page.getByRole('button', { name: 'Needs me', exact: true }).click();
+  const card = page.locator('.session-sheet .sc').filter({ hasText: 'alpha' }).first();
+  await card.getByRole('button', { name: 'Show details', exact: true }).click();
+  const original = await card.getByRole('button', { name: 'Yes', exact: true }).textContent();
+  await page.evaluate(() => window.__navigation.changePrompt());
+  await card.getByRole('button', { name: 'Yes', exact: true }).click();
+  const answerSent = await page.evaluate(() => window.__navigation.sent().filter(m => m.message.type === 'answer').at(-1));
+  if (original !== 'Yes' || answerSent?.message.prompt_id !== 'prompt-alpha' || answerSent.message.seq !== 2 || answerSent.message.session !== 'session-1') fail(`answer did not keep the displayed prompt: ${JSON.stringify(answerSent)}`);
+  await card.getByRole('button', { name: 'Hide details', exact: true }).click();
+  console.log('ok  expanded cards hold their layout and answers carry the prompt read by the user');
+
+  await page.getByRole('button', { name: 'Recent', exact: true }).click();
+  await page.getByRole('button', { name: 'Group, sort and filter', exact: true }).click();
+  const findField = page.getByLabel('Find', { exact: true });
+  await findField.dispatchEvent('pointerdown', { pointerId: 8, pointerType: 'touch', bubbles: true });
+  await findField.focus();
+  if (await page.locator('.session-sheet').getAttribute('data-height') !== 'half') fail('focusing a field moved the sheet before the finger lifted');
+  await findField.dispatchEvent('pointerup', { pointerId: 8, pointerType: 'touch', bubbles: true });
+  await page.locator('.session-sheet[data-height=full]').waitFor();
+  await page.getByLabel('Group', { exact: true }).selectOption('agent');
+  await page.getByLabel('Sort', { exact: true }).selectOption('name');
+  await page.getByLabel('Server', { exact: true }).selectOption('beta');
+  await page.getByLabel('Find', { exact: true }).fill('session-2');
+  await page.waitForFunction(() => document.querySelectorAll('.session-sheet .sc').length === 1);
+  await page.reload();
+  await page.getByRole('button', { name: 'Sessions, 3 need you' }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.session-sheet .sc').length === 1);
+  await page.getByRole('button', { name: 'Group, sort and filter', exact: true }).click();
+  if (await page.getByLabel('Group', { exact: true }).inputValue() !== 'agent' || await page.getByLabel('Sort', { exact: true }).inputValue() !== 'name' || await page.getByLabel('Server', { exact: true }).inputValue() !== 'beta' || await page.getByLabel('Find', { exact: true }).inputValue() !== 'session-2') fail('custom view was not restored on reload');
+  console.log('ok  group, sort, server and text filters survive reload on this device');
+
+  await page.getByRole('button', { name: 'By server', exact: true }).click();
+  await page.locator('.session-sheet #reply-to').selectOption('beta/session-2');
+  await page.locator('.session-sheet input[aria-label="Reply text"]').fill('continue');
+  await page.evaluate(() => window.__vv({ height: 460, offsetTop: 80 }));
+  await page.waitForTimeout(300);
+  await page.locator('.session-sheet input[aria-label="Reply text"]').scrollIntoViewIfNeeded();
+  const replyBox = await page.locator('.session-sheet input[aria-label="Reply text"]').boundingBox();
+  const sheetBox = await page.locator('.session-sheet').boundingBox();
+  if (replyBox.y < 80 || replyBox.y + replyBox.height > 540 || sheetBox.y + sheetBox.height > 540) fail('the keyboard viewport shrink/pan hides the sheet input');
+  await page.locator('.session-sheet').getByRole('button', { name: 'Send', exact: true }).click();
+  const sentReply = await page.evaluate(() => window.__navigation.sent().filter(m => m.message.type === 'reply').at(-1));
+  if (sentReply?.server !== 'beta' || sentReply.message.session !== 'session-2' || sentReply.message.text !== 'continue') fail(`quick reply crossed servers: ${JSON.stringify(sentReply)}`);
+  await page.getByRole('button', { name: 'Minimize sessions', exact: true }).click();
+  const keyBox = await page.getByRole('toolbar', { name: 'Terminal keys', exact: true }).boundingBox();
+  if (keyBox.y < 80 || keyBox.y + keyBox.height > 540) fail('the keyboard viewport shrink/pan hides the terminal keys');
+  console.log('ok  emulated keyboard shrink/pan keeps sheet input and terminal keys visible; replies route to their server');
+
+  await page.evaluate(() => window.__vv({ height: 900, offsetTop: 0, width: 1100 }));
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.locator('.session-sheet[data-height=docked]').waitFor();
+  const docked = await page.locator('.session-sheet').boundingBox();
+  if (docked.width < 280 || docked.width > 360 || docked.x !== 0) fail(`wide screen did not dock the sidebar: ${JSON.stringify(docked)}`);
+  console.log('ok  wide screens keep a docked sessions sidebar');
+} catch (error) {
+  fail(error.stack ?? String(error));
 } finally {
   await browser.close();
   srv.close();

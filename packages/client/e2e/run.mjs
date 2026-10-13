@@ -350,8 +350,8 @@ try {
       // Connecting lands in a live terminal: the hidden input has focus without any tap.
       await page.waitForFunction(() => document.activeElement?.classList.contains('xterm-helper-textarea'), null, { timeout: 5000 });
       await page.getByRole('tab', { selected: true }).waitFor({ timeout: 5000 });
-      await page.getByRole('button', { name: 'Sessions' }).click();
-      const heights = await page.evaluate(() => [...document.querySelectorAll('aside button.icon')].map((b) => Math.round(b.getBoundingClientRect().height)));
+      await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+      const heights = await page.evaluate(() => [...document.querySelectorAll('.sheet-header button.icon')].map((b) => Math.round(b.getBoundingClientRect().height)));
       if (heights.length !== 2 || heights[0] !== heights[1]) fail(`Refresh and New differ in size: ${heights}`);
       if (!(await page.getByText(/server 0\.1\.\d+\+/).count())) fail('the sidebar does not show the server version');
       await page.getByText('s1', { exact: true }).first().click();
@@ -507,7 +507,7 @@ try {
           setTimeout(() => el.dispatchEvent(new PointerEvent('pointerup', init)), 700);
         });
         await page.locator('.selbar').waitFor({ timeout: 4000 });
-        if ((await page.locator('.handle').count()) !== 2) fail('the selection handles are missing');
+        if ((await page.locator('.screenbox .handle').count()) !== 2) fail('the selection handles are missing');
         await page.locator('.selbar').getByRole('button', { name: 'Copy', exact: true }).click();
         const picked = await page.evaluate(() => navigator.clipboard.readText());
         if (picked.trim() !== 'SELECTME') fail(`long-press copied ${JSON.stringify(picked)} instead of the word under the finger`);
@@ -524,8 +524,9 @@ try {
           window.dispatchEvent(new Event('termanch-debug'));
         });
       }
-      await page.getByRole('button', { name: 'Sessions' }).click();
-      await page.getByRole('button', { name: '← Servers' }).click();
+      await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+      await page.getByRole('button', { name: 'Menu', exact: true }).click();
+      await page.getByRole('dialog', { name: 'Menu', exact: true }).getByRole('button', { name: 'Servers', exact: true }).click();
       await page.getByText('Your Servers').waitFor({ timeout: 5000 });
       await waitFor(() => paneClients() === backgroundClients, 'no background PTY stream in Servers', 5000);
       console.log(`    lap ${lap}: connect, session, back to servers`);
