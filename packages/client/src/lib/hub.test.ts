@@ -132,4 +132,34 @@ describe('ServerHub', () => {
     connections[0].ready(); await connections[0].opts.target();
     expect(refreshes).toEqual([false, true, false]);
   });
+  it('keeps each server\'s window lists under global keys, forgets closed sessions, and reports tmux control mode', () => {
+    const { hub, connections } = setup();
+    hub.start([server('a'), server('b')]);
+    connections[0].opts.onState('connected');
+    connections[0].opts.onReady({ type: 'auth_ok', user: 'u', server_name: 'a', backends: ['tmux'], control_mode: false, tmux_version: '3.0a', prefix: 'C-a' }, false);
+    connections[1].ready();
+    const win = { index: 0, name: 'w', command: 'claude', path: '/srv/app', active: true, agent: 'claude' };
+    connections[0].emit({ type: 'sessions', sessions: [{ id: 's', name: 's', agent: null }, { id: 't', name: 't', agent: null }] });
+    connections[0].emit({ type: 'window_list', session: 's', windows: [win], representative: 0 });
+    connections[1].emit({ type: 'window_list', session: 's', windows: [{ ...win, path: '/other' }], representative: null });
+    const windows = get(hub.windows);
+    expect(windows['a/s'].windows[0].path).toBe('/srv/app');
+    expect(windows['b/s'].windows[0].path).toBe('/other');
+    const a = get(hub.servers)[0];
+    expect([a.controlMode, a.tmuxVersion, a.prefix]).toEqual([false, '3.0a', 'C-a']);
+    connections[0].emit({ type: 'sessions', sessions: [{ id: 't', name: 't', agent: null }] });
+    expect(Object.keys(get(hub.windows))).toEqual(['b/s']);
+  });
+  it('sends peek, windows and close messages with the server-local session id', () => {
+    const { hub, connections } = setup();
+    hub.start([server('a')]);
+    connections[0].ready();
+    connections[0].emit({ type: 'sessions', sessions: [{ id: 's', name: 's', agent: null }] });
+    hub.sendToSession('a/s', { type: 'peek', session: 'a/s' });
+    hub.sendToSession('a/s', { type: 'close_window', session: 'a/s', index: 2 });
+    hub.sendToSession('a/s', { type: 'close_session', session: 'a/s' });
+    expect(connections[0].sent.slice(-3)).toEqual([
+      { type: 'peek', session: 's' }, { type: 'close_window', session: 's', index: 2 }, { type: 'close_session', session: 's' },
+    ]);
+  });
 });

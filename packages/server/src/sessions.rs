@@ -9,6 +9,7 @@ use termanch_core::protocol::{ClientMessage, ServerMessage};
 use std::sync::Arc;
 
 use crate::backend::{RunMode, SessionBackend};
+use crate::control::WindowHub;
 use crate::events::EventHub;
 use crate::link::{Link, LinkTx};
 use crate::pty::Attachment;
@@ -26,6 +27,11 @@ pub struct SessionManager {
     /// Called after an uninstall has wiped the configuration and told the client; stops the process.
     on_uninstalled: Arc<dyn Fn() + Send + Sync>,
     events: Option<EventHub>,
+    windows: Option<WindowHub>,
+    /// tmux version text and whether control mode runs (plan H.3); reported in `auth_ok`.
+    tmux_version: String,
+    control_mode: bool,
+    prefix: String,
 }
 
 impl SessionManager {
@@ -36,6 +42,10 @@ impl SessionManager {
             server_name: String::new(),
             on_uninstalled: Arc::new(|| {}),
             events: None,
+            windows: None,
+            tmux_version: String::new(),
+            control_mode: false,
+            prefix: String::new(),
         }
     }
 
@@ -48,6 +58,38 @@ impl SessionManager {
     pub fn with_events(mut self, hub: EventHub) -> Self {
         self.events = Some(hub);
         self
+    }
+
+    /// Serves the tmux window lists kept current by control mode (plan H.3).
+    pub fn with_windows(mut self, hub: WindowHub, tmux_version: String) -> Self {
+        self.windows = Some(hub);
+        self.control_mode = true;
+        self.tmux_version = tmux_version;
+        self
+    }
+
+    /// The tmux version seen at startup and why control mode may be off (an old tmux still gets the scan).
+    pub fn with_tmux_version(mut self, tmux_version: String) -> Self {
+        self.tmux_version = tmux_version;
+        self
+    }
+
+    /// tmux's prefix key as tmux writes it (`C-b`), for the key row.
+    pub fn with_prefix(mut self, prefix: String) -> Self {
+        self.prefix = prefix;
+        self
+    }
+
+    pub fn prefix(&self) -> &str {
+        &self.prefix
+    }
+
+    pub fn control_mode(&self) -> bool {
+        self.control_mode
+    }
+
+    pub fn tmux_version(&self) -> &str {
+        &self.tmux_version
     }
 
     /// Enables remote uninstall: `server_name` is what the owner must type, `on_uninstalled` stops the server.
@@ -73,6 +115,7 @@ impl SessionManager {
         let idle = tokio::time::sleep(IDLE_TIMEOUT);
         tokio::pin!(idle);
         let mut agent_rx = self.events.as_ref().map(|h| h.subscribe());
+        let mut window_rx = self.windows.as_ref().map(|h| h.subscribe());
 
         loop {
             tokio::select! {
@@ -107,6 +150,19 @@ impl SessionManager {
                         Some(events) => ServerMessage::AgentEvents { events },
                         // Too slow to keep up: the client resyncs from a snapshot.
                         None => ServerMessage::AgentSnapshot { states: self.events.as_ref().map(|h| h.snapshot()).unwrap_or_default() },
+                    };
+                    if !send(&link.tx, &msg).await { break; }
+                }
+                update = next_window(&mut window_rx) => {
+                    let msg = match update {
+                        Some(u) => window_message(u),
+                        None => {
+                            // Fell behind: send everything again.
+                            for u in self.windows.as_ref().map(|h| h.all()).unwrap_or_default() {
+                                if !send(&link.tx, &window_message(u)).await { return Ok(()); }
+                            }
+                            continue;
+                        }
                     };
                     if !send(&link.tx, &msg).await { break; }
                 }
@@ -214,24 +270,81 @@ impl SessionManager {
                 if !events.is_empty() {
                     send_r(tx, &ServerMessage::AgentEvents { events }).await?;
                 }
+                // A tab speaks for one window of its session: send them all along with the agent states.
+                for u in self.windows.as_ref().map(|h| h.all()).unwrap_or_default() {
+                    send_r(tx, &window_message(u)).await?;
+                }
+            }
+            ClientMessage::Windows { session } => {
+                let windows = self.backend.windows(&session).await?;
+                send_r(
+                    tx,
+                    &ServerMessage::WindowList {
+                        session,
+                        representative: crate::control::representative(&windows),
+                        windows: windows.into_iter().map(|w| w.info).collect(),
+                    },
+                )
+                .await?;
+            }
+            ClientMessage::SelectWindow { session, index } => {
+                self.backend.select_window(&session, index).await?;
+            }
+            ClientMessage::CloseWindow { session, index } => {
+                info!(target: "audit", event = "close_window", github_id = identity.id, session = %session, window = index);
+                self.backend.kill_window(&session, index).await?;
+                // Closing the last window ends the session: the lists follow.
+                let sessions = self.backend.list().await?;
+                send_r(tx, &ServerMessage::Sessions { sessions }).await?;
+            }
+            ClientMessage::CloseSession { session } => {
+                info!(target: "audit", event = "close_session", github_id = identity.id, login = %identity.login, session = %session);
+                self.backend.kill(&session).await?;
+                let sessions = self.backend.list().await?;
+                send_r(tx, &ServerMessage::Sessions { sessions }).await?;
             }
             ClientMessage::Peek { session, hash } => {
                 // Only a counter in the audit log: what is on the screen is never logged.
                 audit_peek(identity.id, &session);
-                let reply = peek(self.backend.as_ref(), &session, hash.as_deref()).await;
+                let window = self
+                    .windows
+                    .as_ref()
+                    .and_then(|h| h.representative(&session));
+                let reply =
+                    peek_window(self.backend.as_ref(), &session, hash.as_deref(), window).await;
                 send_r(tx, &reply).await?;
             }
             ClientMessage::ListSessions => {
                 let sessions = self.backend.list().await?;
                 send_r(tx, &ServerMessage::Sessions { sessions }).await?;
             }
-            ClientMessage::NewSession { name, backend } => {
-                self.backend.create_in(&name, backend.as_deref()).await?;
+            ClientMessage::NewSession {
+                name,
+                backend,
+                dir,
+                template,
+            } => {
+                self.backend
+                    .create_with(
+                        &name,
+                        backend.as_deref(),
+                        dir.as_deref(),
+                        template.as_deref(),
+                    )
+                    .await?;
                 let sessions = self.backend.list().await?;
                 send_r(tx, &ServerMessage::Sessions { sessions }).await?;
             }
             ClientMessage::Attach { session_id } => {
                 *attachment = None; // detach the previous one first
+                                    // Land in the window the tab showed, unless somebody else is looking at the session.
+                if let Some(index) = self
+                    .windows
+                    .as_ref()
+                    .and_then(|h| h.representative(&session_id))
+                {
+                    let _ = self.backend.focus_window(&session_id, index).await;
+                }
                 *attachment = Some(self.backend.attach(&session_id, *cols, *rows)?);
                 send_r(tx, &ServerMessage::SessionAttached { session_id }).await?;
             }
@@ -303,6 +416,30 @@ async fn next_events(
     Some(out)
 }
 
+fn window_message(u: crate::control::WindowUpdate) -> ServerMessage {
+    ServerMessage::WindowList {
+        session: u.session,
+        windows: u.windows,
+        representative: u.representative,
+    }
+}
+
+/// The next change to any session's windows (`None` when this connection fell behind); pends forever when
+/// control mode is off.
+async fn next_window(
+    rx: &mut Option<tokio::sync::broadcast::Receiver<crate::control::WindowUpdate>>,
+) -> Option<crate::control::WindowUpdate> {
+    use tokio::sync::broadcast::error::RecvError;
+    let Some(rx) = rx else {
+        return std::future::pending().await;
+    };
+    match rx.recv().await {
+        Ok(u) => Some(u),
+        Err(RecvError::Lagged(_)) => None,
+        Err(RecvError::Closed) => std::future::pending().await,
+    }
+}
+
 fn audit_peek(github_id: u64, session: &str) {
     info!(target: "audit", event = "peek", github_id, session = %session);
 }
@@ -312,10 +449,21 @@ pub const SNAPSHOT_MAX: usize = 16 * 1024;
 
 /// A session's visible screen for the client to draw at once (decision 0084). Never fails: a manager that cannot
 /// capture (herdr) gets an empty snapshot, which the client reads as "attach normally".
+#[cfg(test)]
 pub async fn peek(
     backend: &dyn SessionBackend,
     session: &str,
     known: Option<&str>,
+) -> ServerMessage {
+    peek_window(backend, session, known, None).await
+}
+
+/// `peek` of one window: the one the session's tab speaks for, so the snapshot shows what the tab promised.
+pub async fn peek_window(
+    backend: &dyn SessionBackend,
+    session: &str,
+    known: Option<&str>,
+    window: Option<u32>,
 ) -> ServerMessage {
     use sha2::{Digest, Sha256};
     let none = || ServerMessage::Snapshot {
@@ -324,7 +472,11 @@ pub async fn peek(
         hash: String::new(),
         unchanged: false,
     };
-    let Ok(raw) = backend.capture_styled(session).await else {
+    let captured = match window {
+        Some(i) => backend.capture_window_styled(session, i).await,
+        None => backend.capture_styled(session).await,
+    };
+    let Ok(raw) = captured else {
         return none();
     };
     // Blank lines below the cursor carry nothing; keep the end of the text when it is too long.

@@ -87,3 +87,4 @@
 0082-navigation-tabs-sheet-and-auto-connect,"Navigation is a tab strip and a session sheet over servers that connect by themselves","client, mobile, agents",active
 0083-cache-expiry-estimate-and-statusline-forwarder,"Prompt-cache expiry is an estimate, made exact by a wrapped status line forwarder","agents, hooks, privacy",active
 0084-tab-switch-shows-a-server-snapshot-first,"A tab switch shows a server snapshot at once, then attaches live","client, mobile, performance, protocol",active
+0085-tabs-speak-for-one-window-and-detach-differs-from-close,"A tab speaks for one tmux window, Detach differs from Close, and windows come from tmux control mode","client, mobile, agents, tmux, protocol",draft

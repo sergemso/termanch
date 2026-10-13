@@ -3,6 +3,7 @@ import { Connection, type ConnectionOptions, type ConnState } from './connection
 import { applyEvents, applySnapshot, syncRequest, type AgentMap } from './agents';
 import type { ClientMessage, ServerListItem, ServerMessage, SessionInfo } from './protocol';
 import type { Target } from './transport';
+import { applyWindowList, forgetWindows, type WindowMap } from './windows';
 
 export type HubConnection = Pick<Connection, 'start' | 'close' | 'subscribe' | 'send'> & Partial<Pick<Connection, 'kind' | 'rtt' | 'drops'>>;
 export type ServerState = ConnState | 'paused';
@@ -13,6 +14,11 @@ export interface HubServer {
   reason: string;
   version: string;
   backends: string[];
+  /** Live window updates run (tmux 3.2+); false shows a notice in the server's status. */
+  controlMode: boolean;
+  tmuxVersion: string;
+  /** tmux's prefix key (`C-b`); empty without tmux. */
+  prefix: string;
 }
 export interface HubSession extends SessionInfo { serverId: string; key: string; serverName: string }
 interface Entry extends HubServer {
@@ -20,6 +26,7 @@ interface Entry extends HubServer {
   unsubscribe?: () => void;
   sessions: SessionInfo[];
   agents: AgentMap;
+  windows: WindowMap;
   refresh: boolean;
   everReady: boolean;
 }
@@ -48,6 +55,7 @@ export class ServerHub {
   readonly servers = writable<HubServer[]>([]);
   readonly allSessions = writable<HubSession[]>([]);
   readonly agents = writable<AgentMap>({});
+  readonly windows = writable<WindowMap>({});
   readonly connectedCount = derived(this.servers, servers => servers.filter(s => s.state === 'connected').length);
   readonly overLimit = derived(this.connectedCount, count => count > 6);
 
@@ -64,8 +72,8 @@ export class ServerHub {
       else this.publish();
       return;
     }
-    const entry: Entry = { id, server, state: 'connecting', reason: '', version: '', backends: [], connection: null,
-      sessions: [], agents: {}, refresh: !server.record && !!server.server_id, everReady: false };
+    const entry: Entry = { id, server, state: 'connecting', reason: '', version: '', backends: [], controlMode: false, tmuxVersion: '', prefix: '', connection: null,
+      sessions: [], agents: {}, windows: {}, refresh: !server.record && !!server.server_id, everReady: false };
     this.entries.set(id, entry);
     this.connect(entry);
   }
@@ -127,6 +135,7 @@ export class ServerHub {
         const { claim, ...saved } = e.server;
         e.server = { ...saved, server_name: saved.server_name || msg.server_name };
         e.version = msg.version ?? ''; e.backends = msg.backends ?? [];
+        e.controlMode = !!msg.control_mode; e.tmuxVersion = msg.tmux_version ?? ''; e.prefix = msg.prefix ?? '';
         this.publish(); this.opts.onSaved?.(e.server);
         connection.send({ type: 'list_sessions' });
         connection.send({ type: 'agent_sync', after: syncRequest(e.agents) });
@@ -141,8 +150,9 @@ export class ServerHub {
     e.connection = connection;
     e.unsubscribe = connection.subscribe(msg => {
       if (!current()) return;
-      const changed = msg.type === 'sessions' || msg.type === 'agent_snapshot' || msg.type === 'agent_events';
-      if (msg.type === 'sessions') e.sessions = msg.sessions;
+      const changed = msg.type === 'sessions' || msg.type === 'agent_snapshot' || msg.type === 'agent_events' || msg.type === 'window_list';
+      if (msg.type === 'sessions') { e.sessions = msg.sessions; e.windows = forgetWindows(e.windows, msg.sessions.map(s => s.id)); }
+      if (msg.type === 'window_list') e.windows = applyWindowList(e.windows, msg);
       if (msg.type === 'agent_snapshot') e.agents = applySnapshot(e.agents, msg.states);
       if (msg.type === 'agent_events') {
         const result = applyEvents(e.agents, msg.events); e.agents = result.map;
@@ -155,9 +165,10 @@ export class ServerHub {
   }
   private publish() {
     const entries = [...this.entries.values()];
-    this.servers.set(entries.map(({ id, server, state, reason, version, backends }) => ({ id, server, state, reason, version, backends })));
+    this.servers.set(entries.map(({ id, server, state, reason, version, backends, controlMode, tmuxVersion, prefix }) => ({ id, server, state, reason, version, backends, controlMode, tmuxVersion, prefix })));
     this.allSessions.set(entries.filter(e => e.state !== 'paused').flatMap(e => e.sessions.map(s => ({ ...s,
       serverId: e.id, serverName: e.server.server_name || 'Server', key: sessionKey(e.id, s.id) }))));
     this.agents.set(Object.fromEntries(entries.filter(e => e.state !== 'paused').flatMap(e => Object.entries(e.agents).map(([id, a]) => [sessionKey(e.id, id), a]))));
+    this.windows.set(Object.fromEntries(entries.filter(e => e.state !== 'paused').flatMap(e => Object.entries(e.windows).map(([id, w]) => [sessionKey(e.id, id), w]))));
   }
 }

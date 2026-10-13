@@ -3,9 +3,10 @@ import { needsYou } from './tabs';
 import type { AgentMap, SessionAgent } from './agents';
 import type { AgentState } from './protocol';
 import type { HubSession, HubServer } from './hub';
+import { shortPath } from './windows';
 
 export type Preset = 'needs' | 'working' | 'cache' | 'recent' | 'server';
-export type GroupBy = 'server' | 'agent' | 'status' | 'none';
+export type GroupBy = 'server' | 'agent' | 'status' | 'project' | 'none';
 export type SortBy = 'human' | 'response' | 'cache' | 'name';
 export interface SessionView {
   preset?: Preset;
@@ -22,7 +23,7 @@ export const PRESETS: { id: Preset; label: string }[] = [
   { id: 'needs', label: 'Needs me' }, { id: 'working', label: 'Working' }, { id: 'cache', label: 'Cache expiring' },
   { id: 'recent', label: 'Recent' }, { id: 'server', label: 'By server' },
 ];
-const GROUPS: GroupBy[] = ['server', 'agent', 'status', 'none'];
+const GROUPS: GroupBy[] = ['server', 'agent', 'status', 'project', 'none'];
 const SORTS: SortBy[] = ['human', 'response', 'cache', 'name'];
 const STATES: AgentState[] = ['idle', 'working', 'needs_input', 'done', 'error', 'unknown'];
 const KEY = 'termanch_session_view';
@@ -44,6 +45,8 @@ export function adaptiveDefault(agents: AgentMap): SessionView {
 
 interface CacheOptions {
   ttlMs?: number;
+  /** Working directory per session key (the tab's window); the Project grouping reads it. */
+  paths?: Record<string, string>;
   /** G.8 supplies exact expiry here; until then use the last-response estimate. Null means unknown. */
   remaining?: (agent: SessionAgent | undefined, key: string, now: number) => number | null;
 }
@@ -83,16 +86,17 @@ export function applyView(sessions: HubSession[], agents: AgentMap, view: Sessio
   });
   const groups = new Map<string, SessionGroup>();
   for (const s of selected) {
-    const value = view.group === 'server' ? s.serverId : view.group === 'agent' ? agentName(s) : view.group === 'status' ? state(s) : '';
+    const value = view.group === 'server' ? s.serverId : view.group === 'agent' ? agentName(s) : view.group === 'status' ? state(s)
+      : view.group === 'project' ? shortPath(cache.paths?.[s.key] ?? '') || 'No directory' : '';
     const key = `${view.group}:${value}`;
     if (!groups.has(key)) groups.set(key, { key,
-      label: view.group === 'server' ? s.serverName : view.group === 'status' ? chipFor({ state: state(s) } as SessionAgent, now).label : value,
+      label: view.group === 'server' ? s.serverName : view.group === 'project' ? value : view.group === 'status' ? chipFor({ state: state(s) } as SessionAgent, now).label : value,
       ...(view.group === 'server' ? { serverId: s.serverId } : {}), sessions: [] });
     groups.get(key)!.sessions.push(s);
   }
   const result = [...groups.values()];
   // Agent/status categories stay easy to find; server groups follow the view's session priority.
-  return view.group === 'agent' || view.group === 'status' ? result.sort((a, b) => a.label.localeCompare(b.label)) : result;
+  return view.group === 'agent' || view.group === 'status' || view.group === 'project' ? result.sort((a, b) => a.label.localeCompare(b.label)) : result;
 }
 
 const deviceStorage = () => typeof localStorage === 'undefined' ? undefined : localStorage;

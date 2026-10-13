@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import { FrozenOrder, chipFor } from './lib/cards';
-  import { needsYou, tabIds, tabLabel } from './lib/tabs';
+  import { needsYou, tabIds } from './lib/tabs';
+  import { representativeWindow, tabTexts, type TabText, type WindowMap } from './lib/windows';
+  import AgentIcon from './AgentIcon.svelte';
   import type { AgentMap } from './lib/agents';
   import type { HubSession, HubServer } from './lib/hub';
 
@@ -10,7 +12,13 @@
   export let servers: HubServer[] = [];
   export let activeKey: string | null = null;
   export let held = false;
+  export let windows: WindowMap = {};
+  /** Sessions whose prompt cache goes cold within a minute: the tab gets a thin ring. */
+  export let expiring: Set<string> = new Set();
   export let onopen: (key: string) => void;
+  /** Tapping the tab that is already open lists the windows of its session. */
+  export let onmenu: (key: string) => void = () => {};
+  export let onpeek: (key: string) => void = () => {};
   export let onactions: (key: string) => void;
 
   const frozen = new FrozenOrder();
@@ -24,6 +32,12 @@
   let longPressed: string | null = null;
   let left = false;
   let right = false;
+
+  // Labels and icons follow the shell's directory and the agent window, but never change under a finger.
+  let texts: Record<string, TabText> = {};
+  let shownWindows: WindowMap = {};
+  $: if (!frozen.frozen(now) || !Object.keys(shownWindows).length) { shownWindows = windows; }
+  $: texts = tabTexts(sessions, shownWindows);
 
   let wasHeld = false;
   $: if (held !== wasHeld) { frozen.sheet(held); wasHeld = held; revision++; }
@@ -52,6 +66,7 @@
   function edges() { if (strip) { left = strip.scrollLeft > 1; right = strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 1; } }
   function down(e: PointerEvent, key: string) {
     frozen.touchDown(e.pointerId); revision++;
+    if (key !== activeKey) onpeek(key); // the screen is fetched while the finger is still going down (decision 0084)
     cancelPress();
     longPressed = null;
     press = { pointerId: e.pointerId, key, x: e.clientX, y: e.clientY, timer: setTimeout(() => {
@@ -81,17 +96,20 @@
       {@const agent = agents[session.key]}
       {@const chip = agent ? chipFor(agent, now) : { icon: '·', label: 'No status' }}
       {@const server = servers.find(s => s.id === session.serverId)}
+      {@const rep = representativeWindow(shownWindows[session.key])}
+      {@const text = texts[session.key] ?? { label: session.name, hint: session.name }}
       <button type="button" role="tab" data-key={session.key} aria-selected={activeKey === session.key}
-        aria-label={`${tabLabel(session, agent, servers.length, now)}${server && server.state !== 'connected' ? ' · ' + server.state + (server.reason ? ': ' + server.reason : '') : ''}`}
-        class:active={activeKey === session.key} class:degraded={server?.state !== 'connected'} disabled={!live.has(session.key)}
+        aria-label={`${text.label}${servers.length > 1 ? ' · ' + session.serverName : ''} · ${agent ? chip.label : 'No status'}${server && server.state !== 'connected' ? ' · ' + server.state + (server.reason ? ': ' + server.reason : '') : ''}`}
+        title={text.hint} class:ring={expiring.has(session.key)} class:active={activeKey === session.key} class:degraded={server?.state !== 'connected'} disabled={!live.has(session.key)}
         on:pointerdown={(e) => down(e, session.key)} on:pointermove={move}
         on:click={(e) => {
           const suppress = e.detail > 0 && longPressed === session.key;
           longPressed = null;
-          if (!suppress) onopen(session.key);
+          if (suppress) return;
+          if (session.key === activeKey) onmenu(session.key); else onopen(session.key);
         }}
         on:contextmenu|preventDefault={() => onactions(session.key)}>
-        <span class="state-icon" aria-hidden="true">{chip.icon}</span><span class="session-name">{session.name}</span>
+        <span class="mark"><AgentIcon command={rep?.command} agent={rep ? rep.agent : agent?.agent} size={22} /><span class="state-icon state-{chip.tone}" aria-hidden="true">{chip.icon}</span></span><span class="session-name">{text.label}</span>
         {#if servers.length > 1}<span class="badge">{session.serverName}</span>{/if}
         <span class="need" aria-hidden="true">{needsYou(agent) ? '●' : ''}</span>
         <span class="sr">{chip.label}</span>
@@ -114,7 +132,10 @@
   button.degraded { color: var(--fg-muted); border-style: dashed; }
   .session-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .badge { font-size: 0.65rem; background: var(--border); border-radius: 4px; padding: 2px 4px; max-width: 64px; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
-  .state-icon { width: 1.2em; text-align: center; flex-shrink: 0; }
+  .mark { position: relative; display: inline-flex; flex-shrink: 0; }
+  .state-icon { position: absolute; right: -6px; bottom: -6px; min-width: 14px; height: 14px; border-radius: 7px; background: var(--bg); border: 1px solid var(--border); font-size: 0.6rem; line-height: 12px; text-align: center; }
+  .state-need { border-color: var(--danger); }
+  button.ring { box-shadow: 0 0 0 2px var(--accent) inset; }
   .need { color: var(--danger); width: 8px; flex-shrink: 0; }
   .empty { padding: 12px; color: var(--fg-muted); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

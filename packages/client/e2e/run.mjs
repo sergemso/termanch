@@ -247,7 +247,7 @@ try {
   // 7. The real app on a phone: connect, open a session, go back to the server list and connect again.
   // Each lap used to risk a hang or a broken screen, so run several and fail on any page error.
   {
-    const paneClients = () => execFileSync('tmux', ['list-clients', '-F', '#{client_pid}'], { env: { ...process.env, TMUX_TMPDIR: home }, encoding: 'utf8' }).trim().split('\n').filter(Boolean).length;
+    const paneClients = () => execFileSync('tmux', ['list-clients', '-F', '#{client_control_mode} #{client_pid}'], { env: { ...process.env, TMUX_TMPDIR: home }, encoding: 'utf8' }).trim().split('\n').filter((l) => l.startsWith('0 ')).length; // the server's own control-mode clients (window updates) are not terminals
     const backgroundClients = paneClients();
     const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true, permissions: ['clipboard-read', 'clipboard-write'] });
     // A counting stand-in for Web Audio, so the bell can be checked without a sound card.
@@ -337,7 +337,7 @@ try {
     for (let lap = 1; lap <= 3; lap++) {
       await page.getByRole('button', { name: '← Sessions', exact: true }).click();
       await page.getByRole('button', { name: 'Sessions', exact: true }).click();
-      await page.getByText('s1', { exact: true }).first().click();
+      await page.locator('.session-sheet').getByRole('button', { name: /^s1(\s|$)/ }).first().click(); // a tab now reads as the directory
       await page.locator('.dot.ok').waitFor({ timeout: 20000 }).catch(async (e) => {
         console.log('page errors:', errors, '\n', (await page.locator('body').innerText()).slice(0, 400));
         throw e;
@@ -354,7 +354,7 @@ try {
       const heights = await page.evaluate(() => [...document.querySelectorAll('.sheet-header button.icon')].map((b) => Math.round(b.getBoundingClientRect().height)));
       if (heights.length !== 2 || heights[0] !== heights[1]) fail(`Refresh and New differ in size: ${heights}`);
       if (!(await page.getByText(/server 0\.1\.\d+\+/).count())) fail('the sidebar does not show the server version');
-      await page.getByText('s1', { exact: true }).first().click();
+      await page.locator('.session-sheet').getByRole('button', { name: /^s1(\s|$)/ }).first().click(); // a tab now reads as the directory
       await page.locator('.xterm').waitFor({ timeout: 5000 });
       if (lap === 3) {
         // The swipe-typing recorder: silent normally, listing the textarea's events when the debug switch is on.
@@ -492,7 +492,7 @@ try {
         // Where SELECTME is on the screen, from tmux: its row, and the client's total rows (including the status line).
         const tm = (...args) => execFileSync('tmux', args, { env: utf8, encoding: 'utf8' });
         const row = tm('capture-pane', '-p', '-t', 's1').split('\n').findIndex((l) => l === 'SELECTME');
-        const total = Number(tm('list-clients', '-F', '#{client_height}').split('\n')[0]);
+        const total = Number(tm('list-clients', '-F', '#{client_control_mode} #{client_height}').split('\n').find((l) => l.startsWith('0 ')).slice(2));
         await page.evaluate(
           ([row, total]) => {
             const r = document.querySelector('.xterm-screen').getBoundingClientRect();

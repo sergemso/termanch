@@ -76,3 +76,34 @@ export function bufferText(getLine: (i: number) => string | undefined, length: n
   while (out.length && out[out.length - 1] === '') out.pop();
   return out.join('\n');
 }
+
+/** tmux writes its prefix as `C-b`, `M-a`, a bare character, or `None`; this is what the terminal receives for it. */
+export function prefixBytes(notation: string): string {
+  const p = notation.trim();
+  if (!p || p === 'None') return '';
+  const named: Record<string, string> = { Space: ' ', Tab: '\t', Enter: '\r', Escape: '\x1b' };
+  const key = (k: string) => (named[k] ?? (k.length === 1 ? k : ''));
+  if (p.startsWith('C-M-') || p.startsWith('M-C-')) {
+    const k = key(p.slice(4));
+    return k ? '\x1b' + applyMods(k, { ctrl: true, alt: false }).out : '';
+  }
+  if (p.startsWith('C-')) {
+    const k = key(p.slice(2));
+    return k ? applyMods(k, { ctrl: true, alt: false }).out : '';
+  }
+  if (p.startsWith('M-')) {
+    const k = key(p.slice(2));
+    return k ? '\x1b' + k : '';
+  }
+  return key(p);
+}
+
+export type KeyProfile = 'shell' | 'tmux';
+
+/** After the prefix: splits, copy mode and detach. Window moves live in the windows dropdown. */
+export const TMUX_COMBOS: [label: string, key: string][] = [
+  ['Split ─', '"'],
+  ['Split │', '%'],
+  ['Copy mode', '['],
+  ['Detach', 'd'],
+];

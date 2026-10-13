@@ -7,8 +7,12 @@ export type ClientMessage =
   | { type: 'peek'; session: string; hash?: string }
   | { type: 'answer'; session: string; prompt_id: string; seq: number; choice: number }
   | { type: 'reply'; session: string; text: string }
+  | { type: 'windows'; session: string }
+  | { type: 'select_window'; session: string; index: number }
+  | { type: 'close_window'; session: string; index: number }
+  | { type: 'close_session'; session: string }
   | { type: 'list_sessions' }
-  | { type: 'new_session'; name: string; backend?: string }
+  | { type: 'new_session'; name: string; backend?: string; dir?: string; template?: string }
   | { type: 'ping' }
   | { type: 'attach'; session_id: string }
   | { type: 'detach' }
@@ -19,11 +23,12 @@ export type ServerMessage =
   | { type: 'challenge'; nonce: string; server_id: string }
   | { type: 'device_revoked'; device: string }
   | { type: 'uninstall_done'; mode: string }
-  | { type: 'auth_ok'; user: string; server_name: string; mode?: string; version?: string; backends?: string[] }
+  | { type: 'auth_ok'; user: string; server_name: string; mode?: string; version?: string; backends?: string[]; control_mode?: boolean; tmux_version?: string; prefix?: string }
   | { type: 'sessions'; sessions: SessionInfo[] }
   | { type: 'session_attached'; session_id: string }
   | { type: 'output'; data: string }
   | { type: 'snapshot'; session: string; text: string; hash: string; unchanged?: boolean }
+  | { type: 'window_list'; session: string; windows: WindowInfo[]; representative?: number | null }
   | { type: 'agent_snapshot'; states: SessionAgentState[] }
   | { type: 'agent_events'; events: AgentEvent[] }
   | { type: 'agent_event'; event: AgentEventType; agent: string; session_id: string }
@@ -36,6 +41,18 @@ export interface SessionInfo {
   agent: 'herdr' | 'tmux' | 'codex' | null;
   /** The session manager it lives in; set when the server runs more than one (`tmux`, `herdr`). */
   backend?: string;
+}
+
+/** One window of a multiplexer session, as the windows dropdown lists it. */
+export interface WindowInfo {
+  index: number;
+  name: string;
+  /** Foreground command of the window's active pane (`bash`, `claude`, `lazygit`). */
+  command: string;
+  path: string;
+  active: boolean;
+  /** Set when `command` is a known coding agent. */
+  agent?: string;
 }
 
 export type AgentState = 'idle' | 'working' | 'needs_input' | 'done' | 'error' | 'unknown';

@@ -125,6 +125,7 @@ jobs:
         run: |
           node e2e/touch.mjs
           node e2e/cards.mjs
+          node e2e/windows.mjs
   # The native host mode (decision 0075) ships one static musl binary per architecture: no glibc, no OpenSSL,
   # nothing to install. Build both on the native runners and fail if anything is linked dynamically.
   static:

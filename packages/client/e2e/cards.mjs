@@ -115,7 +115,15 @@ try {
   await actionTab.dispatchEvent('pointerup', { pointerId: 2, pointerType: 'touch' });
   await actionTab.dispatchEvent('click', { detail: 1 });
   if ((await page.evaluate(() => window.__navigation.active())) !== activeBefore) fail('long press also switched the session');
-  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  // Detach and Close are separate, and Close asks first, naming the session and its server.
+  const actions = page.getByRole('dialog', { name: 'Session actions' });
+  await actions.getByRole('button', { name: /^Detach/ }).waitFor();
+  await actions.getByRole('button', { name: 'Close session…' }).click();
+  await actions.getByRole('alert').filter({ hasText: 'Everything running in it ends' }).waitFor();
+  await actions.getByRole('button', { name: 'Cancel', exact: true }).click(); // back to the choices
+  await actions.getByRole('button', { name: /^Detach/ }).waitFor();
+  await actions.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await actions.waitFor({ state: 'hidden' });
   await actionTab.focus();
   await page.keyboard.press('Enter');
   if ((await page.evaluate(() => window.__navigation.active())) !== 'alpha/session-1') fail('long press suppressed later keyboard activation');
@@ -142,8 +150,8 @@ try {
   await page.mouse.move(x, y + fullBox.height / 2, { steps: 12 }); await page.mouse.up();
   await page.locator('.session-sheet[data-height=half]').waitFor();
   await page.getByRole('button', { name: 'Minimize sessions', exact: true }).click();
-  await page.locator('.session-sheet[data-height=peek]').waitFor();
-  console.log('ok  sheet has peek, half and full heights; a drag snaps to half');
+  await page.locator('.session-sheet[data-height=closed]').waitFor({ state: 'hidden' }); // nothing of it stays on a phone screen
+  console.log('ok  sheet closes on a phone and has half and full heights; a drag snaps to half');
 
   await page.getByRole('button', { name: 'Sessions, 3 need you' }).click();
   await page.getByRole('button', { name: 'By server', exact: true }).click();

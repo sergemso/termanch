@@ -9,6 +9,7 @@ use async_trait::async_trait;
 use termanch_core::protocol::SessionInfo;
 use tokio::process::Command;
 
+use crate::control::WindowState;
 use crate::events::EventEnv;
 use crate::pty::Attachment;
 
@@ -27,6 +28,17 @@ pub trait SessionBackend: Send + Sync {
     async fn create_in(&self, name: &str, _backend: Option<&str>) -> Result<()> {
         self.create(name).await
     }
+    /// Creates a session in a working directory, optionally starting a coding agent in it. Managers that cannot
+    /// do either ignore them.
+    async fn create_with(
+        &self,
+        name: &str,
+        backend: Option<&str>,
+        _dir: Option<&str>,
+        _template: Option<&str>,
+    ) -> Result<()> {
+        self.create_in(name, backend).await
+    }
     /// The visible text of the session's pane, for checking what a one-tap answer would answer.
     async fn capture(&self, _id: &str) -> Result<String> {
         Err(anyhow!("this session manager cannot read a pane"))
@@ -35,9 +47,34 @@ pub trait SessionBackend: Send + Sync {
     async fn capture_styled(&self, id: &str) -> Result<String> {
         self.capture(id).await
     }
+    /// `capture_styled` of one window instead of the current one.
+    async fn capture_window_styled(&self, id: &str, _index: u32) -> Result<String> {
+        self.capture_styled(id).await
+    }
     /// Types `text` into the session's pane as if it was typed there.
     async fn send_text(&self, _id: &str, _text: &str) -> Result<()> {
         Err(anyhow!("this session manager cannot send keys"))
+    }
+    /// Ends the session and everything running in it. The caller has already asked the user.
+    async fn kill(&self, _id: &str) -> Result<()> {
+        Err(anyhow!("this session manager cannot close sessions"))
+    }
+    /// The windows of a session, for the windows dropdown.
+    async fn windows(&self, _id: &str) -> Result<Vec<WindowState>> {
+        Err(anyhow!("this session manager has no windows"))
+    }
+    /// Makes window `index` the one the next client sees, whoever is attached (the user chose it).
+    async fn select_window(&self, _id: &str, _index: u32) -> Result<()> {
+        Err(anyhow!("this session manager has no windows"))
+    }
+    /// Like `select_window`, but only when no real terminal is attached to the session, so opening a tab never
+    /// moves a screen somebody else is looking at. Returns whether it switched.
+    async fn focus_window(&self, _id: &str, _index: u32) -> Result<bool> {
+        Ok(false)
+    }
+    /// Closes one window; closing the last one ends the session.
+    async fn kill_window(&self, _id: &str, _index: u32) -> Result<()> {
+        Err(anyhow!("this session manager has no windows"))
     }
 }
 
@@ -48,6 +85,12 @@ pub fn valid_name(name: &str) -> bool {
         && name
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// A working directory a client may ask for: absolute, no control characters, a sane length. It reaches tmux as
+/// one argument, never through a shell.
+pub fn valid_dir(dir: &str) -> bool {
+    dir.starts_with('/') && dir.len() <= 512 && !dir.chars().any(|c| c.is_control())
 }
 
 /// One session per line: `id` or `id|name|...`; extra fields are ignored.
@@ -160,6 +203,20 @@ impl Runner {
             .envs(crate::locale::utf8_env())
             .output()
             .await
+            .map_err(|e| anyhow!("cannot run {program}: {e}"))
+    }
+
+    /// A long-lived child with piped stdin/stdout (a control-mode client); it dies with its handle.
+    pub fn spawn_piped(&self, program: &str, args: &[String]) -> Result<tokio::process::Child> {
+        let (program, args) = self.wrap(false, program, args);
+        Command::new(&program)
+            .args(&args)
+            .envs(crate::locale::utf8_env())
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .kill_on_drop(true)
+            .spawn()
             .map_err(|e| anyhow!("cannot run {program}: {e}"))
     }
 
@@ -348,12 +405,38 @@ impl SessionBackend for TmuxBackend {
     }
 
     async fn create(&self, name: &str) -> Result<()> {
+        self.create_with(name, None, None, None).await
+    }
+
+    async fn create_with(
+        &self,
+        name: &str,
+        _backend: Option<&str>,
+        dir: Option<&str>,
+        template: Option<&str>,
+    ) -> Result<()> {
         if !valid_name(name) {
             return Err(anyhow!(
                 "Session names use letters, digits, - and _ (max 64)"
             ));
         }
+        // Only the agents the scan knows may be started from a client; a plain shell otherwise.
+        let template = match template.filter(|t| !t.is_empty() && *t != "shell") {
+            Some(t) => Some(
+                crate::adapters::AGENTS
+                    .into_iter()
+                    .find(|a| *a == t)
+                    .ok_or_else(|| anyhow!("Unknown agent template"))?,
+            ),
+            None => None,
+        };
         let mut args: Vec<String> = ["new-session", "-d", "-s", name].map(String::from).into();
+        if let Some(dir) = dir.filter(|d| !d.is_empty()) {
+            if !valid_dir(dir) {
+                return Err(anyhow!("The directory must be an absolute path"));
+            }
+            args.extend(["-c".to_string(), dir.to_string()]);
+        }
         for var in self
             .events
             .iter()
@@ -367,6 +450,10 @@ impl SessionBackend for TmuxBackend {
                 "tmux new-session failed: {}",
                 String::from_utf8_lossy(&out.stderr).trim()
             ));
+        }
+        if let Some(agent) = template {
+            // Typed into the new shell, so quitting the agent leaves the shell (and the session) alive.
+            self.send_text(name, &format!("{agent}\r")).await?;
         }
         Ok(())
     }
@@ -395,6 +482,18 @@ impl SessionBackend for TmuxBackend {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     }
 
+    async fn capture_window_styled(&self, id: &str, index: u32) -> Result<String> {
+        if !valid_name(id) {
+            return Err(anyhow!("Unknown session"));
+        }
+        let args = ["capture-pane", "-e", "-p", "-t", &format!("={id}:{index}")].map(String::from);
+        let out = self.runner.run("tmux", &args).await?;
+        if !out.status.success() {
+            return Err(anyhow!("the pane cannot be read"));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    }
+
     async fn send_text(&self, id: &str, text: &str) -> Result<()> {
         if !valid_name(id) {
             return Err(anyhow!("Unknown session"));
@@ -410,6 +509,72 @@ impl SessionBackend for TmuxBackend {
                     ["send-keys", "-t", &format!("={id}:"), "-l", "--", part].map(String::from);
                 self.runner.run("tmux", &args).await?;
             }
+        }
+        Ok(())
+    }
+
+    async fn kill(&self, id: &str) -> Result<()> {
+        if !valid_name(id) {
+            return Err(anyhow!("Unknown session"));
+        }
+        let args = ["kill-session", "-t", &format!("={id}")].map(String::from);
+        let out = self.runner.run("tmux", &args).await?;
+        if !out.status.success() {
+            return Err(anyhow!(
+                "tmux kill-session failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Ok(())
+    }
+
+    async fn windows(&self, id: &str) -> Result<Vec<WindowState>> {
+        crate::control::read_windows(&self.runner, id).await
+    }
+
+    async fn select_window(&self, id: &str, index: u32) -> Result<()> {
+        if !valid_name(id) {
+            return Err(anyhow!("Unknown session"));
+        }
+        let args = ["select-window", "-t", &format!("={id}:{index}")].map(String::from);
+        let out = self.runner.run("tmux", &args).await?;
+        if !out.status.success() {
+            return Err(anyhow!("that window is gone"));
+        }
+        Ok(())
+    }
+
+    async fn focus_window(&self, id: &str, index: u32) -> Result<bool> {
+        if !valid_name(id) {
+            return Err(anyhow!("Unknown session"));
+        }
+        let args = [
+            "list-clients",
+            "-t",
+            &format!("={id}"),
+            "-F",
+            "#{client_control_mode}",
+        ]
+        .map(String::from);
+        let out = self.runner.run("tmux", &args).await?;
+        let real_client = String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .any(|l| l.trim() == "0");
+        if !out.status.success() || real_client {
+            return Ok(false);
+        }
+        self.select_window(id, index).await?;
+        Ok(true)
+    }
+
+    async fn kill_window(&self, id: &str, index: u32) -> Result<()> {
+        if !valid_name(id) {
+            return Err(anyhow!("Unknown session"));
+        }
+        let args = ["kill-window", "-t", &format!("={id}:{index}")].map(String::from);
+        let out = self.runner.run("tmux", &args).await?;
+        if !out.status.success() {
+            return Err(anyhow!("that window is gone"));
         }
         Ok(())
     }
@@ -573,12 +738,21 @@ impl SessionBackend for CompositeBackend {
     }
 
     async fn create_in(&self, name: &str, backend: Option<&str>) -> Result<()> {
-        let (kind, b) = match backend {
-            Some(k) => (k, self.part(k)?),
-            None => (self.parts[0].0.as_str(), &self.parts[0].1),
+        self.create_with(name, backend, None, None).await
+    }
+
+    async fn create_with(
+        &self,
+        name: &str,
+        backend: Option<&str>,
+        dir: Option<&str>,
+        template: Option<&str>,
+    ) -> Result<()> {
+        let b = match backend {
+            Some(k) => self.part(k)?,
+            None => &self.parts[0].1,
         };
-        let _ = kind;
-        b.create(name).await
+        b.create_with(name, backend, dir, template).await
     }
 
     fn attach(&self, id: &str, cols: u16, rows: u16) -> Result<Attachment> {
@@ -606,11 +780,53 @@ impl SessionBackend for CompositeBackend {
         self.part(kind)?.capture_styled(name).await
     }
 
+    async fn capture_window_styled(&self, id: &str, index: u32) -> Result<String> {
+        let (kind, name) = id
+            .split_once(':')
+            .ok_or_else(|| anyhow!("Unknown session"))?;
+        self.part(kind)?.capture_window_styled(name, index).await
+    }
+
     async fn send_text(&self, id: &str, text: &str) -> Result<()> {
         let (kind, name) = id
             .split_once(':')
             .ok_or_else(|| anyhow!("Unknown session"))?;
         self.part(kind)?.send_text(name, text).await
+    }
+
+    async fn kill(&self, id: &str) -> Result<()> {
+        let (kind, name) = id
+            .split_once(':')
+            .ok_or_else(|| anyhow!("Unknown session"))?;
+        self.part(kind)?.kill(name).await
+    }
+
+    async fn windows(&self, id: &str) -> Result<Vec<WindowState>> {
+        let (kind, name) = id
+            .split_once(':')
+            .ok_or_else(|| anyhow!("Unknown session"))?;
+        self.part(kind)?.windows(name).await
+    }
+
+    async fn select_window(&self, id: &str, index: u32) -> Result<()> {
+        let (kind, name) = id
+            .split_once(':')
+            .ok_or_else(|| anyhow!("Unknown session"))?;
+        self.part(kind)?.select_window(name, index).await
+    }
+
+    async fn focus_window(&self, id: &str, index: u32) -> Result<bool> {
+        let (kind, name) = id
+            .split_once(':')
+            .ok_or_else(|| anyhow!("Unknown session"))?;
+        self.part(kind)?.focus_window(name, index).await
+    }
+
+    async fn kill_window(&self, id: &str, index: u32) -> Result<()> {
+        let (kind, name) = id
+            .split_once(':')
+            .ok_or_else(|| anyhow!("Unknown session"))?;
+        self.part(kind)?.kill_window(name, index).await
     }
 }
 
@@ -1083,5 +1299,55 @@ mod tests {
             !plain.contains("\x1b["),
             "the plain capture has no escape codes"
         );
+    }
+
+    #[test]
+    fn only_absolute_clean_directories_are_accepted() {
+        assert!(valid_dir("/home/u/app"));
+        assert!(!valid_dir("app"));
+        assert!(!valid_dir("/tmp/a\nb"));
+        assert!(!valid_dir(&format!("/{}", "a".repeat(600))));
+    }
+
+    #[tokio::test]
+    async fn a_new_session_starts_in_the_asked_directory_and_unknown_agents_are_refused() {
+        if std::process::Command::new("tmux")
+            .arg("-V")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("tm-new-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let tmpdir = dir.to_string_lossy().into_owned();
+        let runner = Runner::default().with_env(&[
+            ("TMUX_TMPDIR", Some(tmpdir.as_str())),
+            ("TMUX", None),
+            ("HERDR_ENV", None),
+        ]);
+        let b = TmuxBackend::new(runner.clone());
+        assert!(b
+            .create_with("nd", None, Some("relative"), None)
+            .await
+            .is_err());
+        assert!(b
+            .create_with("nd", None, None, Some("rm -rf"))
+            .await
+            .is_err());
+        b.create_with("nd", None, Some("/tmp"), None).await.unwrap();
+        let mut path = String::new();
+        for _ in 0..20 {
+            path = b.windows("nd").await.unwrap()[0].info.path.clone();
+            if path == "/tmp" {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        assert_eq!(path, "/tmp");
+        b.kill("nd").await.unwrap();
+        assert!(b.list().await.map(|l| l.is_empty()).unwrap_or(true));
+        let _ = runner.run("tmux", &["kill-server".to_string()]).await;
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

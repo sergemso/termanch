@@ -53,12 +53,37 @@ pub enum ClientMessage {
         #[serde(default)]
         hash: Option<String>,
     },
+    /// Asks for the windows of a session (answered with `window_list`; later changes are pushed).
+    Windows {
+        session: String,
+    },
+    /// Makes window `index` the one a client sees when it attaches (plan H.6).
+    SelectWindow {
+        session: String,
+        index: u32,
+    },
+    /// Closes one window of a session; closing the last one ends the session.
+    CloseWindow {
+        session: String,
+        index: u32,
+    },
+    /// Ends the session and everything in it (the client has asked the user first). Different from `Detach`,
+    /// which only stops streaming and leaves the session running.
+    CloseSession {
+        session: String,
+    },
     ListSessions,
     NewSession {
         name: String,
         /// Which session manager to create it in (`tmux`, `herdr`); the first one when absent.
         #[serde(default)]
         backend: Option<String>,
+        /// Absolute working directory to start in; the manager's default when absent.
+        #[serde(default)]
+        dir: Option<String>,
+        /// A coding agent to start in the new session (`claude`, `codex`, ...); a plain shell when absent.
+        #[serde(default)]
+        template: Option<String>,
     },
     Ping,
     Attach {
@@ -103,6 +128,16 @@ pub enum ServerMessage {
         /// Session managers this server offers; more than one means "New session" asks which.
         #[serde(default)]
         backends: Vec<String>,
+        /// Live window updates through tmux control mode are on; false from older servers and below tmux 3.2.
+        #[serde(default)]
+        control_mode: bool,
+        /// The tmux version string (`3.6`), empty when there is no tmux; with `control_mode` false the client
+        /// can say why live window updates are off.
+        #[serde(default)]
+        tmux_version: String,
+        /// tmux's prefix key in its own notation (`C-b`); empty without tmux.
+        #[serde(default)]
+        prefix: String,
     },
     Sessions {
         sessions: Vec<SessionInfo>,
@@ -122,6 +157,15 @@ pub enum ServerMessage {
         #[serde(default)]
         unchanged: bool,
     },
+    /// The windows of one session; sent for `windows` and again whenever they change.
+    WindowList {
+        session: String,
+        windows: Vec<WindowInfo>,
+        /// The window the session's tab speaks for (plan H.3): the agent window used last, else the active one.
+        /// Its command and path name the tab and its agent gives the icon.
+        #[serde(default)]
+        representative: Option<u32>,
+    },
     /// Latest agent state per session; answers `agent_sync`.
     AgentSnapshot {
         states: Vec<crate::events::SessionAgentState>,
@@ -140,6 +184,21 @@ pub enum ServerMessage {
         message: String,
     },
     Pong,
+}
+
+/// One window of a multiplexer session, as the windows dropdown shows it.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct WindowInfo {
+    pub index: u32,
+    pub name: String,
+    /// The foreground command of the window's active pane (`bash`, `claude`, `lazygit`).
+    pub command: String,
+    /// The working directory of that pane.
+    pub path: String,
+    pub active: bool,
+    /// Set when `command` is a known coding agent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -185,6 +244,9 @@ mod tests {
             mode: "container".into(),
             version: "0.1.0+dev".into(),
             backends: vec!["tmux".into()],
+            control_mode: true,
+            tmux_version: "3.6".into(),
+            prefix: "C-b".into(),
         })
         .unwrap();
         assert_eq!(v["type"], "auth_ok");
@@ -229,9 +291,70 @@ mod tests {
         let v = serde_json::to_value(ClientMessage::NewSession {
             name: "n".into(),
             backend: None,
+            dir: Some("/srv/app".into()),
+            template: Some("claude".into()),
         })
         .unwrap();
         assert_eq!(v["type"], "new_session");
+        assert_eq!(v["dir"], "/srv/app");
+        // The new messages the client speaks (packages/client/src/lib/protocol.ts).
+        for (msg, name) in [
+            (
+                ClientMessage::Windows {
+                    session: "s".into(),
+                },
+                "windows",
+            ),
+            (
+                ClientMessage::SelectWindow {
+                    session: "s".into(),
+                    index: 1,
+                },
+                "select_window",
+            ),
+            (
+                ClientMessage::CloseWindow {
+                    session: "s".into(),
+                    index: 1,
+                },
+                "close_window",
+            ),
+            (
+                ClientMessage::CloseSession {
+                    session: "s".into(),
+                },
+                "close_session",
+            ),
+        ] {
+            assert_eq!(serde_json::to_value(msg).unwrap()["type"], name);
+        }
+        let v = serde_json::to_value(ServerMessage::WindowList {
+            session: "s".into(),
+            windows: vec![WindowInfo {
+                index: 0,
+                name: "w".into(),
+                command: "claude".into(),
+                path: "/srv".into(),
+                active: true,
+                agent: Some("claude".into()),
+            }],
+            representative: Some(0),
+        })
+        .unwrap();
+        assert_eq!(v["type"], "window_list");
+        assert_eq!(v["windows"][0]["agent"], "claude");
+        // An older client's NewSession has neither field.
+        let old: ClientMessage =
+            serde_json::from_str(r#"{"type":"new_session","name":"n"}"#).unwrap();
+        assert_eq!(
+            old,
+            ClientMessage::NewSession {
+                name: "n".into(),
+                backend: None,
+                dir: None,
+                template: None
+            }
+        );
         let v = serde_json::to_value(ClientMessage::Hello).unwrap();
         assert_eq!(v["type"], "hello");
         let v = serde_json::to_value(ServerMessage::Challenge {

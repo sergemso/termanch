@@ -2,6 +2,9 @@
   import type { SessionInfo } from './lib/protocol';
   import type { SessionAgent } from './lib/agents';
   import { ageText, chipFor, isDone, progress, staleText, toolLine } from './lib/cards';
+  import { cacheRemaining, cacheText, expiringSoon } from './lib/cache';
+  import { representativeWindow, shortPath, type SessionWindows } from './lib/windows';
+  import AgentIcon from './AgentIcon.svelte';
 
   export let session: SessionInfo;
   export let agent: SessionAgent;
@@ -12,18 +15,27 @@
   export let ontoggle: () => void;
   export let onanswer: (choice: number, prompt: NonNullable<SessionAgent['prompt']>) => void;
   export let serverName = '';
+  export let windows: SessionWindows | undefined = undefined;
+  export let ttlMs = 300000;
+  /** What Keep warm sends; the button is hidden while it is empty. */
+  export let keepWarm = '';
+  export let onwarm: () => void = () => {};
+  export let onpeek: () => void = () => {};
   let pressedAnswer: { choice: number; prompt: NonNullable<SessionAgent['prompt']> } | null = null;
 
   $: chip = chipFor(agent, now);
   $: prog = progress(agent.plan);
   $: line = toolLine(agent);
+  $: rep = representativeWindow(windows);
+  $: remaining = cacheRemaining(agent, now, ttlMs);
   // Only a prompt the agent's own hook confirmed gets answer buttons, and never one that may be out of date.
   $: canAnswer = !!agent.prompt && agent.prompt.confidence === 'high' && !chip.stale && agent.state === 'needs_input';
 </script>
 
 <div class="sc" class:active role="group" aria-label={`${session.name}: ${chip.label}${chip.stale ? ', ' + staleText(agent, now) : ''}`}>
-  <button type="button" class="open" on:click={onopen}>
+  <button type="button" class="open" on:pointerdown={() => !active && onpeek()} on:click={onopen}>
     <span class="top">
+      <AgentIcon command={rep?.command} agent={rep ? rep.agent : agent.agent} size={20} />
       <strong class="name">{session.name}</strong>
       {#if serverName}<span class="badge">{serverName}</span>{/if}
       {#if session.backend}<span class="badge">{session.backend}</span>{/if}
@@ -31,11 +43,14 @@
     </span>
     {#if line}<span class="line">{line}</span>{/if}
     <span class="meta">
+      {#if rep?.path}<span class="path" title={rep.path}>{shortPath(rep.path)}</span>{/if}
       <span>{ageText(agent.ts, now)}</span>
+      {#if remaining !== null}<span class="cache" class:soon={expiringSoon(remaining)}>{cacheText(remaining)}</span>{/if}
       {#if prog}<span>plan {prog}</span>{/if}
       {#if chip.stale}<span class="staletext">{staleText(agent, now)}</span>{/if}
     </span>
   </button>
+  {#if keepWarm && expiringSoon(remaining)}<button type="button" class="warm" on:click={onwarm}>Keep warm</button>{/if}
   <button type="button" class="more" aria-expanded={expanded} aria-label={expanded ? 'Hide details' : 'Show details'} on:click={ontoggle}>{expanded ? '▲' : '▼'}</button>
 
   {#if expanded}
@@ -79,6 +94,9 @@
 </div>
 
 <style>
+  .path { max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cache.soon { color: var(--danger); font-weight: 600; }
+  .warm { margin: 0 12px 10px; min-height: 44px; }
   .sc {
     position: relative;
     margin-bottom: 6px;

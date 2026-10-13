@@ -21,6 +21,7 @@ mod backend;
 mod cert;
 mod claude_hooks;
 mod connection;
+mod control;
 mod directory;
 #[cfg(test)]
 mod e2e;
@@ -567,9 +568,30 @@ async fn main() -> anyhow::Result<()> {
             String::new()
         }
     };
+    let window_hub = control::WindowHub::default();
+    let mut tmux_version = String::new();
+    let mut control_on = false;
+    let mut tmux_prefix = String::new();
     for k in &kinds {
         match k.as_str() {
-            "tmux" => agentwatch::spawn_tmux_scan(hub.clone(), mode.runner(), prefix_of(k)),
+            "tmux" => {
+                agentwatch::spawn_tmux_scan(hub.clone(), mode.runner(), prefix_of(k));
+                // Control mode needs tmux 3.2; an older one keeps the scan and says so (plan H.3).
+                let out = mode
+                    .runner()
+                    .run("tmux", &["-V".to_string()])
+                    .await
+                    .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+                    .unwrap_or_default();
+                tmux_version = control::version_label(&out);
+                tmux_prefix = runner_prefix(&mode).await;
+                if control::control_supported(&out) {
+                    control_on = true;
+                    control::spawn(window_hub.clone(), mode.runner(), prefix_of(k));
+                } else {
+                    info!("tmux {tmux_version}: live window updates need tmux 3.2 or newer; using the periodic scan");
+                }
+            }
             "herdr" => agentwatch::spawn_herdr_poll(hub.clone(), mode.runner(), prefix_of(k)),
             _ => {}
         }
@@ -594,18 +616,24 @@ async fn main() -> anyhow::Result<()> {
     let mut state = AppState {
         auth,
         sessions: Arc::new(
-            SessionManager::new(backend, mode.clone())
-                .with_events(hub.clone())
-                .with_uninstall(
-                    args.server_name.clone(),
-                    Arc::new(|| {
-                        // Let the reply reach the client, then stop; Docker then finds the idle marker.
-                        std::thread::spawn(|| {
-                            std::thread::sleep(std::time::Duration::from_secs(1));
-                            std::process::exit(0);
-                        });
-                    }),
-                ),
+            if control_on {
+                SessionManager::new(backend, mode.clone())
+                    .with_windows(window_hub.clone(), tmux_version.clone())
+            } else {
+                SessionManager::new(backend, mode.clone()).with_tmux_version(tmux_version.clone())
+            }
+            .with_prefix(tmux_prefix.clone())
+            .with_events(hub.clone())
+            .with_uninstall(
+                args.server_name.clone(),
+                Arc::new(|| {
+                    // Let the reply reach the client, then stop; Docker then finds the idle marker.
+                    std::thread::spawn(|| {
+                        std::thread::sleep(std::time::Duration::from_secs(1));
+                        std::process::exit(0);
+                    });
+                }),
+            ),
         ),
         server_name: args.server_name.clone(),
         mode: mode.label(),
@@ -687,6 +715,22 @@ async fn ws_handler(
     headers: HeaderMap,
 ) -> Response {
     ws.on_upgrade(|socket| handle_websocket(socket, State(state), headers))
+}
+
+/// tmux's prefix key as it writes it (`C-b`); the default when it cannot be read.
+async fn runner_prefix(mode: &RunMode) -> String {
+    let args = ["show-options", "-gv", "prefix"].map(String::from);
+    match mode.runner().run("tmux", &args).await {
+        Ok(o) if o.status.success() => {
+            let p = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if p.is_empty() || p == "None" || p.len() > 16 {
+                "C-b".into()
+            } else {
+                p
+            }
+        }
+        _ => "C-b".into(),
+    }
 }
 
 #[cfg(test)]

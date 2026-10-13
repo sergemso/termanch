@@ -12,3 +12,11 @@ describe('sheet heights', () => {
     expect(snapHeight(600, 700)).toBe('full');
   });
 });
+
+import { sheetHeight as heightOf } from './sheet';
+describe('closed sheet', () => {
+  it('takes no room', () => {
+    expect(heightOf('closed', 600)).toBe(0);
+    expect(heightOf('peek', 600)).toBe(96);
+  });
+});
