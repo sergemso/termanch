@@ -1,4 +1,4 @@
-# Termanch Plan: agent event layer (implemented 2026-10-13 except the items under Status; decision 0079 still needs the owner's acceptance)
+# Termanch Plan: agent event layer (implemented 2026-10-13, merged in #79, released as v0.1.2, except the items under Status; decision 0079 still needs the owner's acceptance)
 
 Decisions: 0061 (state from process scans plus tool adapters), 0079 (hooks are opt-in; draft). Guardrails: `host-changes-are-journaled`, `internal-network-binding`, `security-secrets-handling`, `audit-logging-no-secrets`, `diagnostics-never-include-secrets`, `resource-constraints`. Feeds v7 (`termanch-v7-output-connectors.md`, steps O.*) and v8 (`termanch-v8-session-cards.md`, steps K.*). Nothing here is decided until the owner accepts it. A fresh session needs only this file, those artifacts and the repo.
 
@@ -30,35 +30,35 @@ Rules every event obeys:
 
 ## Steps
 
-### P.1 Spike: what each tool really exposes — [ ]
+### P.1 Spike: what each tool really exposes — [x]
 Class: research · Needs: none · Check: `test -s docs/facts/0029-agent-tool-surfaces.md`
 Context: Tool interfaces below are unverified. Run in a throwaway home on the VPS, not the owner's.
 Do: 1. For Claude Code, Codex and herdr record the hook, JSON or status surface, the exact settings lines needed, and a real sample event for each of: tool started, needs input, done, and a crash or kill. 2. Record how a hook script can learn its session (an environment variable the server sets in the pane, for example `TERMANCH_SESSION` and `TERMANCH_EVENT_SOCKET`). 3. Record hook timeout behaviour and what happens to the agent when the hook command is missing or slow. 4. Decide per tool the primary source.
 Done-when: fact 0029 has the table with all samples and the per-tool verdict.
 
-### P.2 Event model, ingest socket and memory budget — [ ]
+### P.2 Event model, ingest socket and memory budget — [x]
 Class: implement · Needs: P.1 · Check: `cargo test -p termanch-core event && cargo test -p termanch-server events`
 Context: Guardrails `internal-network-binding`, `audit-logging-no-secrets`.
 Do: 1. Types in `termanch-core` with `serde(other)` handling of unknown kinds. 2. A Unix socket in the state directory, mode 0600, never TCP. Each session is given its own per-session token in its environment at creation; an event is accepted only if its token matches the session it names, so one session cannot write events for another. 3. Sanitiser: strip control characters, length caps, scrubber rules from the Event model. 4. Bounded per-session ring, staleness flag, `seq` stamping. 5. Audit entries (session, kind, source) without content. 6. A load test: 20 sessions at 20 events per second for a minute stays within the stated budget and under 5% of one core.
 Done-when: unit tests prove token mismatch is refused, control characters and secrets are removed from samples, rings stay bounded, unknown kinds are ignored; the load test passes.
 
-### P.3 Claude Code adapter via hooks — [ ]
+### P.3 Claude Code adapter via hooks — [x] (command line; no UI, 0079 not accepted)
 Class: implement · Needs: P.2, decision 0079 accepted · Check: e2e with a scripted fake hook caller.
 Context: Decision 0079. Guardrail `host-changes-are-journaled`.
 Do: 1. An opt-in "Connect Claude Code" action that shows the exact lines to add to the user's hook settings, backs the file up, merges without touching other entries, journals the change, and has a Disconnect that removes only our entries. 2. The hook script has a 2 s timeout, exits 0 on any failure and when the socket is missing. 3. Never edited by an update.
 Done-when: tests show the merge keeps unrelated settings, Disconnect restores the original bytes when nothing else changed, and the fake hook with the server stopped neither delays nor fails the caller.
 
-### P.4 Process-scan and screen-heuristic fallback — [ ]
+### P.4 Process-scan and screen-heuristic fallback — [x]
 Class: implement · Needs: P.2 · Check: `cargo test -p termanch-server scan`
 Do: 1. The 0061 scan as `state` events with `source=scan`. 2. Prompt heuristics as `prompt` events with `confidence=low` and a fresh prompt `id` each time the matched screen changes, covered by recorded screen fixtures per tool version.
 Done-when: fixtures for each tool produce the expected states, a changed screen produces a new prompt id, and nothing from the screen text leaves the server except the capped summary.
 
-### P.5 Codex and herdr adapters — [ ]
+### P.5 Codex and herdr adapters — [~] herdr done, Codex unverified
 Class: implement · Needs: P.1, P.2 · Check: e2e with recorded samples from fact 0029.
 Do: one adapter per tool on the surface P.1 chose, reading its structured channel and emitting events through the same ingest path and sanitiser.
 Done-when: replaying each recorded sample yields the matching `state`, `tool` and `prompt` events; a tool without hooks still shows scan state.
 
-### P.6 Protocol and client plumbing — [ ]
+### P.6 Protocol and client plumbing — [x]
 Class: implement · Needs: P.2 · Check: `cargo test -p termanch-core && cd packages/client && npx --yes pnpm@9 test`
 Do: 1. Additive `ServerMessage::AgentEvent` and a `session list` field with the latest state, `seq` and `stale`. 2. Mirror in `protocol.ts`. 3. Client store only, no UI (UI is v8). 4. On reconnect the client gets the latest snapshot per session, then events with higher `seq`; a gap in `seq` triggers a new snapshot request.
 Done-when: an old client ignores the new message in a test; reconnect yields the snapshot; a `seq` gap is recovered.
