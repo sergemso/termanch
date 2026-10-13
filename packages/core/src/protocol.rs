@@ -46,6 +46,13 @@ pub enum ClientMessage {
         session: String,
         text: String,
     },
+    /// Asks for a snapshot of a session's screen without attaching to it (decision 0084). `hash` is the one the
+    /// client already holds: the server answers `unchanged` instead of sending the same text again.
+    Peek {
+        session: String,
+        #[serde(default)]
+        hash: Option<String>,
+    },
     ListSessions,
     NewSession {
         name: String,
@@ -103,6 +110,15 @@ pub enum ServerMessage {
     },
     Output {
         data: String,
+    },
+    /// A session's visible screen as text with its colour codes. Empty `text` with `unchanged` false means the
+    /// session manager cannot give one; with `unchanged` true the client's copy is current.
+    Snapshot {
+        session: String,
+        text: String,
+        hash: String,
+        #[serde(default)]
+        unchanged: bool,
     },
     /// Latest agent state per session; answers `agent_sync`.
     AgentSnapshot {
@@ -185,6 +201,20 @@ mod tests {
         .unwrap();
         assert_eq!(v["type"], "answer");
         assert_eq!(v["choice"], 1);
+        let v = serde_json::to_value(ClientMessage::Peek {
+            session: "s".into(),
+            hash: None,
+        })
+        .unwrap();
+        assert_eq!(v["type"], "peek");
+        let v = serde_json::to_value(ServerMessage::Snapshot {
+            session: "s".into(),
+            text: "x".into(),
+            hash: "h".into(),
+            unchanged: false,
+        })
+        .unwrap();
+        assert_eq!(v["type"], "snapshot");
         let v = serde_json::to_value(ServerMessage::AgentSnapshot { states: vec![] }).unwrap();
         assert_eq!(v["type"], "agent_snapshot");
         let v = serde_json::to_value(ServerMessage::AgentEvents { events: vec![] }).unwrap();

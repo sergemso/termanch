@@ -23,7 +23,7 @@ Context: `SessionAgentState` in `packages/core/src/events.rs` has session, state
 Do: 1. Add `agent: Option<String>` (claude, codex, herdr, shell) and `last_response_at: Option<u64>` (ms) to `SessionAgentState`, `#[serde(default)]`, mirrored in `protocol.ts`. 2. The scan records the agent name per session in the hub; a response time is the time of the last `Done`/`Message` event or the last `Working`→`Idle`/`Done` transition from any source. 3. `EventHub::snapshot_at` fills both. 4. Unit tests for each source and for an old client ignoring the fields.
 Done-when: tests show a scanned `claude` pane reports `agent=claude`, a Stop hook sets `last_response_at`, a scan-only working→idle change sets it, and a snapshot without events leaves both empty.
 
-### G.2 Server `peek`: a pane snapshot on request — [ ]‖
+### G.2 Server `peek`: a pane snapshot on request — [x]‖
 Class: implement · Needs: none · Check: `cargo test -p termanch-server peek`
 Context: Decision 0084. `SessionBackend::capture` exists (`backend.rs`, tmux `capture-pane -p`); `CompositeBackend` delegates it by `manager:name` id.
 Do: 1. Add `ClientMessage::Peek {session, hash: Option<String>}` and `ServerMessage::Snapshot {session, text, hash, unchanged}` to `packages/core/src/protocol.rs` and `protocol.ts`. 2. `TmuxBackend::capture_styled` uses `capture-pane -e -p`; the default trait method falls back to plain capture, herdr returns an error the client treats as "no snapshot". 3. The handler caps text at 16 KB and the pane size, answers `unchanged` with no text when `hash` matches (sha256, first 16 hex), and writes only a counter to the audit log, never text. 4. Tests with a fake backend (cap, unchanged, error) and a real tmux (colour codes survive).
