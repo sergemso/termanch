@@ -16,7 +16,7 @@
 
   type Tab = 'paste' | 'scan' | 'url';
   let tab: Tab = prefillSecret ? 'paste' : 'paste';
-  let name = 'my-vps';
+  let name = '';
   let secret = prefillSecret ?? randomClaimSecret();
   /** Where sessions run. The host choices give this browser a shell on the machine itself, so they need consent. */
   let where: 'container' | 'host' = 'container';
@@ -46,7 +46,7 @@
     error = '';
     try {
       const record = await waitForServer(origin, s, abort.signal);
-      onadd({ server_id: record.server_id, server_name: name || 'my-vps', server_url: '', record, registered_at: Date.now(), claim: s });
+      onadd({ server_id: record.server_id, server_name: name.trim(), server_url: '', record, registered_at: Date.now(), claim: s });
     } catch (e) {
       waiting = false;
       if (e instanceof DOMException && e.name === 'AbortError') return;
@@ -123,7 +123,7 @@
       error = 'Enter the server URL (https://...)';
       return;
     }
-    onadd({ server_url: manualUrl.trim(), server_name: name || 'my-vps', registered_at: Date.now(), claim: manualClaim.trim() || undefined });
+    onadd({ server_url: manualUrl.trim(), server_name: name.trim(), registered_at: Date.now(), claim: manualClaim.trim() || undefined });
   }
 
   function choose(t: Tab) {
@@ -155,7 +155,7 @@
     </div>
 
     <label style="display: block; font-size: 0.875rem; margin-bottom: 6px; color: var(--fg-muted);">Name</label>
-    <input bind:value={name} style="width: 100%; margin-bottom: 16px;" />
+    <input bind:value={name} placeholder="Leave empty to use the server's hostname" maxlength="40" style="width: 100%; margin-bottom: 16px;" />
 
     <fieldset class="where">
       <legend>Where should sessions run?</legend>

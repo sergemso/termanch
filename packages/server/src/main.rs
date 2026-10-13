@@ -14,13 +14,17 @@ use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
+mod adapters;
+mod agentwatch;
 mod auth;
 mod backend;
 mod cert;
+mod claude_hooks;
 mod connection;
 mod directory;
 #[cfg(test)]
 mod e2e;
+mod events;
 mod helper;
 mod journal;
 mod link;
@@ -36,7 +40,7 @@ mod updater;
 mod websocket;
 
 use auth::AuthState;
-use backend::{CommandBackend, RunMode, SessionBackend, TmuxBackend};
+use backend::{CommandBackend, HerdrBackend, RunMode, SessionBackend, TmuxBackend};
 use sessions::SessionManager;
 use websocket::handle_websocket;
 
@@ -53,7 +57,8 @@ struct Args {
     #[arg(long, env = "TERMANCH_CONFIG_DIR", default_value_os_t = default_config_dir())]
     config_dir: PathBuf,
 
-    #[arg(long, env = "TERMANCH_SERVER_NAME", default_value = "termanch-server")]
+    /// Name shown in the client and typed to confirm a remote uninstall. Default: the machine's hostname.
+    #[arg(long, env = "TERMANCH_SERVER_NAME", default_value_t = default_server_name())]
     server_name: String,
 
     /// Client that opens the registration link.
@@ -64,7 +69,7 @@ struct Args {
     )]
     client_url: String,
 
-    /// Session manager: `tmux` (built in) or `command` (any CLI, see TERMANCH_BACKEND_*).
+    /// Session manager: `tmux` or `herdr` (built in) or `command` (any CLI, see TERMANCH_BACKEND_*).
     #[arg(long, env = "TERMANCH_BACKEND", default_value = "tmux")]
     backend: String,
 
@@ -189,6 +194,27 @@ struct Args {
     /// Print the registration link for this (unclaimed) server and exit.
     #[arg(long, default_value = "false")]
     register: bool,
+
+    /// What an agent tool runs on each of its events (`claude`): copies its JSON to the local event socket.
+    /// Never fails and never waits long. Used by the entries `--connect-claude` writes.
+    #[arg(long)]
+    hook: Option<String>,
+
+    /// One-shot, opt-in (decision 0079): add Termanch's hooks to Claude Code's settings. Shows what it would
+    /// do; add --yes to apply. `--disconnect-claude` removes exactly that again.
+    #[arg(long, default_value = "false")]
+    connect_claude: bool,
+
+    #[arg(long, default_value = "false")]
+    disconnect_claude: bool,
+
+    /// With --connect-claude: apply instead of only showing the change.
+    #[arg(long, default_value = "false")]
+    yes: bool,
+
+    /// The Claude Code settings file to change. Default: ~/.claude/settings.json
+    #[arg(long)]
+    claude_settings: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -298,9 +324,36 @@ fn default_config_dir() -> PathBuf {
         .join(".config/termanch")
 }
 
-fn build_backend(args: &Args, mode: &RunMode) -> anyhow::Result<Arc<dyn SessionBackend>> {
+/// The host's short name (`vps-1` for `vps-1.example.com`), cleaned for display; `termanch-server` when unknown.
+fn default_server_name() -> String {
+    let raw = std::fs::read_to_string("/proc/sys/kernel/hostname")
+        .or_else(|_| std::fs::read_to_string("/etc/hostname"))
+        .unwrap_or_default();
+    clean_server_name(&raw)
+}
+
+fn clean_server_name(raw: &str) -> String {
+    let short = raw.trim().split('.').next().unwrap_or("");
+    let name: String = short
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .take(40)
+        .collect();
+    if name.is_empty() || name == "localhost" {
+        "termanch-server".into()
+    } else {
+        name
+    }
+}
+
+fn build_backend(
+    args: &Args,
+    mode: &RunMode,
+    env: events::EventEnv,
+) -> anyhow::Result<Arc<dyn SessionBackend>> {
     match args.backend.as_str() {
-        "tmux" => Ok(Arc::new(TmuxBackend::new(mode.runner()))),
+        "tmux" => Ok(Arc::new(TmuxBackend::new(mode.runner()).with_events(env))),
+        "herdr" => Ok(Arc::new(HerdrBackend::new(mode.runner()).with_events(env))),
         "command" => {
             let need = |v: &Option<String>, name: &str| {
                 v.clone()
@@ -315,7 +368,7 @@ fn build_backend(args: &Args, mode: &RunMode) -> anyhow::Result<Arc<dyn SessionB
             )?))
         }
         other => Err(anyhow::anyhow!(
-            "unknown TERMANCH_BACKEND `{other}` (tmux or command)"
+            "unknown TERMANCH_BACKEND `{other}` (tmux, herdr or command)"
         )),
     }
 }
@@ -364,6 +417,30 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
+    if let Some(adapter) = &args.hook {
+        events::run_hook(adapter);
+        return Ok(());
+    }
+    if args.connect_claude || args.disconnect_claude {
+        let settings = args
+            .claude_settings
+            .clone()
+            .unwrap_or_else(claude_hooks::default_settings_path);
+        let outcome = if args.connect_claude {
+            let binary = std::env::current_exe()?.display().to_string();
+            claude_hooks::connect(&settings, &binary, &args.config_dir, args.yes)
+        } else {
+            claude_hooks::disconnect(&settings, &args.config_dir)
+        };
+        match outcome {
+            Ok(o) => println!("{}", o.0),
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
+        }
+        return Ok(());
+    }
     if run_journal_command(&args)? {
         return Ok(());
     }
@@ -435,20 +512,46 @@ async fn main() -> anyhow::Result<()> {
     if mode.is_host() {
         info!(target: "audit", event = "host_mode_enabled", user = %mode.label());
     }
-    let backend = build_backend(&args, &mode)?;
+    let hub = events::EventHub::load_or_create(&args.config_dir)?;
+    let socket = events::socket_path(&args.config_dir);
+    tokio::spawn({
+        let (hub, socket) = (hub.clone(), socket.clone());
+        async move {
+            if let Err(e) = events::serve_socket(hub, socket).await {
+                tracing::warn!("agent event socket: {e}");
+            }
+        }
+    });
+    match args.backend.as_str() {
+        "tmux" => agentwatch::spawn_tmux_scan(hub.clone(), mode.runner()),
+        "herdr" => agentwatch::spawn_herdr_poll(hub.clone(), mode.runner()),
+        _ => {}
+    }
+    let backend = build_backend(
+        &args,
+        &mode,
+        events::EventEnv {
+            hub: hub.clone(),
+            socket,
+        },
+    )?;
     info!("Session backend: {}", backend.name());
     let mut state = AppState {
         auth,
-        sessions: Arc::new(SessionManager::new(backend, mode.clone()).with_uninstall(
-            args.server_name.clone(),
-            Arc::new(|| {
-                // Let the reply reach the client, then stop; Docker then finds the idle marker.
-                std::thread::spawn(|| {
-                    std::thread::sleep(std::time::Duration::from_secs(1));
-                    std::process::exit(0);
-                });
-            }),
-        )),
+        sessions: Arc::new(
+            SessionManager::new(backend, mode.clone())
+                .with_events(hub.clone())
+                .with_uninstall(
+                    args.server_name.clone(),
+                    Arc::new(|| {
+                        // Let the reply reach the client, then stop; Docker then finds the idle marker.
+                        std::thread::spawn(|| {
+                            std::thread::sleep(std::time::Duration::from_secs(1));
+                            std::process::exit(0);
+                        });
+                    }),
+                ),
+        ),
         server_name: args.server_name.clone(),
         mode: mode.label(),
         rtc_info: None,
@@ -529,4 +632,18 @@ async fn ws_handler(
     headers: HeaderMap,
 ) -> Response {
     ws.on_upgrade(|socket| handle_websocket(socket, State(state), headers))
+}
+
+#[cfg(test)]
+mod name_tests {
+    use super::clean_server_name;
+
+    #[test]
+    fn the_default_name_is_the_short_hostname() {
+        assert_eq!(clean_server_name("vps-1.example.com\n"), "vps-1");
+        assert_eq!(clean_server_name("  "), "termanch-server");
+        assert_eq!(clean_server_name("localhost"), "termanch-server");
+        assert_eq!(clean_server_name("a b\u{1b}[31mc"), "ab31mc");
+        assert_eq!(clean_server_name(&"x".repeat(80)).len(), 40);
+    }
 }

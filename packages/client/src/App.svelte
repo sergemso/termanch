@@ -13,6 +13,7 @@
   import ReportDialog from './ReportDialog.svelte';
   import { buildReport, noteError, recentErrors } from './lib/report';
   import { runningBundle } from './lib/update';
+  import { handleAgentMessage, requestAgentSync, resetAgents } from './lib/agents';
   import { startUsageMeter } from './lib/usageMeter';
   import { DEBUG_KEY, tapCounter } from './lib/viewport';
   import { updateAvailable, watchForUpdates } from './lib/update';
@@ -149,7 +150,7 @@
         showToast('That server is not in the directory yet. Is it running?', 'error');
         return;
       }
-      const server: ServerListItem = { server_id: id, server_name: 'my-vps', server_url: '', record, registered_at: Date.now() };
+      const server: ServerListItem = { server_id: id, server_name: '', server_url: '', record, registered_at: Date.now() };
       addServer(server);
       connectToServer(server);
     } catch (e) {
@@ -198,11 +199,15 @@
           // The claim token is single-use: the server now knows its owner.
           const { claim, ...rest } = server;
           server = rest;
-          addServer({ ...rest, server_name: msg.server_name || rest.server_name });
+          addServer({ ...rest, server_name: rest.server_name || msg.server_name });
+        } else if (!server.server_name && msg.server_name) {
+          server = { ...server, server_name: msg.server_name };
+          addServer(server);
         }
         serverVersion = msg.version ?? '';
         showToast(isReconnect ? 'Reconnected' : `Connected to ${msg.server_name}`);
         connection?.send({ type: 'list_sessions' });
+        if (connection) requestAgentSync((m) => connection?.send(m));
         // tmux kept the session alive; attaching again repaints it.
         if (activeSessionId) connection?.send({ type: 'attach', session_id: activeSessionId });
       },
@@ -255,6 +260,10 @@
       case 'session_attached':
         activeSessionId = msg.session_id;
         break;
+      case 'agent_snapshot':
+      case 'agent_events':
+        handleAgentMessage(msg, (m) => connection?.send(m));
+        break;
       case 'agent_event':
         showToast(`Agent ${msg.agent} ${msg.event} in ${msg.session_id}`);
         break;
@@ -270,6 +279,7 @@
     deviceCert = null;
     selectedServer = null;
     sessions = [];
+    resetAgents();
     activeSessionId = null;
     connection?.close();
     connection = null;
@@ -280,6 +290,7 @@
     connection = null;
     selectedServer = null;
     sessions = [];
+    resetAgents();
     activeSessionId = null;
     drawerOpen = false;
   }

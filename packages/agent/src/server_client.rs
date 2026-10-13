@@ -159,6 +159,7 @@ impl ServerClient {
             } => {
                 info!("Agent event: {} - {} - {}", event, agent, session_id);
             }
+            ServerMessage::AgentSnapshot { .. } | ServerMessage::AgentEvents { .. } => {}
             ServerMessage::Error { message } => {
                 info!("Server error: {}", message);
             }

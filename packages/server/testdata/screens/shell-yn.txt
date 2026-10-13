@@ -1,0 +1,4 @@
+$ rm -i old.log
+rm: remove regular file 'old.log'? 
+$ ./deploy.sh
+Deploy to production? (y/n) 

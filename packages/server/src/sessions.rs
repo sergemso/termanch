@@ -9,6 +9,7 @@ use termanch_core::protocol::{ClientMessage, ServerMessage};
 use std::sync::Arc;
 
 use crate::backend::{RunMode, SessionBackend};
+use crate::events::EventHub;
 use crate::link::{Link, LinkTx};
 use crate::pty::Attachment;
 
@@ -24,6 +25,7 @@ pub struct SessionManager {
     server_name: String,
     /// Called after an uninstall has wiped the configuration and told the client; stops the process.
     on_uninstalled: Arc<dyn Fn() + Send + Sync>,
+    events: Option<EventHub>,
 }
 
 impl SessionManager {
@@ -33,7 +35,14 @@ impl SessionManager {
             mode,
             server_name: String::new(),
             on_uninstalled: Arc::new(|| {}),
+            events: None,
         }
+    }
+
+    /// Serves the agent event stream (plan v6) to every connection.
+    pub fn with_events(mut self, hub: EventHub) -> Self {
+        self.events = Some(hub);
+        self
     }
 
     /// Enables remote uninstall: `server_name` is what the owner must type, `on_uninstalled` stops the server.
@@ -58,6 +67,7 @@ impl SessionManager {
         let (mut cols, mut rows) = (80u16, 24u16);
         let idle = tokio::time::sleep(IDLE_TIMEOUT);
         tokio::pin!(idle);
+        let mut agent_rx = self.events.as_ref().map(|h| h.subscribe());
 
         loop {
             tokio::select! {
@@ -86,6 +96,14 @@ impl SessionManager {
                             if !send(&link.tx, &ServerMessage::Sessions { sessions }).await { break; }
                         }
                     }
+                }
+                batch = next_events(&mut agent_rx) => {
+                    let msg = match batch {
+                        Some(events) => ServerMessage::AgentEvents { events },
+                        // Too slow to keep up: the client resyncs from a snapshot.
+                        None => ServerMessage::AgentSnapshot { states: self.events.as_ref().map(|h| h.snapshot()).unwrap_or_default() },
+                    };
+                    if !send(&link.tx, &msg).await { break; }
                 }
                 _ = &mut idle => {
                     info!("Closing idle connection of {}", identity.login);
@@ -144,6 +162,22 @@ impl SessionManager {
                 send_r(tx, &ServerMessage::DeviceRevoked { device }).await?;
             }
             ClientMessage::Ping => send_r(tx, &ServerMessage::Pong).await?,
+            ClientMessage::AgentSync { after } => {
+                let Some(hub) = &self.events else {
+                    return Ok(());
+                };
+                let states = hub.snapshot();
+                let mut events = Vec::new();
+                for st in &states {
+                    if let Some(seq) = after.get(&st.session) {
+                        events.extend(hub.since(&st.session, *seq));
+                    }
+                }
+                send_r(tx, &ServerMessage::AgentSnapshot { states }).await?;
+                if !events.is_empty() {
+                    send_r(tx, &ServerMessage::AgentEvents { events }).await?;
+                }
+            }
             ClientMessage::ListSessions => {
                 let sessions = self.backend.list().await?;
                 send_r(tx, &ServerMessage::Sessions { sessions }).await?;
@@ -197,4 +231,28 @@ async fn next_output(attachment: &mut Option<Attachment>) -> Option<Vec<u8>> {
         Some(att) => att.rx.recv().await,
         None => std::future::pending().await,
     }
+}
+
+/// The next agent events (up to 20 at once); `None` when this connection fell behind; pends forever
+/// when events are off.
+async fn next_events(
+    rx: &mut Option<tokio::sync::broadcast::Receiver<termanch_core::events::AgentEvent>>,
+) -> Option<Vec<termanch_core::events::AgentEvent>> {
+    use tokio::sync::broadcast::error::{RecvError, TryRecvError};
+    let Some(rx) = rx else {
+        return std::future::pending().await;
+    };
+    let mut out = match rx.recv().await {
+        Ok(e) => vec![e],
+        Err(RecvError::Lagged(_)) => return None,
+        Err(RecvError::Closed) => return std::future::pending().await,
+    };
+    while out.len() < 20 {
+        match rx.try_recv() {
+            Ok(e) => out.push(e),
+            Err(TryRecvError::Lagged(_)) => return None,
+            Err(_) => break,
+        }
+    }
+    Some(out)
 }
