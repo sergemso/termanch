@@ -17,6 +17,7 @@
   import { setEnterKeyHint } from './lib/terminal/inputGuards';
   import { WordTracker } from './lib/terminal/wordTracker';
   import { PinchZoom } from './lib/terminal/pinch';
+  import { TouchScroll } from './lib/terminal/touchScroll';
   import { FONT_FAMILY, THEME } from './lib/terminal/theme';
   import { TouchSelection, type Selection } from './lib/terminal/touchSelection';
   import KeyRow from './KeyRow.svelte';
@@ -56,6 +57,16 @@
     isFocused: () => document.activeElement === term?.textarea,
     isSystemKeyboardUp: () => !!window.visualViewport && window.innerHeight - window.visualViewport.height > 150,
     onFnChange: (open) => (fnOpen = open),
+  });
+  /** The next `touchend` follows a gesture handled here (a tap or a scroll): keep the browser's own click away. */
+  let suppressClick = false;
+  const scroll = new TouchScroll({
+    rowHeight: () => (terminalContainer?.querySelector('.xterm-screen')?.getBoundingClientRect().height ?? 0) / (term?.rows || 1) || 18,
+    wheel: (dy, x, y) => {
+      suppressClick = true;
+      term?.element?.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, deltaMode: WheelEvent.DOM_DELTA_PIXEL, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+    },
+    tap: (x, y) => tapAt(x, y),
   });
   const touch = new TouchSelection({
     term: () => term,
@@ -162,18 +173,39 @@
     }
   }
 
+  /**
+   * A tap is sent as the app would see a mouse click: a move, a press, a short pause, a release. The browser's own
+   * compatibility events press and release in the same millisecond, which mouse-first apps like herdr ignore.
+   */
+  function tapAt(x: number, y: number) {
+    suppressClick = true;
+    if (sel) {
+      touch.clear();
+      return;
+    }
+    const target = document.elementFromPoint(x, y) ?? terminalContainer;
+    const fire = (type: string, buttons: number) =>
+      target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 0, buttons }));
+    fire('mousemove', 0);
+    fire('mousedown', 1);
+    setTimeout(() => fire('mouseup', 0), 40);
+    keyboard.tap();
+  }
   function onPointerDown(e: PointerEvent) {
     pinch.down(e.pointerId, e.clientX, e.clientY, fontSize);
     touch.pointerDown(e.clientX, e.clientY, { touch: e.pointerType === 'touch', second: pinch.fingers > 1 });
+    if (e.pointerType === 'touch') scroll.down(e.pointerId, e.clientX, e.clientY, pinch.fingers > 1 || !!sel);
   }
   function onPointerMove(e: PointerEvent) {
     touch.pointerMove(e.clientX, e.clientY);
     const next = pinch.move(e.pointerId, e.clientX, e.clientY);
     if (next !== null && next !== fontSize) setFont(next);
+    if (e.pointerType === 'touch' && !touch.busy && !sel) scroll.move(e.pointerId, e.clientX, e.clientY);
   }
   function onPointerUp(e: PointerEvent) {
     touch.pointerUp();
     pinch.up(e.pointerId);
+    if (e.pointerType === 'touch') scroll.up(e.pointerId, e.type === 'pointercancel');
   }
   function grabHandle(end: 'a' | 'b', e: PointerEvent) {
     e.stopPropagation();
@@ -233,6 +265,15 @@
     const blockScroll = (ev: TouchEvent) => touch.busy && ev.preventDefault();
     terminalContainer.addEventListener('touchmove', blockScroll, { passive: false });
     cleanups.push(() => terminalContainer.removeEventListener('touchmove', blockScroll));
+    // A tap or scroll handled above must not also arrive as the browser's own mouse events and click.
+    const swallowClick = (ev: TouchEvent) => {
+      if (!suppressClick) return;
+      suppressClick = false;
+      ev.preventDefault();
+    };
+    terminalContainer.addEventListener('touchend', swallowClick, { passive: false });
+    cleanups.push(() => terminalContainer.removeEventListener('touchend', swallowClick));
+    cleanups.push(() => scroll.stopFling());
 
     const resizeObserver = new ResizeObserver(() => {
       if (disposed || !term) return;
@@ -322,7 +363,11 @@
   }
   .screen {
     height: 100%;
-    touch-action: pan-y; /* vertical scroll stays native; the two-finger pinch is ours */
+    touch-action: none; /* one-finger drag and tap, and the two-finger pinch, are all ours (TouchScroll, PinchZoom) */
+  }
+  .screen :global(.xterm-viewport),
+  .screen :global(.xterm-screen) {
+    touch-action: none;
   }
   .selbar {
     position: absolute;
