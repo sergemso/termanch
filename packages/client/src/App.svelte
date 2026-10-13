@@ -71,11 +71,11 @@
     },
     onSaved: server => saveServers(servers.map(s => serverKey(s) === serverKey(server) ? server : s)),
     onReady: (id, _msg, reconnect) => {
-      if (!reconnect || id !== activeServerId || !activeKey) return;
+      if (!reconnect || serversPage || id !== activeServerId || !activeKey) return;
       const key = activeKey;
       // Retry and Resume replace the connection: mount its terminal before accepting a repaint.
       void tick().then(() => {
-        if (id === activeServerId && key === activeKey) hub.sendToSession(key, { type: 'attach', session_id: key });
+        if (!serversPage && id === activeServerId && key === activeKey) hub.sendToSession(key, { type: 'attach', session_id: key });
       });
     },
     onDrop: (_id, reason, upMs) => noteError(`connection lost after ${Math.round(upMs / 1000)} s: ${reason}`),
@@ -212,6 +212,7 @@
     }
     drawerOpen = false;
     if (activeServerId && activeServerId !== session.serverId) hub.send(activeServerId, { type: 'detach' });
+    serversPage = false;
     activeKey = key;
     activeServerId = session.serverId;
     // Mount the receiving terminal before attach can produce a repaint on another server.
@@ -265,7 +266,18 @@
     activeServerId = null;
   }
 
+  function showWorkspace() {
+    const wasServersPage = serversPage;
+    serversPage = false;
+    if (!wasServersPage || !activeKey) return;
+    const key = activeKey;
+    void tick().then(() => {
+      if (!serversPage && activeKey === key && connState === 'connected') hub.sendToSession(key, { type: 'attach', session_id: key });
+    });
+  }
+
   function leaveServer() {
+    if (activeServerId) hub.send(activeServerId, { type: 'detach' });
     serversPage = true;
     drawerOpen = false;
   }
@@ -382,7 +394,7 @@
       </div>
     </div>
   {:else}
-    <NavigationBar sessions={$allSessions} agents={$allAgents} servers={$hubServers} {activeKey} held={!!actionSession || cardExpanded} onopen={attach} onactions={(key) => actionKey = key} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { serversPage = false; drawerOpen = !drawerOpen; }} />
+    <NavigationBar sessions={$allSessions} agents={$allAgents} servers={$hubServers} {activeKey} held={!!actionSession || cardExpanded} onopen={attach} onactions={(key) => actionKey = key} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { showWorkspace(); drawerOpen = !drawerOpen; }} />
 
     {#if iosHint && !selectedServer}
       <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); font-size: 0.85rem;">
@@ -404,7 +416,7 @@
         </div>
       {/snippet}
       {#if serversPage || servers.length === 0}
-        {#if servers.length > 0}<button class="secondary" on:click={() => serversPage = false}>← Sessions</button>{/if}
+        {#if servers.length > 0}<button class="secondary" on:click={showWorkspace}>← Sessions</button>{/if}
         <ServerList {servers} states={$hubServers} onpause={(id) => { hub.pause(id); }} onresume={(id) => hub.resume(id)} onretry={(id) => hub.retry(id)} onadd={() => { addPrefill = null; showAddServer = true; }} onremove={removeServer} />
       {:else}
         <div style="display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative;">
