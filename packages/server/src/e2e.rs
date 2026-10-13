@@ -39,6 +39,8 @@ struct Fixture {
     auth: Arc<AuthState>,
     dir: std::path::PathBuf,
     stopped: Arc<std::sync::atomic::AtomicBool>,
+    hub: crate::events::EventHub,
+    events_socket: std::path::PathBuf,
 }
 
 /// A browser: its device key and the certificate the hosted function issued for it.
@@ -64,13 +66,24 @@ async fn fixture() -> Fixture {
     let claim = auth.claim_token().unwrap().unwrap();
     let stopped = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let stop_flag = stopped.clone();
+    let hub = crate::events::EventHub::new([9; 32]);
+    let events_socket = dir.join("events.sock");
+    tokio::spawn(crate::events::serve_socket(
+        hub.clone(),
+        events_socket.clone(),
+    ));
+    let env = crate::events::EventEnv {
+        hub: hub.clone(),
+        socket: events_socket.clone(),
+    };
     let mut state = AppState {
         auth: auth.clone(),
         sessions: Arc::new(
             SessionManager::new(
-                Arc::new(crate::backend::TmuxBackend::default()),
+                Arc::new(crate::backend::TmuxBackend::default().with_events(env)),
                 crate::backend::RunMode::Container,
             )
+            .with_events(hub.clone())
             .with_uninstall(
                 "test-vps".into(),
                 Arc::new(move || stop_flag.store(true, std::sync::atomic::Ordering::SeqCst)),
@@ -100,6 +113,8 @@ async fn fixture() -> Fixture {
         auth,
         dir,
         stopped,
+        hub,
+        events_socket,
     }
 }
 
@@ -547,6 +562,110 @@ async fn reconnect_resumes_the_tmux_session_with_its_screen(kind: Kind) {
         .output();
 }
 
+/// A session gets its event variables; what a tool writes to the socket reaches a connected client
+/// sanitised and in order, and a client that connects later gets the snapshot and the missed events.
+async fn agent_events_flow_from_a_session_tool_to_the_client(kind: Kind) {
+    use tokio::io::AsyncWriteExt;
+    if std::process::Command::new("tmux")
+        .arg("-V")
+        .output()
+        .is_err()
+    {
+        eprintln!("tmux not installed; skipping");
+        return;
+    }
+    let f = fixture().await;
+    let name = format!("ev{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
+    let alice = f.who(1, "alice");
+    let mut c = Conn::open(kind, &f).await;
+    c.login(&f, &alice, &f.claim).await;
+    c.recv_type("auth_ok").await;
+    c.send(json!({"type":"new_session","name":name})).await;
+    c.recv_type("sessions").await;
+    c.send(json!({"type":"attach","session_id":name})).await;
+    c.recv_type("session_attached").await;
+    c.send(json!({"type":"input","data":B64.encode("echo who:$TERMANCH_SESSION; test -S \"$TERMANCH_EVENT_SOCKET\" && echo sock:ok\n")})).await;
+    assert!(
+        c.output_contains(&format!("who:{name}")).await,
+        "the session knows its name"
+    );
+
+    let send = |data: Value, token: String| {
+        let line = json!({"session": name, "token": token, "adapter": "claude", "data": data})
+            .to_string()
+            + "\n";
+        let sock = f.events_socket.clone();
+        async move {
+            let mut s = tokio::net::UnixStream::connect(sock).await.unwrap();
+            s.write_all(line.as_bytes()).await.unwrap();
+        }
+    };
+    send(
+        json!({"hook_event_name": "UserPromptSubmit"}),
+        "forged".into(),
+    )
+    .await;
+    send(
+        json!({"hook_event_name": "UserPromptSubmit"}),
+        f.hub.token(&name),
+    )
+    .await;
+    send(
+        json!({"hook_event_name": "PreToolUse", "tool_name": "Bash",
+               "tool_input": {"command": "curl -H \"Authorization: Bearer hunter2hunter2\" 10.1.2.3:8080\nrm -rf /"}}),
+        f.hub.token(&name),
+    )
+    .await;
+
+    let mut seen = Vec::new();
+    for _ in 0..50 {
+        let v = c.recv().await.expect("closed");
+        if v["type"] == "agent_events" {
+            seen.extend(v["events"].as_array().unwrap().clone());
+        }
+        if seen.len() >= 2 {
+            break;
+        }
+    }
+    let wire = serde_json::to_string(&seen).unwrap();
+    assert_eq!(seen[0]["kind"], "state");
+    assert_eq!(seen[0]["state"], "working");
+    assert_eq!(
+        seen[0]["seq"], 1,
+        "the forged event was refused and consumed no seq"
+    );
+    assert_eq!(seen[1]["kind"], "tool");
+    for leaked in ["hunter2", "10.1.2.3", "\\n", "\\u001b"] {
+        assert!(!wire.contains(leaked), "{leaked} leaked: {wire}");
+    }
+
+    // A client that connects later: snapshot first, then what it missed.
+    let mut d = Conn::open(kind, &f).await;
+    d.login(&f, &alice, "").await;
+    d.recv_type("auth_ok").await;
+    d.send(json!({"type":"agent_sync","after":{name.clone(): 1}}))
+        .await;
+    let snap = d.recv_type("agent_snapshot").await;
+    assert_eq!(snap["states"][0]["session"], name.as_str());
+    assert_eq!(snap["states"][0]["state"], "working");
+    assert_eq!(snap["states"][0]["seq"], 2);
+    assert_eq!(snap["states"][0]["stale"], false);
+    let missed = d.recv_type("agent_events").await;
+    assert_eq!(
+        missed["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["seq"].as_u64().unwrap())
+            .collect::<Vec<_>>(),
+        [2]
+    );
+
+    let _ = std::process::Command::new("tmux")
+        .args(["kill-session", "-t", &name])
+        .output();
+}
+
 macro_rules! over_both_transports {
     ($($name:ident),*) => {$(
         mod $name {
@@ -561,7 +680,8 @@ over_both_transports!(
     a_connection_for_another_server_expired_or_revoked_certificates_fail,
     uninstall_needs_the_name_and_a_recent_login_then_wipes_the_config,
     nothing_is_served_before_auth,
-    reconnect_resumes_the_tmux_session_with_its_screen
+    reconnect_resumes_the_tmux_session_with_its_screen,
+    agent_events_flow_from_a_session_tool_to_the_client
 );
 
 // --- WebRTC-specific ----------------------------------------------------------------------------

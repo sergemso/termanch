@@ -3,6 +3,7 @@ export type ClientMessage =
   | { type: 'auth'; cert: string; signature: string; server_token: string }
   | { type: 'revoke_device'; device: string }
   | { type: 'uninstall'; confirm_name: string; delete_user?: boolean; remove_tmux?: boolean; kill_sessions?: boolean }
+  | { type: 'agent_sync'; after: Record<string, number> }
   | { type: 'list_sessions' }
   | { type: 'new_session'; name: string }
   | { type: 'ping' }
@@ -18,6 +19,8 @@ export type ServerMessage =
   | { type: 'sessions'; sessions: SessionInfo[] }
   | { type: 'session_attached'; session_id: string }
   | { type: 'output'; data: string }
+  | { type: 'agent_snapshot'; states: SessionAgentState[] }
+  | { type: 'agent_events'; events: AgentEvent[] }
   | { type: 'agent_event'; event: AgentEventType; agent: string; session_id: string }
   | { type: 'error'; message: string }
   | { type: 'pong' };
@@ -28,6 +31,27 @@ export interface SessionInfo {
   agent: 'herdr' | 'tmux' | 'codex' | null;
 }
 
+export type AgentState = 'idle' | 'working' | 'needs_input' | 'done' | 'error' | 'unknown';
+
+export interface SessionAgentState {
+  session: string;
+  state: AgentState;
+  seq: number;
+  stale: boolean;
+  ts: number;
+}
+
+/** Plan v6: `seq` and `ts` come from the server; unknown `kind`s and extra fields are ignored. */
+export type AgentEvent = { session: string; seq: number; ts: number; source: string; confidence: string } & (
+  | { kind: 'state'; state: AgentState }
+  | { kind: 'tool'; name: string; summary: string; phase: 'started' | 'finished' }
+  | { kind: 'plan'; items: { text: string; status: string }[] }
+  | { kind: 'prompt'; id: string; prompt_kind: string; choices: string[] }
+  | { kind: 'message'; summary: string }
+  | { kind: string }
+);
+
+/** Legacy message of the parked termanch-agent. */
 export type AgentEventType = 'spawned' | 'completed' | 'error';
 
 export interface ServerListItem {

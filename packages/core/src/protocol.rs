@@ -28,6 +28,11 @@ pub enum ClientMessage {
         #[serde(default)]
         kill_sessions: bool,
     },
+    /// Asks for the agent state of every session and for the events after `after[session]` (plan v6, P.6).
+    AgentSync {
+        #[serde(default)]
+        after: std::collections::HashMap<String, u64>,
+    },
     ListSessions,
     NewSession {
         name: String,
@@ -80,6 +85,15 @@ pub enum ServerMessage {
     Output {
         data: String,
     },
+    /// Latest agent state per session; answers `agent_sync`.
+    AgentSnapshot {
+        states: Vec<crate::events::SessionAgentState>,
+    },
+    /// New agent events, in `seq` order per session. A gap in `seq` means the client should `agent_sync`.
+    AgentEvents {
+        events: Vec<crate::events::AgentEvent>,
+    },
+    /// Legacy message of the parked termanch-agent.
     AgentEvent {
         event: AgentEventType,
         agent: String,
@@ -133,6 +147,16 @@ mod tests {
         })
         .unwrap();
         assert_eq!(v["type"], "auth_ok");
+        let v = serde_json::to_value(ClientMessage::AgentSync {
+            after: [("a".to_string(), 4u64)].into(),
+        })
+        .unwrap();
+        assert_eq!(v["type"], "agent_sync");
+        assert_eq!(v["after"]["a"], 4);
+        let v = serde_json::to_value(ServerMessage::AgentSnapshot { states: vec![] }).unwrap();
+        assert_eq!(v["type"], "agent_snapshot");
+        let v = serde_json::to_value(ServerMessage::AgentEvents { events: vec![] }).unwrap();
+        assert_eq!(v["type"], "agent_events");
         let v = serde_json::to_value(ServerMessage::SessionAttached {
             session_id: "x".into(),
         })

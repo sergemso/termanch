@@ -1,0 +1,8 @@
+{
+ "type": "agent-turn-complete",
+ "turn-id": "turn-1",
+ "input-messages": [
+  "fix the build"
+ ],
+ "last-assistant-message": "The build passes now."
+}

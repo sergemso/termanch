@@ -1,0 +1,17 @@
+{
+ "session_id": "00000000-0000-0000-0000-000000000000",
+ "transcript_path": "/home/user/.claude/projects/x/session.jsonl",
+ "cwd": "/home/user/project",
+ "prompt_id": "4b9872ac-eda9-4fbc-9d7d-bd023c7cd027",
+ "permission_mode": "default",
+ "effort": {
+  "level": "medium"
+ },
+ "hook_event_name": "PreToolUse",
+ "tool_name": "Bash",
+ "tool_input": {
+  "command": "echo hello",
+  "description": "Print hello"
+ },
+ "tool_use_id": "toolu_019o7aYN5CBb8mrURfSe8efP"
+}

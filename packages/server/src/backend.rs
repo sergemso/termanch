@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use termanch_core::protocol::SessionInfo;
 use tokio::process::Command;
 
+use crate::events::EventEnv;
 use crate::pty::Attachment;
 
 #[async_trait]
@@ -53,6 +54,9 @@ pub struct Runner {
     enter: Vec<String>,
     /// `runuser -u <user> --` for a dedicated user; empty for root and in container mode.
     user: Vec<String>,
+    /// `env K=V -u K ...` words put in front of every command; empty normally, used by tests to give a
+    /// tool a private home or socket directory without touching this process's environment.
+    env: Vec<String>,
 }
 
 /// Runs the rest of the command line in its own transient systemd scope when the host has systemd, so a
@@ -66,6 +70,22 @@ const DETACH: [&str; 4] = [
 ];
 
 impl Runner {
+    /// Sets (`Some`) or removes (`None`) environment variables for every command this runner starts.
+    #[cfg(test)]
+    pub fn with_env(mut self, vars: &[(&str, Option<&str>)]) -> Self {
+        for (k, v) in vars {
+            match v {
+                Some(v) => self.env.push(format!("{k}={v}")),
+                // `env` reads its options before the first NAME=value.
+                None => {
+                    self.env.insert(0, k.to_string());
+                    self.env.insert(0, "-u".to_string());
+                }
+            }
+        }
+        self
+    }
+
     /// `user` is `root` or the name of an unprivileged host user.
     pub fn host(user: &str) -> Self {
         let enter = ["nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p"]
@@ -76,7 +96,11 @@ impl Runner {
         } else {
             ["runuser", "-u", user, "--"].map(String::from).to_vec()
         };
-        Self { enter, user }
+        Self {
+            enter,
+            user,
+            env: vec![],
+        }
     }
 
     /// The program and arguments to actually execute for `program args`. `detach` is for commands that
@@ -87,13 +111,17 @@ impl Runner {
             argv.extend(DETACH.iter().map(|s| s.to_string()));
         }
         argv.extend(self.user.iter().cloned());
+        if !self.env.is_empty() {
+            argv.push("env".to_string());
+            argv.extend(self.env.iter().cloned());
+        }
         argv.push(program.to_string());
         argv.extend(args.iter().cloned());
         let first = argv.remove(0);
         (first, argv)
     }
 
-    async fn run(&self, program: &str, args: &[String]) -> Result<std::process::Output> {
+    pub async fn run(&self, program: &str, args: &[String]) -> Result<std::process::Output> {
         self.run_as(false, program, args).await
     }
 
@@ -110,6 +138,25 @@ impl Runner {
             .output()
             .await
             .map_err(|e| anyhow!("cannot run {program}: {e}"))
+    }
+
+    /// Starts a long-lived process (a session server) that must outlive this call and the connection.
+    fn spawn_detached(&self, program: &str, args: &[String]) -> Result<()> {
+        let (program, args) = self.wrap(true, program, args);
+        let mut child = Command::new(&program)
+            .args(&args)
+            .envs(crate::locale::utf8_env())
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .process_group(0)
+            .spawn()
+            .map_err(|e| anyhow!("cannot run {program}: {e}"))?;
+        // Reap it if it ever exits; a session server normally runs until its session is closed.
+        tokio::spawn(async move {
+            let _ = child.wait().await;
+        });
+        Ok(())
     }
 
     fn attach(&self, program: &str, args: &[String], cols: u16, rows: u16) -> Result<Attachment> {
@@ -231,11 +278,21 @@ impl RunMode {
 #[derive(Default)]
 pub struct TmuxBackend {
     runner: Runner,
+    events: Option<EventEnv>,
 }
 
 impl TmuxBackend {
     pub fn new(runner: Runner) -> Self {
-        Self { runner }
+        Self {
+            runner,
+            events: None,
+        }
+    }
+
+    /// New sessions get the variables agent tools use to report events (plan v6).
+    pub fn with_events(mut self, events: EventEnv) -> Self {
+        self.events = Some(events);
+        self
     }
 }
 
@@ -265,7 +322,10 @@ impl SessionBackend for TmuxBackend {
                 "Session names use letters, digits, - and _ (max 64)"
             ));
         }
-        let args = ["new-session", "-d", "-s", name].map(String::from);
+        let mut args: Vec<String> = ["new-session", "-d", "-s", name].map(String::from).into();
+        for var in self.events.iter().flat_map(|e| e.vars(name)) {
+            args.extend(["-e".to_string(), var]);
+        }
         let out = self.runner.run_as(true, "tmux", &args).await?;
         if !out.status.success() {
             return Err(anyhow!(
@@ -283,6 +343,96 @@ impl SessionBackend for TmuxBackend {
         // `=` makes the target an exact name match.
         let args = ["attach-session", "-t", &format!("={id}")].map(String::from);
         self.runner.attach("tmux", &args, cols, rows)
+    }
+}
+
+/// `herdr session list --json`: the running sessions, by name.
+pub fn parse_herdr_list(json: &str) -> Result<Vec<SessionInfo>> {
+    let v: serde_json::Value = serde_json::from_str(json)?;
+    Ok(v["sessions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|s| s["running"].as_bool() == Some(true))
+        .filter_map(|s| s["name"].as_str())
+        .filter(|n| valid_name(n))
+        .map(|n| SessionInfo {
+            id: n.to_string(),
+            name: n.to_string(),
+            agent: None,
+        })
+        .collect())
+}
+
+/// herdr (https://herdr.dev): named persistent sessions, each with its own headless server. Verified on 0.9.3:
+/// a session is created by starting `herdr --session NAME server`, `herdr session attach NAME` repaints the
+/// whole screen and killing that client leaves the session running.
+pub struct HerdrBackend {
+    runner: Runner,
+    events: Option<EventEnv>,
+}
+
+impl HerdrBackend {
+    pub fn new(runner: Runner) -> Self {
+        Self {
+            runner,
+            events: None,
+        }
+    }
+
+    pub fn with_events(mut self, events: EventEnv) -> Self {
+        self.events = Some(events);
+        self
+    }
+}
+
+#[async_trait]
+impl SessionBackend for HerdrBackend {
+    fn name(&self) -> &str {
+        "herdr"
+    }
+
+    async fn list(&self) -> Result<Vec<SessionInfo>> {
+        let args = ["session", "list", "--json"].map(String::from);
+        let out = self.runner.run("herdr", &args).await?;
+        if !out.status.success() {
+            return Err(anyhow!(
+                "herdr session list failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        parse_herdr_list(&String::from_utf8_lossy(&out.stdout))
+    }
+
+    async fn create(&self, name: &str) -> Result<()> {
+        if !valid_name(name) {
+            return Err(anyhow!(
+                "Session names use letters, digits, - and _ (max 64)"
+            ));
+        }
+        if self.list().await?.iter().any(|s| s.id == name) {
+            return Err(anyhow!("Session {name} already exists"));
+        }
+        // The panes inherit the server's environment, so the event variables go through `env`.
+        let mut args: Vec<String> = self.events.iter().flat_map(|e| e.vars(name)).collect();
+        args.extend(["herdr", "--session", name, "server"].map(String::from));
+        self.runner.spawn_detached("env", &args)?;
+        // The server needs a moment to open its socket; attaching before that would start a second one.
+        for _ in 0..30 {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            if self.list().await?.iter().any(|s| s.id == name) {
+                return Ok(());
+            }
+        }
+        Err(anyhow!("herdr did not start session {name}"))
+    }
+
+    fn attach(&self, id: &str, cols: u16, rows: u16) -> Result<Attachment> {
+        if !valid_name(id) {
+            return Err(anyhow!("Unknown session"));
+        }
+        let args = ["session", "attach", id].map(String::from);
+        self.runner.attach("herdr", &args, cols, rows)
     }
 }
 
@@ -404,6 +554,19 @@ mod tests {
     }
 
     #[test]
+    fn herdr_list_keeps_running_sessions_with_safe_names() {
+        let json = r#"{"sessions":[{"name":"default","running":false},{"name":"work","running":true},{"name":"a b","running":true}]}"#;
+        let ids: Vec<_> = parse_herdr_list(json)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(ids, ["work"]);
+        assert!(parse_herdr_list("nope").is_err());
+        assert!(parse_herdr_list("{}").unwrap().is_empty());
+    }
+
+    #[test]
     fn rejects_unsafe_names() {
         assert!(valid_name("agent-1_a"));
         assert!(!valid_name(""));
@@ -494,6 +657,7 @@ mod tests {
         let broken = Runner {
             enter: vec!["/nonexistent-nsenter".into()],
             user: vec![],
+            env: vec![],
         };
         let err = broken.check_host(false).await.unwrap_err().to_string();
         assert!(err.contains("--pid=host --privileged"), "{err}");
@@ -525,5 +689,54 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(String::from_utf8_lossy(&chunk).contains("hello"));
+    }
+
+    /// Needs a real herdr; skipped when the binary is absent. Runs in a throwaway config dir so no real session is touched.
+    #[tokio::test]
+    async fn herdr_backend_creates_lists_and_reattaches() {
+        if std::process::Command::new("herdr")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("termanch-herdr-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let d = dir.to_str().unwrap();
+        let b = HerdrBackend::new(Runner::default().with_env(&[
+            ("HERDR_ENV", None),
+            ("HERDR_SOCKET_PATH", None),
+            ("HERDR_PANE_ID", None),
+            ("XDG_CONFIG_HOME", Some(d)),
+            ("HOME", Some(d)),
+        ]));
+        b.create("t-one").await.unwrap();
+        assert!(b.create("t-one").await.is_err());
+        assert!(b.list().await.unwrap().iter().any(|s| s.id == "t-one"));
+        for _ in 0..2 {
+            let mut att = b.attach("t-one", 100, 30).unwrap();
+            let chunk = tokio::time::timeout(std::time::Duration::from_secs(5), att.rx.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(chunk.len() > 50, "the attach repaints the screen");
+        }
+        // Dropping an attachment only detached: the session is still there.
+        assert!(b.list().await.unwrap().iter().any(|s| s.id == "t-one"));
+        let _ = std::process::Command::new("env")
+            .args([
+                "-u",
+                "HERDR_ENV",
+                &format!("XDG_CONFIG_HOME={d}"),
+                &format!("HOME={d}"),
+                "herdr",
+                "--session",
+                "t-one",
+                "server",
+                "stop",
+            ])
+            .output();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

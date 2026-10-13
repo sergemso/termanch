@@ -81,7 +81,7 @@ By default everything uses the hosted client at app.termanch.vivantel.dev. To ru
 
 ## Session backends
 
-The default is tmux. To use another tool with a CLI, give three commands (no shell; `{name}` and `{id}` are replaced by a validated session name):
+The default is tmux. `TERMANCH_BACKEND=herdr` uses [herdr](https://herdr.dev) (one herdr session per Termanch session; verified on 0.9.3, see `docs/facts/0029-agent-tool-surfaces.md`). To use another tool with a CLI, give three commands (no shell; `{name}` and `{id}` are replaced by a validated session name):
 
 ```
 TERMANCH_BACKEND=command
@@ -91,7 +91,19 @@ TERMANCH_BACKEND_CREATE=zellij attach --create-background {name}
 TERMANCH_BACKEND_ATTACH=zellij attach {id}
 ```
 
-The attach command runs in a PTY. It must repaint the session when it starts and only detach when it is killed; that is how a dropped connection resumes. The zellij lines are an illustration and untested; herdr's CLI is being verified (issue #22). Otherwise implement the `SessionBackend` trait (`packages/server/src/backend.rs`).
+The attach command runs in a PTY. It must repaint the session when it starts and only detach when it is killed; that is how a dropped connection resumes. The zellij lines are an illustration and untested. Otherwise implement the `SessionBackend` trait (`packages/server/src/backend.rs`).
+
+## Agent events
+
+The server turns what agents do into a small typed stream (idle, working, needs input, done) that clients can follow. With no setup it comes from a process scan and screen heuristics (low confidence); herdr reports its agents' status itself. For exact tool and "needs input" events from Claude Code, opt in:
+
+```
+termanch-server --connect-claude          # shows the hook lines it would add
+termanch-server --connect-claude --yes    # applies them (backup kept)
+termanch-server --disconnect-claude       # removes exactly those again
+```
+
+Only sessions created by Termanch carry the variables hooks need. Agent text in events is cleaned (control characters, secrets, addresses) and capped before it is stored or sent. Details: `docs/plans/termanch-v6-agent-events.md`.
 
 ## Configuration
 
@@ -103,7 +115,7 @@ Server (environment variables of the container; the installer sets the first two
 | `TERMANCH_CLIENT_URL` | Client and directory origin (default https://app.termanch.vivantel.dev) |
 | `TERMANCH_PUBLIC_IP` | Address clients connect to; detected when unset |
 | `TERMANCH_WEBRTC` | `off` for WebSocket only |
-| `TERMANCH_SERVER_NAME` | Display name |
+| `TERMANCH_SERVER_NAME` | Display name; default: the host's short hostname (the installer passes it into the container) |
 | `TERMANCH_BACKEND` | `tmux` (default) or `command` |
 | `TERMANCH_CONFIG_DIR` | Owner, keys and certificate (default `~/.config/termanch`) |
 

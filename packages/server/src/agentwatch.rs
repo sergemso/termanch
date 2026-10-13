@@ -1,0 +1,263 @@
+//! The server-side watchers behind the event layer (plan v6, P.4/P.5): the process scan and screen
+//! heuristics for tmux sessions, and herdr's own agent status. They report through the same hub as the
+//! hooks, with low confidence (scan, screen) or high (herdr).
+use std::collections::{HashMap, HashSet};
+use std::time::Duration;
+
+use sha2::{Digest, Sha256};
+use termanch_core::events::{AgentState, Confidence, EventKind, Source};
+
+use crate::adapters;
+use crate::backend::Runner;
+use crate::events::EventHub;
+
+const SCAN_EVERY: Duration = Duration::from_secs(2);
+/// Never more than one `capture-pane` per this long, whatever the number of sessions.
+const PANE_SPACING: Duration = Duration::from_millis(250);
+
+/// Per-session memory of the prompt heuristic: a prompt is a new one each time the matched text changes
+/// or reappears after being gone.
+#[derive(Default)]
+pub struct PromptTracker {
+    seen: HashMap<String, (String, u32)>,
+}
+
+impl PromptTracker {
+    /// `matched` is the question text on screen now, if any. Returns the prompt id when it is new.
+    pub fn update(&mut self, session: &str, matched: Option<&str>) -> Option<String> {
+        let Some(text) = matched else {
+            self.seen.remove(session);
+            return None;
+        };
+        let hash = hex8(text);
+        let (prev_hash, generation) = self.seen.get(session).cloned().unwrap_or_default();
+        if prev_hash == hash {
+            return None;
+        }
+        let generation = generation + 1;
+        self.seen
+            .insert(session.to_string(), (hash.clone(), generation));
+        Some(format!("{generation}-{hash}"))
+    }
+
+    pub fn active(&self, session: &str) -> bool {
+        self.seen.contains_key(session)
+    }
+
+    pub fn retain(&mut self, live: &HashSet<String>) {
+        self.seen.retain(|k, _| live.contains(k));
+    }
+}
+
+fn hex8(s: &str) -> String {
+    Sha256::digest(s.as_bytes())[..4]
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+fn now_s() -> u64 {
+    crate::events::now_ms() / 1000
+}
+
+/// One scan cycle over tmux: states from the process scan, then prompts from the screens of agent sessions.
+pub async fn scan_tmux_once(hub: &EventHub, runner: &Runner, tracker: &mut PromptTracker) {
+    let args = [
+        "list-panes",
+        "-a",
+        "-F",
+        "#{session_name}|#{pane_current_command}|#{window_activity}",
+    ]
+    .map(String::from);
+    let Ok(out) = runner.run("tmux", &args).await else {
+        return;
+    };
+    if !out.status.success() {
+        hub.forget_except(&[]);
+        tracker.retain(&HashSet::new());
+        return;
+    }
+    let panes = adapters::parse_panes(&String::from_utf8_lossy(&out.stdout), now_s());
+    let live: HashSet<String> = panes.iter().map(|p| p.session.clone()).collect();
+    hub.forget_except(&live.iter().cloned().collect::<Vec<_>>());
+    tracker.retain(&live);
+    let mut seen = HashSet::new();
+    for p in panes
+        .iter()
+        .filter(|p| adapters::agent_name(&p.command).is_some())
+    {
+        if !seen.insert(p.session.clone()) || !crate::backend::valid_name(&p.session) {
+            continue;
+        }
+        let capture = ["capture-pane", "-p", "-t", &format!("={}:", p.session)].map(String::from);
+        let screen = match runner.run("tmux", &capture).await {
+            Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
+            _ => String::new(),
+        };
+        let matched = adapters::detect_prompt(&screen);
+        if let Some(id) = tracker.update(&p.session, matched.as_deref()) {
+            let choices = vec!["yes".to_string(), "no".to_string()];
+            hub.report(
+                &p.session,
+                Source::Screen,
+                Confidence::Low,
+                EventKind::State {
+                    state: AgentState::NeedsInput,
+                },
+            );
+            hub.report(
+                &p.session,
+                Source::Screen,
+                Confidence::Low,
+                EventKind::Prompt {
+                    id,
+                    prompt_kind: "yes_no".into(),
+                    choices,
+                },
+            );
+        }
+        // While a question is on screen the scan must not flip the state back and forth.
+        if !tracker.active(&p.session) {
+            if let Some(state) = adapters::scan_state(p) {
+                hub.report(
+                    &p.session,
+                    Source::Scan,
+                    Confidence::Low,
+                    EventKind::State { state },
+                );
+            }
+        }
+        tokio::time::sleep(PANE_SPACING).await;
+    }
+}
+
+pub fn spawn_tmux_scan(hub: EventHub, runner: Runner) {
+    tokio::spawn(async move {
+        let mut tracker = PromptTracker::default();
+        loop {
+            scan_tmux_once(&hub, &runner, &mut tracker).await;
+            tokio::time::sleep(SCAN_EVERY).await;
+        }
+    });
+}
+
+/// herdr reports agent status itself: one `agent list` per running herdr session.
+pub async fn poll_herdr_once(hub: &EventHub, runner: &Runner) {
+    let list = ["session", "list", "--json"].map(String::from);
+    let Ok(out) = runner.run("herdr", &list).await else {
+        return;
+    };
+    let Ok(sessions) = crate::backend::parse_herdr_list(&String::from_utf8_lossy(&out.stdout))
+    else {
+        return;
+    };
+    let ids: Vec<String> = sessions.iter().map(|s| s.id.clone()).collect();
+    hub.forget_except(&ids);
+    for s in sessions {
+        let agents = ["--session", &s.id, "agent", "list"].map(String::from);
+        let Ok(out) = runner.run("herdr", &agents).await else {
+            continue;
+        };
+        if let Some(state) = adapters::herdr_state(&String::from_utf8_lossy(&out.stdout)) {
+            hub.report(
+                &s.id,
+                Source::Herdr,
+                Confidence::High,
+                EventKind::State { state },
+            );
+        }
+        tokio::time::sleep(PANE_SPACING).await;
+    }
+}
+
+pub fn spawn_herdr_poll(hub: EventHub, runner: Runner) {
+    tokio::spawn(async move {
+        loop {
+            poll_herdr_once(&hub, &runner).await;
+            tokio::time::sleep(Duration::from_secs(3)).await;
+        }
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_changed_or_returning_prompt_gets_a_fresh_id_and_a_steady_one_does_not() {
+        let mut t = PromptTracker::default();
+        let a = t.update("s", Some("Do you want to proceed?")).unwrap();
+        assert_eq!(t.update("s", Some("Do you want to proceed?")), None);
+        let b = t.update("s", Some("Overwrite file? (y/n)")).unwrap();
+        assert_ne!(a, b);
+        assert_eq!(t.update("s", None), None);
+        assert!(!t.active("s"));
+        let c = t.update("s", Some("Overwrite file? (y/n)")).unwrap();
+        assert_ne!(b, c, "the same question asked again is a new prompt");
+        assert!(t.update("other", Some("Overwrite file? (y/n)")).is_some());
+    }
+
+    /// A real tmux (private socket directory) running a program named `claude` that shows a question.
+    #[tokio::test]
+    async fn the_scan_sees_an_agent_process_and_its_question_in_a_real_tmux() {
+        if std::process::Command::new("tmux")
+            .arg("-V")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("tm-scan-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // A binary named like the agent (a copy of dash, which is not a multicall binary), started after the question is printed.
+        let fake = dir.join("claude");
+        std::fs::copy("/bin/dash", &fake).unwrap();
+        let launcher = format!(
+            "echo 'Deploy to production? (y/n)'; exec {} -c 'read answer'",
+            fake.display()
+        );
+        let tmpdir = dir.to_str().unwrap();
+        let runner = Runner::default().with_env(&[("TMUX_TMPDIR", Some(tmpdir)), ("TMUX", None)]);
+        let tmux = |args: &[&str]| {
+            std::process::Command::new("env")
+                .args(["-u", "TMUX"])
+                .arg(format!("TMUX_TMPDIR={tmpdir}"))
+                .arg("tmux")
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        tmux(&[
+            "new-session",
+            "-d",
+            "-s",
+            "scantest",
+            "-x",
+            "80",
+            "-y",
+            "24",
+            &launcher,
+        ]);
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        let hub = EventHub::new([1; 32]);
+        let mut tracker = PromptTracker::default();
+        scan_tmux_once(&hub, &runner, &mut tracker).await;
+        let ev = hub.since("scantest", 0);
+        tmux(&["kill-server"]);
+        let kinds: Vec<_> = ev
+            .iter()
+            .map(|e| (e.source, e.confidence, e.kind.clone()))
+            .collect();
+        assert!(
+            kinds.iter().any(|(s, c, k)| *s == Source::Screen
+                && *c == Confidence::Low
+                && matches!(k, EventKind::Prompt { .. })),
+            "{kinds:?}"
+        );
+        assert!(kinds.iter().any(|(_, _, k)| *k
+            == EventKind::State {
+                state: AgentState::NeedsInput
+            }));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

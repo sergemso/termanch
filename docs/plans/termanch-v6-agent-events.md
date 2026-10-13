@@ -1,4 +1,4 @@
-# Termanch Plan: agent event layer (DRAFT roadmap, needs owner review)
+# Termanch Plan: agent event layer (implemented 2026-10-13 except the items under Status; decision 0079 still needs the owner's acceptance)
 
 Decisions: 0061 (state from process scans plus tool adapters), 0079 (hooks are opt-in; draft). Guardrails: `host-changes-are-journaled`, `internal-network-binding`, `security-secrets-handling`, `audit-logging-no-secrets`, `diagnostics-never-include-secrets`, `resource-constraints`. Feeds v7 (`termanch-v7-output-connectors.md`, steps O.*) and v8 (`termanch-v8-session-cards.md`, steps K.*). Nothing here is decided until the owner accepts it. A fresh session needs only this file, those artifacts and the repo.
 
@@ -62,6 +62,19 @@ Done-when: replaying each recorded sample yields the matching `state`, `tool` an
 Class: implement · Needs: P.2 · Check: `cargo test -p termanch-core && cd packages/client && npx --yes pnpm@9 test`
 Do: 1. Additive `ServerMessage::AgentEvent` and a `session list` field with the latest state, `seq` and `stale`. 2. Mirror in `protocol.ts`. 3. Client store only, no UI (UI is v8). 4. On reconnect the client gets the latest snapshot per session, then events with higher `seq`; a gap in `seq` triggers a new snapshot request.
 Done-when: an old client ignores the new message in a test; reconnect yields the snapshot; a `seq` gap is recovered.
+
+## Status (2026-10-13)
+
+| Step | State | Evidence / what is left |
+|---|---|---|
+| P.1 | done | `docs/facts/0029-agent-tool-surfaces.md`: real Claude Code and herdr samples, tmux screens. Codex is not installed on the dev VPS: its row is documentation only |
+| P.2 | done | `events.rs` (hub, sanitiser, socket), `termanch-core/src/events.rs`; unit tests, load test (24,000 events in about 0.8 s), `tests/hook_cli.rs` |
+| P.3 | done as a command line action | `--connect-claude [--yes]` / `--disconnect-claude` (`claude_hooks.rs`); a real Claude Code run through the built hook reached a socket. Left: a UI button, and the owner accepting decision 0079. The change is recorded in the user's own `claude-hooks.json` beside a backup, not in the root-only system journal (that one is out of reach of the user the hooks belong to) |
+| P.4 | done | `agentwatch.rs`, `adapters.rs`; recorded screens in `testdata/screens/`, a real tmux test. Only Claude Code screens are recorded; Codex and herdr prompts are not matched |
+| P.5 | herdr done, Codex unverified | herdr status polled every 3 s (`agent list`, fixture-free because no real agent ran under herdr; the mapping is tested on the schema's values). The Codex adapter follows its documented notify shape against a hand-written sample and is not wired to any installer |
+| P.6 | done | `ServerMessage::AgentSnapshot` / `AgentEvents`, `ClientMessage::AgentSync`, `src/lib/agents.ts`; e2e over WebSocket and WebRTC (`agent_events_flow_from_a_session_tool_to_the_client`) |
+
+Measured: the memory estimate in "Rules every event obeys" was too low; 20 full rings are about 165 KB for typical events, under 500 KB at the length caps. CPU in the CI resource gate has not been re-measured with the scan running (one `tmux list-panes` per 2 s plus one `capture-pane` per agent session).
 
 ## Open questions for the owner (recommended default first)
 

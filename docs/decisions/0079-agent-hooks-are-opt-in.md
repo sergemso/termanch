@@ -18,3 +18,9 @@ tags: [agents, hooks, security, roadmap]
 ## Why
 
 Editing another program's settings is a change on the owner's machine they did not ask for unless they ask. The scan floor keeps cards useful for everyone, and fail-open hooks mean a Termanch outage never stalls an agent mid-task.
+
+## Where the first implementation differs (2026-10-13, for the owner to accept or correct)
+
+- "Connect" is a command (`--connect-claude --yes`), not a button in the client.
+- The change is recorded in the user's own `claude-hooks.json` beside a backup, not in the root-only journal of 0067, which the user the hooks belong to cannot write.
+- The command does not refuse container mode; sessions created by Termanch carry the event variables, but the settings file edited is the invoking user's.

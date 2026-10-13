@@ -83,3 +83,4 @@
 0078-install-for-the-current-user,"A host install can run sessions as the user who ran the installer","deployment, security, client",active
 0079-agent-hooks-are-opt-in,"Agent hooks are installed only on the owner's explicit request, and the layer works without them","agents, hooks, security, roadmap",draft
 0080-connector-credentials-from-a-root-owned-file,"Connector credentials come from a root-owned file read at start and are held in memory","security, secrets, notifications, roadmap",draft
+0081-server-name-defaults-to-the-hostname,"A server's display name defaults to the host's short hostname, and a name the owner types wins","server, client, deployment",draft

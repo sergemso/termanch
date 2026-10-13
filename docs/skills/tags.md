@@ -11,6 +11,7 @@ bootstrap-generated: true
 | Tag | Meaning |
 |---|---|
 | architecture | System structure, component boundaries |
+| agents | Coding-agent tools (Claude Code, Codex, herdr) and their state or events |
 | auth | Authentication, authorization, identity |
 | build | Compilation, packaging, CI/CD |
 | client | Browser-facing code (Svelte, WASM, UI) |

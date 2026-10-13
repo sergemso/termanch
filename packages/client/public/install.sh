@@ -122,6 +122,7 @@ install_container() {
   docker run -d --name "$NAME" --restart unless-stopped \
     -p "$PORT:$PORT/udp" \
     -e "TERMANCH_UDP_PORT=$PORT" -e "TERMANCH_CLIENT_URL=$ORIGIN" \
+    -e "TERMANCH_SERVER_NAME=$(hostname -s 2>/dev/null || hostname)" \
     -v "$ROOT/home:/home/node" \
     "$IMAGE" >/dev/null || die "could not start the server"
 

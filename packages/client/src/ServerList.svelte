@@ -35,7 +35,7 @@
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg>
             </div>
             <div style="flex: 1; min-width: 0;">
-              <h3 style="font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{server.server_name}</h3>
+              <h3 style="font-size: 1rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{server.server_name || 'Server'}</h3>
               <p style="font-size: 0.75rem; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{server.server_url || (server.record ? `${server.record.ip}:${server.record.udp_port}` : '')}</p>
             </div>
             <div style="display: flex; gap: 8px;">
