@@ -62,7 +62,7 @@
   }
   onMount(() => {
     const timer = setInterval(() => { now = Date.now(); edges(); }, 250);
-    const observer = new ResizeObserver(edges); observer.observe(strip); edges();
+    const observer = new ResizeObserver(() => { visibleActive = null; now = Date.now(); edges(); }); observer.observe(strip); edges();
     window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
     return () => { clearInterval(timer); observer.disconnect(); cancelPress(); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); };
   });
@@ -80,7 +80,7 @@
         on:pointerdown={(e) => down(e, session.key)} on:pointermove={move}
         on:click={() => { if (longPressed !== session.key) onopen(session.key); }}
         on:contextmenu|preventDefault={() => onactions(session.key)}>
-        <span class="state-icon" aria-hidden="true">{chip.icon}</span><span>{session.name}</span>
+        <span class="state-icon" aria-hidden="true">{chip.icon}</span><span class="session-name">{session.name}</span>
         {#if servers.length > 1}<span class="badge">{session.serverName}</span>{/if}
         <span class="need" aria-hidden="true">{needsYou(agent) ? '●' : ''}</span>
         <span class="sr">{chip.label}</span>
@@ -98,12 +98,13 @@
   .tabs.left::before, .tabs.right::after { opacity: 1; }
   .strip { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; touch-action: pan-x; }
   .strip::-webkit-scrollbar { display: none; }
-  button { flex: 0 0 auto; min-height: 44px; min-width: 44px; display: flex; align-items: center; gap: 6px; white-space: nowrap; background: var(--bg); color: var(--fg); border: 1px solid var(--border); }
+  button { flex: 0 0 auto; max-width: 100%; min-height: 44px; min-width: 44px; display: flex; align-items: center; gap: 6px; white-space: nowrap; background: var(--bg); color: var(--fg); border: 1px solid var(--border); }
   button.active { border-color: var(--accent); }
   button.degraded { color: var(--fg-muted); border-style: dashed; }
-  .badge { font-size: 0.65rem; background: var(--border); border-radius: 4px; padding: 2px 4px; }
-  .state-icon { width: 1.2em; text-align: center; }
-  .need { color: var(--danger); width: 8px; }
+  .session-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .badge { font-size: 0.65rem; background: var(--border); border-radius: 4px; padding: 2px 4px; max-width: 64px; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+  .state-icon { width: 1.2em; text-align: center; flex-shrink: 0; }
+  .need { color: var(--danger); width: 8px; flex-shrink: 0; }
   .empty { padding: 12px; color: var(--fg-muted); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
