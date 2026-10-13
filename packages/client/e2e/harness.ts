@@ -1,4 +1,7 @@
 // Drives the real client Connection from a test: no Svelte UI, same transport, auth and reconnect code.
+import { mount } from 'svelte';
+import '../src/app.css';
+import Terminal from '../src/Terminal.svelte';
 import { Connection, b64ToBytes, textToB64, type ConnState } from '../src/lib/connection';
 import { deviceKey, publicKeyB64, signChallenge } from '../src/lib/device';
 import type { ClientMessage, ServerMessage } from '../src/lib/protocol';
@@ -23,6 +26,8 @@ interface Opts {
 
 const decoder = new TextDecoder();
 let connection: Connection | null = null;
+let activeSession: string | null = null; // re-attached after a reconnect, as the app does
+let mounted = false; // the Terminal component sizes the session itself
 
 const api = {
   /** Public key of this browser's device key, for the test to have a certificate issued. */
@@ -31,6 +36,12 @@ const api = {
   ready: 0,
   fatal: '',
   output: '',
+  /** Every `input` message the client sent, decoded, so a test can see which key or mouse reports a gesture produced. */
+  sent: [] as string[],
+  /** Every other message the client sent (attach, resize, ...). */
+  control: [] as string[],
+  /** Every server message except terminal output, for diagnosing a test. */
+  received: [] as string[],
   sessions: [] as { id: string; name: string }[],
   kind: () => connection?.kind ?? null,
   start(opts: Opts) {
@@ -45,16 +56,38 @@ const api = {
       onState: (s) => (api.state = s),
       onReady: (_msg, isReconnect) => {
         api.ready++;
-        if (isReconnect) connection?.send({ type: 'list_sessions' });
+        if (isReconnect) {
+          connection?.send({ type: 'list_sessions' });
+          if (activeSession) connection?.send({ type: 'attach', session_id: activeSession });
+        }
       },
       onFatal: (m) => (api.fatal = m),
     });
     connection.subscribe((m: ServerMessage) => {
+      if (m.type !== 'output') api.received.push(JSON.stringify(m).slice(0, 160));
       if (m.type === 'output') api.output += decoder.decode(b64ToBytes(m.data), { stream: true });
       if (m.type === 'sessions') api.sessions = m.sessions;
-      if (m.type === 'session_attached') connection?.send({ type: 'resize', cols: 120, rows: 30 });
+      if (m.type === 'session_attached' && !mounted) connection?.send({ type: 'resize', cols: 120, rows: 30 });
     });
+    const realSend = connection.send.bind(connection);
+    connection.send = (m: ClientMessage) => {
+      if (m.type === 'input') api.sent.push(atob(m.data));
+      else {
+        api.control.push(JSON.stringify(m));
+        if (m.type === 'attach') activeSession = m.session_id;
+      }
+      return realSend(m);
+    };
     connection.start();
+  },
+  /** The real Terminal component on this connection, full screen, for touch and mouse tests. */
+  mountTerminal(sessionId: string) {
+    const host = document.createElement('div');
+    host.id = 'termhost';
+    host.style.cssText = 'position:fixed;inset:0;display:flex;flex-direction:column;background:#000';
+    document.body.append(host);
+    mounted = true;
+    mount(Terminal, { target: host, props: { connection: connection!, activeSessionId: sessionId, connState: 'connected' } });
   },
   send: (msg: ClientMessage) => connection?.send(msg),
   type: (text: string) => connection?.send({ type: 'input', data: textToB64(text) }),
