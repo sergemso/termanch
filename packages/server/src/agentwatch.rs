@@ -281,7 +281,7 @@ mod tests {
         let hub = EventHub::new([1; 32]);
         if hook_said_needs_input {
             hub.report(
-                "scantest",
+                "tmux:scantest",
                 Source::Hook,
                 Confidence::High,
                 EventKind::State {
