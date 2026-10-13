@@ -50,3 +50,14 @@ describe('device key', () => {
     expect(certExpiry('garbage')).toBe(0);
   });
 });
+
+describe('avatar', () => {
+  const cert = (payload: object) => `${btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')}.sig`;
+  it('reads the account id from the certificate and builds a one-host URL', async () => {
+    const { certUserId, avatarUrl } = await import('./device');
+    expect(certUserId(cert({ sub: 12345, login: 'a' }))).toBe(12345);
+    expect(certUserId('garbage')).toBe(0);
+    expect(avatarUrl(12345)).toBe('https://avatars.githubusercontent.com/u/12345?s=64&v=4');
+    expect(avatarUrl(0)).toBe('');
+  });
+});
