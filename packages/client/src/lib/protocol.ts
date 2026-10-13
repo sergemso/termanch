@@ -43,6 +43,10 @@ export interface SessionAgentState {
   seq: number;
   stale: boolean;
   ts: number;
+  /** The agent in the session (`claude`, `codex`, `herdr`); absent for a plain shell and from older servers. */
+  agent?: string;
+  /** When the agent last answered (ms since the epoch); absent until it has. */
+  last_response_at?: number;
 }
 
 /** Plan v6: `seq` and `ts` come from the server; unknown `kind`s and extra fields are ignored. */

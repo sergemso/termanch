@@ -61,6 +61,23 @@ describe('agent events', () => {
   });
 });
 
+describe('agent and last response', () => {
+  it('takes both from the snapshot and advances the response time on done, message and working going quiet', () => {
+    let map = applySnapshot({}, [{ session: 's', state: 'working', seq: 3, stale: false, ts: 1000, agent: 'claude', last_response_at: 500 }]);
+    expect(map.s.agent).toBe('claude');
+    expect(map.s.lastResponseAt).toBe(500);
+    map = applyEvents(map, [ev(4, { kind: 'tool', name: 'Bash', summary: 'ls', phase: 'started' })]).map;
+    expect(map.s.lastResponseAt).toBe(500);
+    map = applyEvents(map, [ev(5, { kind: 'state', state: 'idle' })]).map;
+    expect(map.s.lastResponseAt).toBe(1005);
+    map = applyEvents(map, [ev(6, { kind: 'message', summary: 'ok' })]).map;
+    expect(map.s.lastResponseAt).toBe(1006);
+    const none = applySnapshot({}, [{ session: 't', state: 'idle', seq: 1, stale: false, ts: 1 }]);
+    expect(none.t.agent).toBeUndefined();
+    expect(none.t.lastResponseAt).toBeUndefined();
+  });
+});
+
 describe('the message handler', () => {
   it('feeds the store, requests a sync on a gap and leaves every other message alone', () => {
     resetAgents();

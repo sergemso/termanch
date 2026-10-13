@@ -17,7 +17,7 @@ Open the app and see, at once, every agent on every server and which ones wait f
 
 ## Steps
 
-### G.1 Server reports each session's agent and last response — [ ]‖
+### G.1 Server reports each session's agent and last response — [x]‖
 Class: implement · Needs: none · Check: `cargo test -p termanch-core && cargo test -p termanch-server events`
 Context: `SessionAgentState` in `packages/core/src/events.rs` has session, state, seq, stale, ts. `agentwatch.rs::scan_tmux_once` knows each pane's command (`adapters::agent_name`) and `EventHub` (`events.rs`) knows every event's time. Group-by-agent and sort-by-recent (0082) need both per session.
 Do: 1. Add `agent: Option<String>` (claude, codex, herdr, shell) and `last_response_at: Option<u64>` (ms) to `SessionAgentState`, `#[serde(default)]`, mirrored in `protocol.ts`. 2. The scan records the agent name per session in the hub; a response time is the time of the last `Done`/`Message` event or the last `Working`→`Idle`/`Done` transition from any source. 3. `EventHub::snapshot_at` fills both. 4. Unit tests for each source and for an old client ignoring the fields.

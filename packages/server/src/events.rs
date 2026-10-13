@@ -195,6 +195,7 @@ struct Ring {
     state: AgentState,
     state_seq: u64,
     last_event_at: u64,
+    last_response_at: Option<u64>,
 }
 
 /// A session id as events know it: a plain name, or `manager:name` when several managers run.
@@ -216,6 +217,8 @@ pub fn now_ms() -> u64 {
 pub struct EventHub {
     key: Arc<[u8; 32]>,
     rings: Arc<Mutex<HashMap<String, Ring>>>,
+    /// The agent the scan found in each session; only sessions that have events report it.
+    agents: Arc<Mutex<HashMap<String, String>>>,
     tx: broadcast::Sender<AgentEvent>,
 }
 
@@ -224,6 +227,7 @@ impl EventHub {
         Self {
             key: Arc::new(key),
             rings: Arc::default(),
+            agents: Arc::default(),
             tx: broadcast::channel(256).0,
         }
     }
@@ -320,6 +324,7 @@ impl EventHub {
             state: AgentState::Unknown,
             state_seq: 0,
             last_event_at: now,
+            last_response_at: None,
         });
         if let EventKind::State { state } = &kind {
             // The same state again only refreshes the clock; a low-confidence source never overrides a
@@ -353,9 +358,20 @@ impl EventHub {
             confidence,
             kind,
         };
-        if let EventKind::State { state } = &event.kind {
-            ring.state = *state;
-            ring.state_seq = event.seq;
+        match &event.kind {
+            EventKind::State { state } => {
+                let was_working = ring.state == AgentState::Working;
+                ring.state = *state;
+                ring.state_seq = event.seq;
+                // A finished turn, or the agent going quiet after working, is a response.
+                if *state == AgentState::Done
+                    || (was_working && matches!(state, AgentState::Idle | AgentState::NeedsInput))
+                {
+                    ring.last_response_at = Some(event.ts);
+                }
+            }
+            EventKind::Message { .. } => ring.last_response_at = Some(event.ts),
+            _ => {}
         }
         ring.events.push_back(event.clone());
         while ring.events.len() > RING {
@@ -370,10 +386,22 @@ impl EventHub {
     /// Forget a session that no longer exists.
     /// Only ids that start with `prefix` are considered (one per session manager when several run).
     pub fn forget_except(&self, prefix: &str, live: &[String]) {
+        self.agents
+            .lock()
+            .unwrap()
+            .retain(|k, _| !k.starts_with(prefix) || live.contains(k));
         self.rings
             .lock()
             .unwrap()
             .retain(|k, _| !k.starts_with(prefix) || live.contains(k));
+    }
+
+    /// Records which agent the process scan found in `session`.
+    pub fn set_agent(&self, session: &str, agent: &str) {
+        let mut agents = self.agents.lock().unwrap();
+        if agents.get(session).map(String::as_str) != Some(agent) {
+            agents.insert(session.to_string(), agent.to_string());
+        }
     }
 
     pub fn snapshot(&self) -> Vec<SessionAgentState> {
@@ -382,6 +410,7 @@ impl EventHub {
 
     pub fn snapshot_at(&self, now: u64) -> Vec<SessionAgentState> {
         let rings = self.rings.lock().unwrap();
+        let agents = self.agents.lock().unwrap();
         let mut out: Vec<_> = rings
             .iter()
             .map(|(session, r)| SessionAgentState {
@@ -391,6 +420,8 @@ impl EventHub {
                 stale: r.state == AgentState::Working
                     && now.saturating_sub(r.last_event_at) > STALE_AFTER_MS,
                 ts: r.last_event_at,
+                agent: agents.get(session).cloned(),
+                last_response_at: r.last_response_at,
             })
             .collect();
         out.sort_by(|a, b| a.session.cmp(&b.session));
