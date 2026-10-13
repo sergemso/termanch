@@ -20,10 +20,11 @@ class Fake implements HubConnection {
 }
 function setup() {
   const connections: Fake[] = [];
-  const hub = new ServerHub({ credentials: async () => ({ cert: 'c', sign: async () => 's' }), factory: (opts) => {
+  const ready: boolean[] = [];
+  const hub = new ServerHub({ credentials: async () => ({ cert: 'c', sign: async () => 's' }), onReady: (_id, _msg, reconnect) => ready.push(reconnect), factory: (opts) => {
     const c = new Fake(opts); connections.push(c); return c;
   } });
-  return { hub, connections };
+  return { hub, connections, ready };
 }
 
 describe('ServerHub', () => {
@@ -83,5 +84,11 @@ describe('ServerHub', () => {
   });
   it('uses the URL as a stable identity for manually saved servers', () => {
     expect(serverKey({ ...server('a'), server_id: undefined, server_url: 'wss://host/ws' })).toBe('wss://host/ws');
+  });
+  it('marks readiness after Retry and Resume as a reconnect so the active session can reattach', () => {
+    const { hub, connections, ready } = setup(); hub.start([server('a')]); connections[0].ready();
+    hub.retry('a'); connections[1].ready();
+    hub.pause('a'); hub.resume('a'); connections[2].ready();
+    expect(ready).toEqual([false, true, true]);
   });
 });
