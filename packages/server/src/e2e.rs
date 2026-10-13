@@ -193,6 +193,17 @@ impl Conn {
         }
     }
 
+    /// The next message of any of these types, skipping others.
+    async fn recv_any(&mut self, types: &[&str]) -> Value {
+        for _ in 0..50 {
+            let v = self.recv().await.expect("connection closed early");
+            if types.iter().any(|t| v["type"] == *t) {
+                return v;
+            }
+        }
+        panic!("none of {types:?} arrived");
+    }
+
     async fn recv_type(&mut self, ty: &str) -> Value {
         for _ in 0..50 {
             let v = self.recv().await.expect("connection closed early");
@@ -789,8 +800,17 @@ async fn windows_close_window_and_close_session_go_through_the_handlers(kind: Ki
     let mut c = Conn::open(kind, &f).await;
     c.login(&f, &alice, &f.claim).await;
     c.recv_type("auth_ok").await;
-    c.send(json!({"type":"new_session","name":name})).await;
-    c.recv_type("sessions").await;
+    // These tests share the machine's default tmux server, which exits when another test closes its last
+    // session at the wrong moment; creating the session is retried when that race loses.
+    for attempt in 0..3 {
+        c.send(json!({"type":"new_session","name":name})).await;
+        let reply = c.recv_any(&["sessions", "error"]).await;
+        if reply["type"] == "sessions" {
+            break;
+        }
+        assert!(attempt < 2, "tmux would not start a session: {reply}");
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
     c.send(json!({"type":"windows","session":name})).await;
     let one = c.recv_type("window_list").await;
     assert_eq!(one["windows"].as_array().unwrap().len(), 1);
