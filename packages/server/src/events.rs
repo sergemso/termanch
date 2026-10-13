@@ -196,6 +196,7 @@ struct Ring {
     state_seq: u64,
     last_event_at: u64,
     last_response_at: Option<u64>,
+    waiting_since: Option<u64>,
 }
 
 /// A session id as events know it: a plain name, or `manager:name` when several managers run.
@@ -325,6 +326,7 @@ impl EventHub {
             state_seq: 0,
             last_event_at: now,
             last_response_at: None,
+            waiting_since: None,
         });
         if let EventKind::State { state } = &kind {
             // The same state again only refreshes the clock; a low-confidence source never overrides a
@@ -361,6 +363,12 @@ impl EventHub {
         match &event.kind {
             EventKind::State { state } => {
                 let was_working = ring.state == AgentState::Working;
+                ring.waiting_since = if matches!(state, AgentState::NeedsInput | AgentState::Error)
+                {
+                    Some(ring.waiting_since.unwrap_or(event.ts))
+                } else {
+                    None
+                };
                 ring.state = *state;
                 ring.state_seq = event.seq;
                 // A finished turn, or the agent going quiet after working, is a response.
@@ -422,6 +430,7 @@ impl EventHub {
                 ts: r.last_event_at,
                 agent: agents.get(session).cloned(),
                 last_response_at: r.last_response_at,
+                waiting_since: r.waiting_since,
             })
             .collect();
         out.sort_by(|a, b| a.session.cmp(&b.session));
@@ -809,6 +818,59 @@ mod tests {
             2,
         );
         assert_eq!(h.since("a", 0).len(), 1);
+    }
+
+    #[test]
+    fn waiting_since_survives_activity_and_same_state_refreshes() {
+        let h = hub();
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::NeedsInput),
+            1000,
+        );
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            EventKind::Message {
+                summary: "waiting".into(),
+            },
+            2000,
+        );
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::NeedsInput),
+            3000,
+        );
+        assert_eq!(h.snapshot_at(4000)[0].waiting_since, Some(1000));
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::Error),
+            5000,
+        );
+        assert_eq!(h.snapshot_at(5000)[0].waiting_since, Some(1000));
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::Working),
+            6000,
+        );
+        assert_eq!(h.snapshot_at(6000)[0].waiting_since, None);
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::NeedsInput),
+            7000,
+        );
+        assert_eq!(h.snapshot_at(7000)[0].waiting_since, Some(7000));
     }
 
     #[test]

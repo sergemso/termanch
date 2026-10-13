@@ -63,23 +63,27 @@ export function sortIds(ids: string[], agents: AgentMap): string[] {
 
 /**
  * The order cards are shown in. It is recomputed only when nothing could move under a finger: no touch is down, no
- * sheet is open and the list has not been scrolled for `holdMs`. Until then new sessions go to the end and gone ones
- * drop out, so a one-tap button never lands on a different card than the one the user read.
+ * card is expanded and the list has not been scrolled for `holdMs`. Inserts and removals also wait for release.
  */
 export class FrozenOrder {
   private shown: string[] = [];
   private touches = 0;
+  private pointers = new Set<number>();
   private sheets = 0;
   private lastScroll = -Infinity;
 
   constructor(private holdMs = 2000) {}
 
-  touchDown() {
-    this.touches++;
+  touchDown(pointerId?: number) {
+    if (pointerId === undefined) this.touches++;
+    else this.pointers.add(pointerId);
   }
-  touchUp() {
-    this.touches = Math.max(0, this.touches - 1);
+  touchUp(pointerId?: number) {
+    if (pointerId === undefined) this.touches = Math.max(0, this.touches - 1);
+    else this.pointers.delete(pointerId);
   }
+  hasPointer(pointerId: number) { return this.pointers.has(pointerId); }
+  get pointerCount() { return this.pointers.size; }
   sheet(open: boolean) {
     this.sheets = Math.max(0, this.sheets + (open ? 1 : -1));
   }
@@ -87,16 +91,12 @@ export class FrozenOrder {
     this.lastScroll = nowMs;
   }
   frozen(nowMs: number): boolean {
-    return this.touches > 0 || this.sheets > 0 || nowMs - this.lastScroll < this.holdMs;
+    return this.touches > 0 || this.pointers.size > 0 || this.sheets > 0 || nowMs - this.lastScroll < this.holdMs;
   }
 
   order(ids: string[], agents: AgentMap, nowMs: number): string[] {
     if (!this.frozen(nowMs) || this.shown.length === 0) {
       this.shown = sortIds(ids, agents);
-    } else {
-      const live = new Set(ids);
-      const kept = this.shown.filter((id) => live.has(id));
-      this.shown = [...kept, ...ids.filter((id) => !kept.includes(id))];
     }
     return this.shown;
   }

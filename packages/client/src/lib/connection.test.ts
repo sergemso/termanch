@@ -33,7 +33,7 @@ describe('heartbeat', () => {
 
   async function connected() {
     vi.useFakeTimers();
-    const doc = { visibilityState: 'visible', addEventListener: () => {}, removeEventListener: () => {} };
+    const doc = Object.assign(new EventTarget(), { visibilityState: 'visible' });
     vi.stubGlobal('document', doc);
     vi.stubGlobal('window', { addEventListener: () => {}, removeEventListener: () => {} });
     const { t, sent } = fake();
@@ -53,8 +53,23 @@ describe('heartbeat', () => {
     t.onmessage!(JSON.stringify({ type: 'challenge', nonce: 'n', server_id: 's' }));
     await vi.advanceTimersByTimeAsync(10);
     t.onmessage!(JSON.stringify({ type: 'auth_ok', user: 'u', server_name: 's' }));
-    return { c, t, sent, drops, states };
+    return { c, t, sent, drops, states, doc };
   }
+
+  it('suspends pings and pending timeouts while hidden, then probes and resumes on foreground', async () => {
+    const { c, t, sent, drops, doc } = await connected();
+    await vi.advanceTimersByTimeAsync(5000);
+    const count = sent.length;
+    doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(sent).toHaveLength(count); expect(drops).toEqual([]);
+    doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange'));
+    expect(sent).toHaveLength(count + 1);
+    t.onmessage!(JSON.stringify({ type: 'pong' }));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(sent).toHaveLength(count + 2);
+    c.close();
+  });
 
   it('survives a reply that is several seconds late, which is normal on a mobile link', async () => {
     const { t, drops, states } = await connected();

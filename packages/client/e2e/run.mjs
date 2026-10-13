@@ -247,6 +247,8 @@ try {
   // 7. The real app on a phone: connect, open a session, go back to the server list and connect again.
   // Each lap used to risk a hang or a broken screen, so run several and fail on any page error.
   {
+    const paneClients = () => execFileSync('tmux', ['list-clients', '-F', '#{client_pid}'], { env: { ...process.env, TMUX_TMPDIR: home }, encoding: 'utf8' }).trim().split('\n').filter(Boolean).length;
+    const backgroundClients = paneClients();
     const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true, permissions: ['clipboard-read', 'clipboard-write'] });
     // A counting stand-in for Web Audio, so the bell can be checked without a sound card.
     await ctx.addInitScript(() => {
@@ -295,6 +297,9 @@ try {
       [mint(deviceKey, 1, 'alice'), { server_url: '', server_id: serverId, server_name: 'e2e-server', registered_at: Date.now(), record }],
     );
     await page.reload();
+    if (await page.getByText('Your Servers').count()) fail('saved servers opened the old Connect screen');
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Menu', exact: true }).getByRole('button', { name: 'Servers', exact: true }).click();
     // Add Server: where sessions run. The container is the default; the host modes show a warning and need consent.
     await page.getByRole('button', { name: 'Add Server' }).first().click();
     const cmd = () => page.locator('pre.command').first().textContent();
@@ -317,6 +322,7 @@ try {
       window.__opened = [];
       window.open = (u) => (window.__opened.push(String(u)), null);
     });
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
     await page.getByRole('button', { name: 'Report a problem', exact: true }).click();
     const reportText = await page.locator('[role=dialog][aria-label="Report a problem"] textarea').inputValue();
     if (!reportText.includes('app:') || !reportText.includes('window: 390x')) fail(`report text is missing diagnostics: ${reportText.slice(0, 120)}`);
@@ -329,7 +335,9 @@ try {
     await page.getByRole('button', { name: 'Remove server' }).click();
     if (!(await page.getByText('e2e-server').isVisible())) fail('the server was removed without confirmation');
     for (let lap = 1; lap <= 3; lap++) {
-      await page.getByRole('button', { name: 'Connect', exact: true }).click();
+      await page.getByRole('button', { name: '← Sessions', exact: true }).click();
+      await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+      await page.getByText('s1', { exact: true }).first().click();
       await page.locator('.dot.ok').waitFor({ timeout: 20000 }).catch(async (e) => {
         console.log('page errors:', errors, '\n', (await page.locator('body').innerText()).slice(0, 400));
         throw e;
@@ -337,14 +345,13 @@ try {
       // The toast must clear the status bar area, and the title must not trigger double-tap zoom.
       const toastTop = await page.evaluate(() => document.querySelector('.toast')?.getBoundingClientRect().top ?? null);
       if (toastTop !== null && toastTop < 47) fail(`the toast is under the status bar: top ${toastTop}`);
-      const taps = await page.evaluate(() => [getComputedStyle(document.querySelector('h1')).touchAction, getComputedStyle(document.body).touchAction]);
+      const taps = await page.evaluate(() => [getComputedStyle(document.querySelector('button[aria-label=Menu]')).touchAction, getComputedStyle(document.body).touchAction]);
       if (taps.some((t) => t !== 'manipulation')) fail(`double-tap zoom is not disabled: ${taps}`);
       // Connecting lands in a live terminal: the hidden input has focus without any tap.
       await page.waitForFunction(() => document.activeElement?.classList.contains('xterm-helper-textarea'), null, { timeout: 5000 });
-      // Connecting lands in a session by itself: the top bar names it instead of saying "Sessions".
-      await page.waitForFunction(() => !document.querySelector('button[aria-label=Sessions]')?.textContent?.includes('Sessions'), null, { timeout: 5000 });
-      await page.getByRole('button', { name: 'Sessions' }).click();
-      const heights = await page.evaluate(() => [...document.querySelectorAll('aside button.icon')].map((b) => Math.round(b.getBoundingClientRect().height)));
+      await page.getByRole('tab', { selected: true }).waitFor({ timeout: 5000 });
+      await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+      const heights = await page.evaluate(() => [...document.querySelectorAll('.sheet-header button.icon')].map((b) => Math.round(b.getBoundingClientRect().height)));
       if (heights.length !== 2 || heights[0] !== heights[1]) fail(`Refresh and New differ in size: ${heights}`);
       if (!(await page.getByText(/server 0\.1\.\d+\+/).count())) fail('the sidebar does not show the server version');
       await page.getByText('s1', { exact: true }).first().click();
@@ -500,7 +507,7 @@ try {
           setTimeout(() => el.dispatchEvent(new PointerEvent('pointerup', init)), 700);
         });
         await page.locator('.selbar').waitFor({ timeout: 4000 });
-        if ((await page.locator('.handle').count()) !== 2) fail('the selection handles are missing');
+        if ((await page.locator('.screenbox .handle').count()) !== 2) fail('the selection handles are missing');
         await page.locator('.selbar').getByRole('button', { name: 'Copy', exact: true }).click();
         const picked = await page.evaluate(() => navigator.clipboard.readText());
         if (picked.trim() !== 'SELECTME') fail(`long-press copied ${JSON.stringify(picked)} instead of the word under the finger`);
@@ -517,9 +524,11 @@ try {
           window.dispatchEvent(new Event('termanch-debug'));
         });
       }
-      await page.getByRole('button', { name: 'Sessions' }).click();
-      await page.getByRole('button', { name: '← Servers' }).click();
+      await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+      await page.getByRole('button', { name: 'Menu', exact: true }).click();
+      await page.getByRole('dialog', { name: 'Menu', exact: true }).getByRole('button', { name: 'Servers', exact: true }).click();
       await page.getByText('Your Servers').waitFor({ timeout: 5000 });
+      await waitFor(() => paneClients() === backgroundClients, 'no background PTY stream in Servers', 5000);
       console.log(`    lap ${lap}: connect, session, back to servers`);
     }
     if (errors.length) fail(`app flow raised errors: ${errors.slice(0, 3).join(' | ')}`);

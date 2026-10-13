@@ -10,7 +10,9 @@
   export let expanded = false;
   export let onopen: () => void;
   export let ontoggle: () => void;
-  export let onanswer: (choice: number) => void;
+  export let onanswer: (choice: number, prompt: NonNullable<SessionAgent['prompt']>) => void;
+  export let serverName = '';
+  let pressedAnswer: { choice: number; prompt: NonNullable<SessionAgent['prompt']> } | null = null;
 
   $: chip = chipFor(agent, now);
   $: prog = progress(agent.plan);
@@ -23,6 +25,7 @@
   <button type="button" class="open" on:click={onopen}>
     <span class="top">
       <strong class="name">{session.name}</strong>
+      {#if serverName}<span class="badge">{serverName}</span>{/if}
       {#if session.backend}<span class="badge">{session.backend}</span>{/if}
       <span class="chip {chip.tone}" class:stale={chip.stale}><span aria-hidden="true">{chip.icon}</span> {chip.label}</span>
     </span>
@@ -41,7 +44,8 @@
         {#if canAnswer}
           <div class="answers" role="group" aria-label="Answer">
             {#each agent.prompt.choices as choice, i}
-              <button type="button" class="answer" on:click={() => onanswer(i)}>{choice}</button>
+              <button type="button" class="answer" on:pointerdown={() => { if (agent.prompt) pressedAnswer = { choice: i, prompt: agent.prompt }; }} on:pointercancel={() => pressedAnswer = null}
+                on:click={() => { const answer = pressedAnswer?.choice === i ? pressedAnswer : (agent.prompt ? { choice: i, prompt: agent.prompt } : null); pressedAnswer = null; if (answer) onanswer(answer.choice, answer.prompt); }}>{choice}</button>
             {/each}
           </div>
         {:else}

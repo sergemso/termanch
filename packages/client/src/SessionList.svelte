@@ -2,9 +2,13 @@
   import { onMount } from 'svelte';
   import SessionCard from './SessionCard.svelte';
   import type { ClientMessage, SessionInfo } from './lib/protocol';
-  import { agents } from './lib/agents';
+  import { agents, type AgentMap } from './lib/agents';
   import { chipFor, FrozenOrder } from './lib/cards';
   import * as snippets from './lib/snippets';
+
+  export let onexpanded: (open: boolean) => void = () => {};
+  export let agentMap: AgentMap | undefined = undefined;
+  $: states = agentMap ?? $agents;
 
   export let sessions: SessionInfo[] = [];
   export let activeSessionId: string | null = null;
@@ -21,13 +25,18 @@
   let draft = '';
   const frozen = new FrozenOrder();
 
-  $: byId = new Map(sessions.map((s) => [s.id, s]));
-  $: order = frozen.order(sessions.map((s) => s.id), $agents, now);
+  let shown: SessionInfo[] = [];
+  $: {
+    order = frozen.order(sessions.map(s => s.id), states, now);
+    const cache = new Map([...shown, ...sessions].map(s => [s.id, s]));
+    shown = order.map(id => cache.get(id)).filter((s): s is SessionInfo => !!s);
+  }
+  $: byId = new Map(shown.map(s => [s.id, s]));
   $: replyTo = target && byId.has(target) ? target : (activeSessionId ?? sessions[0]?.id ?? null);
 
   // A change to "needs you" is announced to screen readers, once per change.
   $: for (const s of sessions) {
-    const a = $agents[s.id];
+    const a = states[s.id];
     const state = a ? a.state : '';
     if (state === 'needs_input' && known[s.id] !== 'needs_input') announcement = `${s.name} needs you`;
     known[s.id] = state;
@@ -39,14 +48,14 @@
   });
 
   function toggle(id: string) {
-    frozen.sheet(expanded !== id); // a sheet is open while a card is expanded: nothing reorders
-    if (expanded && expanded !== id) frozen.sheet(false);
+    if (expanded) frozen.sheet(false);
     expanded = expanded === id ? null : id;
+    if (expanded) frozen.sheet(true);
+    onexpanded(!!expanded);
   }
 
-  function answer(id: string, choice: number) {
-    const p = $agents[id]?.prompt;
-    if (p) send({ type: 'answer', session: id, prompt_id: p.id, seq: p.seq, choice });
+  function answer(id: string, choice: number, p: NonNullable<import('./lib/agents').SessionAgent['prompt']>) {
+    send({ type: 'answer', session: id, prompt_id: p.id, seq: p.seq, choice });
   }
 
   function sendReply(text: string) {
@@ -78,16 +87,16 @@
     {@const session = byId.get(id)}
     {#if session}
       <li>
-        {#if $agents[id]}
+        {#if states[id]}
           <SessionCard
             {session}
-            agent={$agents[id]}
+            agent={states[id]}
             {now}
             active={activeSessionId === id}
             expanded={expanded === id}
             onopen={() => onopen(id)}
             ontoggle={() => toggle(id)}
-            onanswer={(c) => answer(id, c)}
+            onanswer={(c, p) => answer(id, c, p)}
           />
         {:else}
           <button type="button" class="plain" class:active={activeSessionId === id} on:click={() => onopen(id)}>

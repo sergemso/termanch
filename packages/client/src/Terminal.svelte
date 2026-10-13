@@ -5,7 +5,7 @@
   import { WebglAddon } from 'xterm-addon-webgl';
   import 'xterm/css/xterm.css';
 
-  import type { Connection, ConnState } from './lib/connection';
+  import type { HubConnection, ServerState } from './lib/hub';
   import { b64ToBytes, textToB64 } from './lib/connection';
   import { applyMods, bufferText, clampFont, FONT_DEFAULT, type Mods } from './lib/keys';
   import { beep, bellEnabled, installAudioUnlock, setBellEnabled, unlockAudio } from './lib/bell';
@@ -19,16 +19,17 @@
   import { PinchZoom } from './lib/terminal/pinch';
   import { InputBatcher } from './lib/terminal/inputBatch';
   import { TouchScroll } from './lib/terminal/touchScroll';
-  import { FONT_FAMILY, THEME } from './lib/terminal/theme';
+  import { FONT_FAMILY, terminalTheme } from './lib/terminal/theme';
   import { TouchSelection, type Selection } from './lib/terminal/touchSelection';
+  import { settings } from './lib/settings';
   import KeyRow from './KeyRow.svelte';
   import FnKeyboard from './FnKeyboard.svelte';
   import InputLog from './InputLog.svelte';
   import SelectView from './SelectView.svelte';
 
-  export let connection: Connection;
+  export let connection: HubConnection;
   export let activeSessionId: string | null = null;
-  export let connState: ConnState = 'connected';
+  export let connState: ServerState = 'connected';
 
   const FONT_KEY = 'termanch_font';
   let mods: Mods = { ctrl: false, alt: false };
@@ -223,11 +224,18 @@
     if (activeSessionId) connection.send({ type: 'resize', cols, rows });
   }
 
+  $: if (term && $settings) term.options.theme = terminalTheme(document.documentElement.dataset.theme === 'light');
+
   onMount(() => {
-    term = new XTermTerminal({ cursorBlink: true, fontSize, fontFamily: FONT_FAMILY, theme: THEME });
+    term = new XTermTerminal({ cursorBlink: true, fontSize, fontFamily: FONT_FAMILY, theme: terminalTheme(document.documentElement.dataset.theme === 'light') });
     fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(terminalContainer);
+    const themeObserver = new MutationObserver(() => {
+      if (term) term.options.theme = terminalTheme(document.documentElement.dataset.theme === 'light');
+    });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    cleanups.push(() => themeObserver.disconnect());
     // WebGL is the fast renderer; where it is missing or its context is lost, xterm's DOM renderer takes over
     // instead of leaving a blank screen.
     try {

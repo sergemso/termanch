@@ -64,6 +64,8 @@ pub enum ClientMessage {
     Attach {
         session_id: String,
     },
+    /// Stop streaming the current pane while keeping authentication and agent events alive.
+    Detach,
     Input {
         data: String,
     },

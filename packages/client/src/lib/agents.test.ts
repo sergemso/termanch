@@ -22,6 +22,16 @@ describe('agent events', () => {
     expect(done.map.s.message).toBe('ok');
   });
 
+  it('tracks the continuous human wait, clears it on exit, and resets it after server restart', () => {
+    let map = applyEvents({}, [ev(1, { kind: 'state', state: 'needs_input', ts: 10 }), ev(2, { kind: 'state', state: 'error', ts: 20 })]).map;
+    expect(map.s.waitingSince).toBe(10);
+    map = applyEvents(map, [ev(3, { kind: 'state', state: 'working', ts: 30 })]).map;
+    expect(map.s.waitingSince).toBeUndefined();
+    map = applyEvents(map, [ev(4, { kind: 'state', state: 'needs_input', ts: 40 })]).map;
+    expect(map.s.waitingSince).toBe(40);
+    expect(applySnapshot(map, [{ session: 's', seq: 1, ts: 50, state: 'needs_input', stale: false }]).s.waitingSince).toBe(50);
+    expect(applySnapshot(map, [{ session: 's', seq: 5, ts: 60, state: 'working', stale: false }]).s.waitingSince).toBeUndefined();
+  });
   it('ignores kinds and fields it does not know', () => {
     const r = applyEvents({}, [ev(1, { kind: 'hologram', x: 1 }), ev(2, { kind: 'state', state: 'working', extra: true })]);
     expect(r.map.s.state).toBe('working');
