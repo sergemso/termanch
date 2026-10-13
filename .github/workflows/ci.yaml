@@ -71,7 +71,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Check the installer script
-        run: sh -n packages/client/public/install.sh && dash -n packages/client/public/install.sh
+        run: for f in install uninstall; do sh -n packages/client/public/$f.sh && dash -n packages/client/public/$f.sh; done
 
       - run: pnpm --filter termanch-client run build
 
@@ -220,7 +220,7 @@ jobs:
       fail-fast: false
       matrix:
         image: ['jrei/systemd-debian:12', 'jrei/systemd-ubuntu:24.04']
-        mode: [host-user, host]
+        mode: [host-user, host-me, host]
     steps:
       - uses: actions/checkout@v4
 
@@ -237,7 +237,7 @@ jobs:
           docker run -d --name machine --privileged --cgroupns=host -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
             -v "$PWD/work/release:/release" -v "$PWD/work/release2:/release2" \
             -v "$PWD/work/release3:/release3" -v "$PWD/work/release4:/release4" \
-            -v "$PWD/packages/client/public/install.sh:/install.sh:ro" \
+            -v "$PWD/packages/client/public/install.sh:/install.sh:ro" -v "$PWD/packages/client/public/uninstall.sh:/uninstall.sh:ro" \
             -v "$PWD/work/keys.txt:/keys.txt:ro" -v "$PWD/.github/scripts/test-native-install.sh:/test.sh:ro" \
             ${{ matrix.image }}
           sleep 8

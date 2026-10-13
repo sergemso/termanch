@@ -1,0 +1,20 @@
+---
+id: 0079-agent-hooks-are-opt-in
+title: Agent hooks are installed only on the owner's explicit request, and the layer works without them
+status: draft
+date: 2026-10-13
+track: product
+tags: [agents, hooks, security, roadmap]
+---
+
+## Decision (draft: needs the owner's acceptance)
+
+- The agent event layer (plan `termanch-v6-agent-events.md`) works with no configuration, from the process scan and screen heuristics of 0061. Hooks only raise precision.
+- Installing a hook into a tool's settings in the user's home (for example Claude Code's `settings.json`) is an explicit "Connect <tool>" action. It previews the exact change, backs the file up, journals it (guardrail `host-changes-are-journaled`) and can be removed from the app. An update never edits those files.
+- A hook script never blocks or fails the agent: it has a short timeout, writes to the server's local socket, and exits 0 when the server is down.
+- Hooks are not offered in container mode unless the sessions' home belongs to Termanch.
+- ACP (a tool run as a managed child process, not a TUI) is out of scope for this layer; it would be a separate session backend under 0054 with its own decision.
+
+## Why
+
+Editing another program's settings is a change on the owner's machine they did not ask for unless they ask. The scan floor keeps cards useful for everyone, and fail-open hooks mean a Termanch outage never stalls an agent mid-task.

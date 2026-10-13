@@ -10,6 +10,12 @@ ORIGIN=https://app.termanch.vivantel.dev
 SECRET="$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 43)"
 RUN_USER=termanch
 [ "$MODE" = host ] && RUN_USER=root
+# host-me runs sessions as whoever invoked the installer; sudo hands the name over as SUDO_USER, which is set here the same way.
+if [ "$MODE" = host-me ]; then
+  RUN_USER=alice
+  useradd --create-home --shell /bin/bash alice
+  export SUDO_USER=alice
+fi
 
 # /release (first install), /release2 (9.0.1 works), /release3 (9.0.2 starts but never serves), /release4 (9.0.3 is frozen)
 export TERMANCH_RELEASE_URL=file:///release
@@ -21,6 +27,12 @@ fail() { echo "FAIL: $*"; exit 1; }
 snapshot() { ls -A /etc/systemd/system /usr/local/bin /var/lib /home 2>/dev/null | sort | md5sum; }
 
 before="$(snapshot)"
+
+if [ "$MODE" = host-me ]; then
+  echo "== host-me refuses to guess the user when it runs as plain root"
+  if env -u SUDO_USER sh /install.sh "$SECRET" "$ORIGIN" host-me >/tmp/noroot.txt 2>&1; then fail "host-me installed for root"; fi
+  grep -q "this is root" /tmp/noroot.txt || { cat /tmp/noroot.txt; fail "the refusal does not say why"; }
+fi
 
 echo "== a dry run changes nothing"
 TERMANCH_DRY_RUN=1 sh /install.sh "$SECRET" "$ORIGIN" "$MODE"
@@ -34,7 +46,9 @@ curl -fs "http://127.0.0.1:$port/health" >/dev/null || fail "the server does not
 pid="$(systemctl show -p MainPID --value termanch)"
 [ "$pid" -gt 0 ] || fail "the service has no main process"
 [ "$(stat -c %U "/proc/$pid")" = "$RUN_USER" ] || fail "the server does not run as $RUN_USER"
-[ "$MODE" = host ] || id termanch >/dev/null || fail "the user termanch was not created"
+[ "$MODE" != host-user ] || id termanch >/dev/null || fail "the user termanch was not created"
+[ "$MODE" != host-me ] || ! id termanch >/dev/null 2>&1 || fail "host-me created a user"
+[ "$MODE" != host-me ] || grep -q '^User=alice' /etc/systemd/system/termanch.service || fail "the unit does not run as the invoking user"
 command -v tmux >/dev/null || fail "tmux was not installed"
 grep -q '^KillMode=process' /etc/systemd/system/termanch.service || fail "sessions would die with the service"
 [ -f /var/lib/termanch/server_key ] || fail "the server did not create its state"
@@ -104,13 +118,18 @@ fi
 grep -q "signature is not valid" /tmp/refused.txt || { cat /tmp/refused.txt; fail "the refusal does not say why"; }
 cp /tmp/manifest.good /release/manifest.json 2>/dev/null || true
 
-echo "== revert restores the machine"
-systemctl stop termanch
-rm -rf /var/lib/termanch/*   # the server's own state is removed by the uninstall step, not by the journal
-termanch-server --revert --dry-run | grep -q "would revert" || fail "the dry run shows nothing"
-termanch-server --revert
+echo "== uninstall.sh shows the plan first and changes nothing"
+before_un="$(snapshot)"
+sh /uninstall.sh | grep -q "Nothing was changed" || fail "the uninstall preview did not say it changed nothing"
+[ "$(snapshot)" = "$before_un" ] || fail "the uninstall preview changed the machine"
+systemctl is-active --quiet termanch || fail "the preview stopped the service"
+
+echo "== uninstall.sh --yes restores the machine"
+sh /uninstall.sh --yes
 [ ! -e /etc/systemd/system/termanch.service ] || fail "the unit is still there"
 [ ! -e /usr/local/bin/termanch-server ] || fail "the binary is still there"
 [ ! -e /var/lib/termanch ] || fail "the state directory is still there"
-[ "$MODE" = host ] || ! id termanch >/dev/null 2>&1 || fail "the user is still there"
+[ "$MODE" != host-user ] || ! id termanch >/dev/null 2>&1 || fail "the user is still there"
+[ "$MODE" != host-me ] || [ -d /home/alice ] || fail "the invoking user's home was touched"
+[ "$MODE" != host-user ] || [ -d /home/termanch ] || fail "the created user's home was deleted without --delete-home"
 echo "OK: $MODE"

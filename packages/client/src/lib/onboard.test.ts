@@ -92,6 +92,7 @@ describe('run choice in the install commands', () => {
   it('adds the mode word only for the host modes', () => {
     expect(installCommand(O, S)).toBe(`curl -fsSL ${O}/install.sh | sh -s -- ${S} ${O}`);
     expect(installCommand(O, S, 'container')).toBe(installCommand(O, S));
+    expect(installCommand(O, S, 'host-me')).toBe(`curl -fsSL ${O}/install.sh | sh -s -- ${S} ${O} host-me`);
     expect(installCommand(O, S, 'host-user')).toBe(`curl -fsSL ${O}/install.sh | sh -s -- ${S} ${O} host-user`);
     expect(installCommand(O, S, 'host')).toBe(`curl -fsSL ${O}/install.sh | sh -s -- ${S} ${O} host`);
   });

@@ -80,3 +80,6 @@
 0075-native-host-mode,"Native host mode runs the server without Docker, as a systemd service","deployment, server, security",active
 0076-native-releases-and-updater,"Native releases carry a signed manifest and a root-owned updater applies them with rollback","build, security, deployment",active
 0077-root-actions-by-request-file,"An unprivileged server asks for root actions through a request file, never through sudo","security, deployment, protocol",active
+0078-install-for-the-current-user,"A host install can run sessions as the user who ran the installer","deployment, security, client",active
+0079-agent-hooks-are-opt-in,"Agent hooks are installed only on the owner's explicit request, and the layer works without them","agents, hooks, security, roadmap",draft
+0080-connector-credentials-from-a-root-owned-file,"Connector credentials come from a root-owned file read at start and are held in memory","security, secrets, notifications, roadmap",draft

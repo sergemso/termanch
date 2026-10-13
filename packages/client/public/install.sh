@@ -7,6 +7,8 @@
 # The optional last word picks where sessions run (DECISION-0058, 0075):
 #   (none)      an isolated Docker container (installs Docker if missing)
 #   host-user   directly on this machine as a dedicated unprivileged user `termanch`, as a systemd service
+#   host-me     directly on this machine as the user who runs this command: sessions open on their behalf, in their
+#               home, with their repositories, keys and agent logins. No user is created.
 #   host        directly on this machine as root, as a systemd service
 # The host modes give the owner's browser a shell on the machine itself and need no Docker.
 #
@@ -40,8 +42,8 @@ case "$ORIGIN" in
 esac
 ORIGIN="${ORIGIN%/}"
 case "$MODE" in
-  container|host|host-user) ;;
-  *) die "unknown mode \"$MODE\" (use host-user, host, or leave it out)" ;;
+  container|host|host-user|host-me) ;;
+  *) die "unknown mode \"$MODE\" (use host-me, host-user, host, or leave it out)" ;;
 esac
 if [ "$SECRET" != "-" ]; then
   case "$SECRET" in
@@ -51,6 +53,10 @@ if [ "$SECRET" != "-" ]; then
 fi
 
 # Root is needed for services, users and the firewall. Re-run this script under sudo; it was piped in, so fetch it again.
+# host-me needs to know who asked: the name is read before the switch to root, then sudo hands it on as SUDO_USER.
+if [ "$MODE" = "host-me" ] && [ "$(id -u)" -eq 0 ] && { [ -z "${SUDO_USER:-}" ] || [ "$SUDO_USER" = root ]; }; then
+  die "host-me runs sessions as the user who runs this command, but this is root. Run it as your own user (it asks for sudo itself), or use host / host-user."
+fi
 if [ "$(id -u)" -ne 0 ]; then
   command -v sudo >/dev/null 2>&1 || die "run this as root (or install sudo)"
   exec sudo env TERMANCH_IMAGE="$IMAGE" TERMANCH_CONTAINER="$NAME" TERMANCH_DATA="$ROOT" \
@@ -248,6 +254,16 @@ install_native() {
   esac
   RUN_USER=root
   [ "$MODE" = "host-user" ] && RUN_USER=termanch
+  if [ "$MODE" = "host-me" ]; then
+    RUN_USER="${SUDO_USER:-}"
+    case "$RUN_USER" in
+      ""|root|*[!A-Za-z0-9._-]*) die "host-me needs a regular user account, not \"$RUN_USER\"" ;;
+    esac
+    id "$RUN_USER" >/dev/null 2>&1 || die "could not tell which user ran this command"
+    # The unit's WorkingDirectory=~ and the sessions use this home; refuse an account that has none.
+    _home="$( (getent passwd "$RUN_USER" 2>/dev/null || cat /etc/passwd) | sed -n "s/^$RUN_USER:[^:]*:[^:]*:[^:]*:[^:]*:\\([^:]*\\):.*/\\1/p" | head -n 1)"
+    [ -d "$_home" ] || die "$RUN_USER has no home directory ($_home)"
+  fi
 
   TMP="$(mktemp -d)"
   trap 'rm -rf "$TMP"' EXIT
@@ -258,6 +274,10 @@ install_native() {
     systemctl is-active --quiet "$UNIT_NAME" || systemctl start "$UNIT_NAME"
     RUN_USER="$(sed -n 's/^User=//p' "$UNIT")"
     RUN_USER="${RUN_USER:-root}"
+    [ "$RUN_USER" = root ] || id "$RUN_USER" >/dev/null 2>&1 \
+      || die "the installed service runs as $RUN_USER, which no longer exists. Remove Termanch (uninstall.sh --yes) and install again."
+    [ "$MODE" != host-me ] || [ "$RUN_USER" = "${SUDO_USER:-}" ] \
+      || say "Note: sessions already run as $RUN_USER and stay that way. To change that, remove Termanch first (curl -fsSL <client>/uninstall.sh | sudo sh -s -- --yes) and install again."
     JBIN="$BIN"
     install_helper_units # installs from before the updater existed get it here
     PORT="$(cat "$JOURNAL/udp_port")"
@@ -403,5 +423,5 @@ install_native() {
 
 case "$MODE" in
   container) install_container ;;
-  host|host-user) install_native ;;
+  host|host-user|host-me) install_native ;;
 esac
