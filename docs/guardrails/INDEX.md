@@ -45,3 +45,5 @@ usage-stays-on-device,"Usage and tier data stay on the device","client, privacy"
 diagnostics-never-include-secrets,"Problem reports never include secrets, session content or addresses","security, privacy, client",active
 unprivileged-server-never-holds-root,"An unprivileged server never holds a way to run root commands","security, deployment",active
 updates-are-verified-and-reversible,"Native updates are verified, reversible and stoppable","security, build, deployment",active
+ui-never-moves-under-the-finger,"The interface never moves a control or switches the session under the user's finger","client, mobile",active
+user-settings-are-wrapped-not-replaced,"Termanch adds to a user's agent settings and never replaces what is there","hooks, security",active

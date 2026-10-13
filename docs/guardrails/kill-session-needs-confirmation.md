@@ -2,8 +2,8 @@
 id: kill-session-needs-confirmation
 title: Killing a session needs confirmation
 status: active
-governed-by: 0070
-grounded-in: 0070
+governed-by: 0082
+grounded-in: [0082]
 derivation-note: Killing ends a running agent and cannot be undone, and phone taps are imprecise.
 tags: [client, protocol]
 ---
