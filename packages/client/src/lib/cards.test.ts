@@ -56,6 +56,14 @@ describe('order', () => {
     expect(o.order(['x', 'y', 'z'], later, 2500)).toEqual(['x', 'y', 'z']); // two seconds after the scroll
   });
 
+  it('ignores releases of pointers that did not start here, including duplicate releases', () => {
+    const o = new FrozenOrder();
+    o.touchDown(1); o.touchDown(2); o.touchDown(2);
+    o.touchUp(99); expect(o.frozen(0)).toBe(true);
+    o.touchUp(1); o.touchUp(1); expect(o.frozen(0)).toBe(true);
+    o.touchUp(2); expect(o.frozen(0)).toBe(false);
+  });
+
   it('while held, neither insertion nor removal moves controls; both apply after release', () => {
     const o = new FrozenOrder();
     o.order(['x', 'y'], agents, 0);
