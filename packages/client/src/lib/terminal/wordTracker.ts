@@ -66,6 +66,16 @@ export class WordTracker {
     return m ? m[0] : '';
   }
 
+  /** The script of the last letter typed on this line; null when there is none (an empty line, digits only). */
+  get script(): 'latin' | 'cyrillic' | null {
+    for (let i = this.line.length - 1; i >= 0; i--) {
+      const c = this.line[i];
+      if (/\p{Script=Cyrillic}/u.test(c)) return 'cyrillic';
+      if (/\p{Script=Latin}/u.test(c)) return 'latin';
+    }
+    return null;
+  }
+
   /** Forget that the last word came in whole (a paste, or anything that is not the keyboard's own insertion). */
   clearInsert(): void {
     this.inserted = null;

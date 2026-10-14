@@ -164,3 +164,24 @@ describe('WordTracker: the phrase the hidden input mirrors', () => {
     expect(t.current).toBe('');
   });
 });
+
+describe('WordTracker: script of the typed text', () => {
+  it('is the script of the last letter, so mixed lines follow the latest word', () => {
+    const t = new WordTracker();
+    expect(t.script).toBeNull();
+    t.feed('hello');
+    expect(t.script).toBe('latin');
+    t.feed(' привет');
+    expect(t.script).toBe('cyrillic');
+    t.feed(' 123 !');
+    expect(t.script).toBe('cyrillic'); // digits and symbols say nothing
+  });
+
+  it('is null for digits only and after Enter', () => {
+    const t = new WordTracker();
+    t.feed('42');
+    expect(t.script).toBeNull();
+    t.feed('abc\r');
+    expect(t.script).toBeNull();
+  });
+});
