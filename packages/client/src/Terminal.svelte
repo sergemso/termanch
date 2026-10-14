@@ -266,10 +266,43 @@
     try {
       fitAddon?.fit();
     } catch {
+      ensureRenderer();
       if (attempt < 20) refitFrame = requestAnimationFrame(() => refit(attempt + 1));
       return;
     }
     sendResize(term.cols, term.rows);
+    kickRenderer();
+  }
+
+  /** xterm 5.3 can lose its renderer while swapping WebGL out; fit() then throws until one is put back. */
+  function ensureRenderer() {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const core = (term as any)?._core;
+    const service = core?._renderService;
+    if (service && !service._renderer?.value) {
+      try {
+        service.setRenderer(core._createRenderer());
+      } catch {
+        /* the next frame tries again */
+      }
+    }
+  }
+
+  /**
+   * After the box changes size (the sessions sheet opens or closes) the phone's canvas could stay displaced until
+   * the font size changed. A font change re-measures the cells and lays the canvas out again, so do exactly that,
+   * to the same size, whenever the box has changed.
+   */
+  let lastBox = '';
+  function kickRenderer() {
+    if (!term) return;
+    const box = `${terminalContainer.clientWidth}x${terminalContainer.clientHeight}`;
+    if (box === lastBox) return;
+    lastBox = box;
+    const size = term.options.fontSize ?? fontSize;
+    term.options.fontSize = size + 1;
+    term.options.fontSize = size;
+    term.refresh(0, term.rows - 1);
   }
 
   $: if (term && $settings) term.options.theme = terminalTheme(document.documentElement.dataset.theme === 'light');
@@ -295,6 +328,7 @@
           /* xterm 5.3 can throw while swapping renderers; the screen keeps its last frame until the next redraw */
         }
         if (webgl === gl) webgl = null;
+        ensureRenderer();
         refit();
       });
       term.loadAddon(gl);

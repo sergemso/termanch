@@ -52,6 +52,12 @@
       inner: `${window.innerWidth}x${window.innerHeight}`,
       visual: vv ? `${Math.round(vv.width)}x${Math.round(vv.height)} top ${Math.round(vv.offsetTop)}` : 'none',
       connection: selectedServer ? connState : 'no server selected',
+      layout: ['.shell', '.workspace', '.terminal-pane', '.screen', '.xterm', '.xterm canvas'].map((q) => {
+        const e = document.querySelector(q);
+        if (!e) return `${q} -`;
+        const b = e.getBoundingClientRect();
+        return `${q} x${Math.round(b.left)} w${Math.round(b.width)} s${e.scrollLeft}`;
+      }).join('; '),
       server: serverVersion || undefined,
       errors: $recentErrors,
     });

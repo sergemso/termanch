@@ -7,6 +7,9 @@ describe('dropColorReplies', () => {
     expect(dropColorReplies('\x1b]11;rgb:0d0d/1111/1717\x07')).toBe('');
     expect(dropColorReplies('\x1b]12;rgb:5858/a6a6/ffff\x1b\\')).toBe('');
   });
+  it('drops palette answers', () => {
+    expect(dropColorReplies('\x1b]4;150;rgb:afaf/d7d7/8787\x1b\\')).toBe('');
+  });
   it('drops several answers and keeps the rest', () => {
     expect(dropColorReplies('\x1b]10;rgb:a/b/c\x1b\\\x1b]11;rgb:d/e/f\x1b\\ls')).toBe('ls');
   });
