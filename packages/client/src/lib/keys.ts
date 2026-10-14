@@ -98,6 +98,25 @@ export function prefixBytes(notation: string): string {
   return key(p);
 }
 
+/** The prefix as it is printed on a keycap: `C-b` is `^B`, `M-a` stays `M-a`, `None` and unknown notation are empty. */
+export function prefixLabel(notation: string): string {
+  const p = notation.trim();
+  if (!p || p === 'None') return '';
+  const k = (name: string) => (name.length === 1 ? name.toUpperCase() : name);
+  if (p.startsWith('C-M-') || p.startsWith('M-C-')) return '^M-' + k(p.slice(4));
+  if (p.startsWith('C-')) return '^' + k(p.slice(2));
+  return p;
+}
+
+/**
+ * What the New line key sends. Claude Code takes Alt+Enter (ESC CR); Codex takes Ctrl+J (LF). Anything else gets
+ * Alt+Enter, which most terminal UIs treat as "line break, do not submit".
+ */
+export function newlineKeys(agent?: string): { seq: string; hint: string } {
+  if (agent === 'codex') return { seq: '\n', hint: 'Ctrl+J' };
+  return { seq: '\x1b\r', hint: 'Alt+Enter' };
+}
+
 export type KeyProfile = 'shell' | 'tmux';
 
 /** After the prefix: splits, copy mode and detach. Window moves live in the windows dropdown. */

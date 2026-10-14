@@ -79,3 +79,21 @@ describe('tmux prefix notation', () => {
     expect(prefixBytes('C-nonsense')).toBe('');
   });
 });
+
+describe('prefixLabel and newlineKeys', () => {
+  it('prints tmux prefixes as keycaps', async () => {
+    const { prefixLabel } = await import('./keys');
+    expect(prefixLabel('C-b')).toBe('^B');
+    expect(prefixLabel('C-Space')).toBe('^Space');
+    expect(prefixLabel('M-a')).toBe('M-a');
+    expect(prefixLabel('C-M-b')).toBe('^M-B');
+    expect(prefixLabel('None')).toBe('');
+  });
+
+  it('picks the multiline key per agent', async () => {
+    const { newlineKeys } = await import('./keys');
+    expect(newlineKeys('claude')).toEqual({ seq: '\x1b\r', hint: 'Alt+Enter' });
+    expect(newlineKeys(undefined).seq).toBe('\x1b\r');
+    expect(newlineKeys('codex')).toEqual({ seq: '\n', hint: 'Ctrl+J' });
+  });
+});

@@ -559,7 +559,7 @@
     </main>
   {/if}
 
-  {#if menuOpen && user}<MenuSheet {user} {avatar} onservers={leaveServer} onreport={openReport} onlogout={logout} onclose={() => menuOpen = false} />{/if}
+  {#if menuOpen && user}<MenuSheet {user} {avatar} {serverVersion} onservers={leaveServer} onreport={openReport} onlogout={logout} onclose={() => menuOpen = false} />{/if}
   {#if actionSession}<SessionActions session={actionSession} canClose={backendOf(actionSession) === 'tmux'} confirmFirst={actionConfirm} ondetach={() => detach(actionSession.key)} onclosesession={() => closeSession(actionSession.key)} onclose={() => actionKey = null} />{/if}
   {#if menuSession && menuKey}
     <WindowMenu session={menuSession} data={$allWindows[menuSession.key]} supported={backendOf(menuSession) === 'tmux'}

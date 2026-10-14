@@ -14,6 +14,11 @@
   /** `tmux` adds the sticky Prefix key; window moves are in the windows dropdown, not here. */
   export let profile: KeyProfile = 'shell';
   export let prefixArmed = false;
+  /** The prefix as printed on a keycap (`^B`); shown on the Prefix key so it is clear what it sends. */
+  export let prefixLabel = '';
+  /** The multiline-input key: `newlineHint` names the combination it sends (Alt+Enter for Claude Code). */
+  export let onnewline: () => void = () => {};
+  export let newlineHint = 'Alt+Enter';
   export let oncombo: (key: string) => void = () => {};
 
   /** The controls the status bar used to hold (keyboard, bell, text size) now scroll with the keys. */
@@ -49,7 +54,7 @@
 
 <div class="row" role="toolbar" aria-label="Terminal keys">
   {#if profile === 'tmux'}
-    <button class="k mod" class:on={prefixArmed} aria-pressed={prefixArmed} aria-label="tmux prefix" on:pointerdown={tap(() => (prefixArmed = !prefixArmed))}>Prefix</button>
+    <button class="k mod" class:on={prefixArmed} aria-pressed={prefixArmed} aria-label={prefixLabel ? `tmux prefix ${prefixLabel}` : 'tmux prefix'} on:pointerdown={tap(() => (prefixArmed = !prefixArmed))}>Prefix{#if prefixLabel}&nbsp;{prefixLabel}{/if}</button>
     <button class="k mod" class:on={combos} aria-expanded={combos} aria-label="tmux commands" on:pointerdown={tap(() => (combos = !combos))}>⋯</button>
     {#if combos}
       {#each TMUX_COMBOS as [label, key]}
@@ -57,6 +62,7 @@
       {/each}
     {/if}
   {/if}
+  <button class="k" aria-label={`New line without sending (${newlineHint})`} on:pointerdown={tap(onnewline)}>↵ Line</button>
   <button class="k mod" class:on={mods.ctrl} aria-pressed={mods.ctrl} on:pointerdown={tap(() => (mods.ctrl = !mods.ctrl))}>Ctrl</button>
   <button class="k mod" class:on={mods.alt} aria-pressed={mods.alt} on:pointerdown={tap(() => (mods.alt = !mods.alt))}>Alt</button>
   <button class="k mod" class:on={fnOpen} aria-pressed={fnOpen} on:pointerdown={tap(onfn)}>Fn</button>
