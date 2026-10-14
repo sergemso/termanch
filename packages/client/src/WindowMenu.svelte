@@ -11,6 +11,8 @@
   export let supported = true;
   export let onselect: (index: number) => void;
   export let onnewwindow: () => void;
+  /** False when the server is older than the message: the button would do nothing, so say why instead. */
+  export let canNewWindow = true;
   export let onclosewindow: (index: number) => void;
   export let ondetach: () => void;
   export let onclosesession: () => void;
@@ -58,7 +60,11 @@
         <li class="none">Loading windows…</li>
       {/each}
     </ul>
-    <button class="new" on:click={() => { onclose(); onnewwindow(); }}>+ New window</button>
+    {#if canNewWindow}
+      <button class="new" on:click={() => { onclose(); onnewwindow(); }}>+ New window</button>
+    {:else}
+      <p class="none">Opening a window from here needs a newer server. Update it from its host.</p>
+    {/if}
   {:else}
     <p class="none">This session manager has no windows to list.</p>
   {/if}

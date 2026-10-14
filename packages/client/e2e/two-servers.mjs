@@ -197,6 +197,10 @@ try {
   await menu('api').waitFor();
   await menu('api').getByRole('button', { name: '+ New window' }).click();
   await waitFor(() => windowsOf(a, 'api') === 2, 'a second tmux window');
+  // The new window must stay the one on screen: attaching again used to jump back to the agent window.
+  await sleep(1500);
+  const activeWindow = () => a.tmux('list-windows', '-t', '=api', '-F', '#{window_index} #{window_active}').split('\n').map((l) => l.split(' ')).find((l) => l[1] === '1')[0];
+  if (activeWindow() !== '1') fail(`the new window did not stay current: window ${activeWindow()} is`);
   await tab('api').click();
   await menu('api').waitFor();
   await menu('api').getByText('bash', { exact: false }).first().waitFor();
