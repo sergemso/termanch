@@ -532,9 +532,13 @@ try {
         await page.keyboard.type('echo привет');
         await page.keyboard.press('Enter');
         await sleep(500);
-        await page.getByRole('button', { name: 'Select', exact: true }).click();
+        await page.getByRole('button', { name: 'Fn', exact: true }).click(); // Select lives on the Fn panel's More page
+        const moreKb = page.getByRole('group', { name: 'Function keyboard' });
+        await moreKb.getByRole('button', { name: 'More', exact: true }).click();
+        await moreKb.getByRole('button', { name: 'Select', exact: true }).click();
         await page.waitForFunction(() => /привет/.test(document.querySelector('[aria-label="Select text"] pre')?.textContent ?? ''), null, { timeout: 5000 });
         await page.getByRole('button', { name: 'Close', exact: true }).click();
+        await moreKb.getByRole('button', { name: 'Back to the system keyboard' }).click();
         await page.evaluate(() => {
           localStorage.setItem('termanch_debug', '0');
           window.dispatchEvent(new Event('termanch-debug'));
