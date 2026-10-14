@@ -13,6 +13,7 @@
   import NeedsYouBanner from './NeedsYouBanner.svelte';
   import NewSessionSheet from './NewSessionSheet.svelte';
   import { SnapshotStore } from './lib/snapshots';
+  import { serverAtLeast, NEW_WINDOW_VERSION } from './lib/serverVersion';
   import { loadHidden, openTabs, saveHidden } from './lib/tabs';
   import { announce, waitingList } from './lib/notify';
   import { cacheRemaining, expiringSoon } from './lib/cache';
@@ -293,6 +294,14 @@
     if (activeKey === key) hub.sendToSession(key, { type: 'attach', session_id: key });
   }
 
+  /** Opens a window and shows it. The session is attached first when it is not the open one: attaching lands on the
+   * tab's representative window, so attaching after the new window exists (or again on the open session) would
+   * switch straight back to the old one. tmux moves the attached client to the new window by itself. */
+  async function newWindow(key: string) {
+    if (key !== activeKey) await attach(key);
+    hub.sendToSession(key, { type: 'new_window', session: key });
+  }
+
   /** Fetches a session's screen while the finger is still going down on its tab or card (decision 0084). */
   function peek(key: string) {
     if (key === activeKey) return;
@@ -555,7 +564,8 @@
   {#if menuSession && menuKey}
     <WindowMenu session={menuSession} data={$allWindows[menuSession.key]} supported={backendOf(menuSession) === 'tmux'}
       onselect={(index) => hub.sendToSession(menuSession.key, { type: 'select_window', session: menuSession.key, index })}
-      onnewwindow={() => { hub.sendToSession(menuSession.key, { type: 'new_window', session: menuSession.key }); void attach(menuSession.key); }}
+      canNewWindow={serverAtLeast($hubServers.find(h => h.id === menuSession.serverId)?.version ?? '', NEW_WINDOW_VERSION)}
+      onnewwindow={() => newWindow(menuSession.key)}
       onclosewindow={(index) => hub.sendToSession(menuSession.key, { type: 'close_window', session: menuSession.key, index })}
       ondetach={() => detach(menuSession.key)} onclosesession={() => { actionConfirm = true; actionKey = menuSession.key; }} onclose={() => menuKey = null} />
   {/if}
