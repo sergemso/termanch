@@ -88,3 +88,6 @@
 0083-cache-expiry-estimate-and-statusline-forwarder,"Prompt-cache expiry is an estimate, made exact by a wrapped status line forwarder","agents, hooks, privacy",active
 0084-tab-switch-shows-a-server-snapshot-first,"A tab switch shows a server snapshot at once, then attaches live","client, mobile, performance, protocol",active
 0085-tabs-speak-for-one-window-and-detach-differs-from-close,"A tab speaks for one tmux window, Detach differs from Close, and windows come from tmux control mode","client, mobile, agents, tmux, protocol",draft
+0086-a-problem-report-says-what-the-app-did-and-how-the-page-was-viewed,"A problem report says what the app did and how the page was viewed","client, privacy, mobile, ios",draft
+0087-the-terminal-is-built-once-and-never-answers-the-page,"The terminal is built once per connection, takes input at 16px and answers no colour queries","client, ios, rendering, terminal, mobile",draft
+0088-the-start-screen-resumes-the-last-session,"The start screen resumes the last session","client, mobile",draft
