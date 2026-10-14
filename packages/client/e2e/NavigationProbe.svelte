@@ -83,6 +83,7 @@
   {#if menuSession && menuKey}
     <WindowMenu session={menuSession} data={$wins[menuSession.key]}
       onselect={index => hub.sendToSession(menuSession.key, { type: 'select_window', session: menuSession.key, index })}
+      onnewwindow={() => hub.sendToSession(menuSession.key, { type: 'new_window', session: menuSession.key })}
       onclosewindow={index => hub.sendToSession(menuSession.key, { type: 'close_window', session: menuSession.key, index })}
       ondetach={() => { hidden = new Set(hidden).add(menuSession.key); }} onclosesession={() => { confirmClose = true; actions = menuSession.key; }} onclose={() => menuKey = null} />
   {/if}

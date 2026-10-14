@@ -555,6 +555,7 @@
   {#if menuSession && menuKey}
     <WindowMenu session={menuSession} data={$allWindows[menuSession.key]} supported={backendOf(menuSession) === 'tmux'}
       onselect={(index) => hub.sendToSession(menuSession.key, { type: 'select_window', session: menuSession.key, index })}
+      onnewwindow={() => { hub.sendToSession(menuSession.key, { type: 'new_window', session: menuSession.key }); void attach(menuSession.key); }}
       onclosewindow={(index) => hub.sendToSession(menuSession.key, { type: 'close_window', session: menuSession.key, index })}
       ondetach={() => detach(menuSession.key)} onclosesession={() => { actionConfirm = true; actionKey = menuSession.key; }} onclose={() => menuKey = null} />
   {/if}
