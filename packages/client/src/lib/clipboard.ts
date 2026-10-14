@@ -31,13 +31,11 @@ export async function copyText(text: string): Promise<boolean> {
   return ok;
 }
 
-/** The system clipboard, or the app's own last copy when the system one is denied or empty. */
-export async function pasteText(): Promise<string> {
+/** The system clipboard, or null when it cannot be read or is empty (iOS only allows it from a tap, and the user may refuse). */
+export async function pasteText(): Promise<string | null> {
   try {
-    const text = await navigator.clipboard.readText();
-    if (text) return text;
+    return (await navigator.clipboard.readText()) || null;
   } catch {
-    /* permission denied: the app's own copy still works */
+    return null;
   }
-  return lastCopied;
 }

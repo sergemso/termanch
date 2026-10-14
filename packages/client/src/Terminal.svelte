@@ -9,7 +9,7 @@
   import { b64ToBytes, textToB64 } from './lib/connection';
   import { applyMods, bufferText, clampFont, FONT_DEFAULT, newlineKeys, prefixBytes, prefixLabel, shiftSeq, type KeyProfile, type Mods } from './lib/keys';
   import { beep, bellEnabled, installAudioUnlock, setBellEnabled, unlockAudio } from './lib/bell';
-  import { copyText, pasteText } from './lib/clipboard';
+  import { copyText, lastCopiedText, pasteText } from './lib/clipboard';
   import { attachInputLogger } from './lib/inputlog';
   import { attachInputMirror, attachSwipeSupport } from './lib/swipe';
   import { DEBUG_KEY, debugEnabled } from './lib/viewport';
@@ -17,6 +17,8 @@
   import { crumb } from './lib/breadcrumbs';
   import { dropColorReplies, setEnterKeyHint, silenceColorQueries } from './lib/terminal/inputGuards';
   import { WordTracker } from './lib/terminal/wordTracker';
+  import { linkAt } from './lib/terminal/links';
+  import { cellAt } from './lib/selection';
   import { PinchZoom } from './lib/terminal/pinch';
   import { InputBatcher } from './lib/terminal/inputBatch';
   import { TouchScroll } from './lib/terminal/touchScroll';
@@ -28,6 +30,7 @@
   import FnKeyboard from './FnKeyboard.svelte';
   import InputLog from './InputLog.svelte';
   import SelectView from './SelectView.svelte';
+  import PasteSheet from './PasteSheet.svelte';
 
   export let connection: HubConnection;
   export let activeSessionId: string | null = null;
@@ -166,9 +169,15 @@
     sendInput(withPrefix(data));
   }
 
+  /** Text the system clipboard would not give us: the user pastes it into a field of our own, then sends it. */
+  let pasteDraft: string | null = null;
+
   async function paste() {
     const text = await pasteText();
-    if (!text) return;
+    if (text) sendPaste(text);
+    else pasteDraft = lastCopiedText();
+  }
+  function sendPaste(text: string) {
     term?.paste(text);
     words.clearInsert(); // a pasted word is not a swiped one
   }
@@ -227,6 +236,7 @@
       touch.clear();
       return;
     }
+    if (openLinkAt(x, y)) return;
     const target = document.elementFromPoint(x, y) ?? terminalContainer;
     const fire = (type: string, buttons: number) =>
       target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y, button: 0, buttons }));
@@ -234,6 +244,16 @@
     fire('mousedown', 1);
     setTimeout(() => fire('mouseup', 0), 40);
     keyboard.tap();
+  }
+  /** A tap on a web address opens it, unless the app in the terminal has asked for mouse clicks itself. */
+  function openLinkAt(x: number, y: number): boolean {
+    const rect = terminalContainer?.querySelector('.xterm-screen')?.getBoundingClientRect();
+    if (!term || !rect || term.modes.mouseTrackingMode !== 'none') return false;
+    const c = cellAt(x, y, rect, term.cols, term.rows, term.buffer.active.viewportY);
+    const url = linkAt(term.buffer.active, term.cols, c.row, c.col);
+    if (!url) return false;
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return true;
   }
   function onPointerDown(e: PointerEvent) {
     pinch.down(e.pointerId, e.clientX, e.clientY, fontSize);
@@ -405,6 +425,7 @@
   <KeyRow bind:mods bind:prefixArmed {profile} prefixLabel={prefixLabel(prefix)} onnewline={() => sendKey(newline.seq)} newlineHint={newline.hint} onkey={sendKey} {fnOpen}
     onfn={() => keyboard.toggleFn()} onkeyboard={() => keyboard.toggleSystem()} onfont={(d) => setFont(fontSize + d)} />
   {#if fnOpen}<FnKeyboard bind:mods onkey={typed} onback={() => keyboard.closeFn()} {profile} {bell} onbell={toggleBell} oncombo={combo} onpaste={paste} oncopy={copy} onselect={openSelect} />{/if}
+  {#if pasteDraft !== null}<PasteSheet text={pasteDraft} onsend={(t) => { pasteDraft = null; sendPaste(t); term?.focus(); }} onclose={() => { pasteDraft = null; term?.focus(); }} />{/if}
   {#if selectText !== null}<SelectView text={selectText} onclose={() => { selectText = null; term?.focus(); }} />{/if}
 </div>
 
