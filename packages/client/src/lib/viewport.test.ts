@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { debugEnabled, debugText, tapCounter, viewportBox } from './viewport';
+import { debugEnabled, debugText, tapCounter, viewportBox, viewportReading } from './viewport';
 
 const win = { innerHeight: 800, innerWidth: 390 };
 
@@ -47,5 +47,14 @@ describe('debug switch', () => {
     expect(tap(2000)).toBe(true);
     const slow = tapCounter();
     expect([0, 1000, 2000, 3500, 4500].map(slow)).toEqual([false, false, false, false, false]);
+  });
+});
+
+describe('viewportReading', () => {
+  it('names zoom, pan and the element that holds focus', () => {
+    const vv = { width: 207.4, height: 448, offsetLeft: 103.2, offsetTop: 0, scale: 2, pageLeft: 103, pageTop: 0 };
+    const active = { tagName: 'TEXTAREA', className: 'xterm-helper-textarea' } as Element;
+    expect(viewportReading(vv, { scrollX: 0, scrollY: 0 }, active)).toBe('207x448 scale 2 offset 103,0 page 103,0 scroll 0,0 focus textarea.xterm-helper-textarea');
+    expect(viewportReading(null, { scrollX: 0, scrollY: 0 }, null)).toBe('none');
   });
 });

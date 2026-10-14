@@ -44,6 +44,8 @@ export interface Env {
   connection: string;
   /** Where the terminal sits: left edge, width and scroll of each box around it. */
   layout?: string;
+  /** What the app did just before (lib/breadcrumbs), oldest first. */
+  steps?: string[];
   /** `version` from the server's auth_ok, so a stale image is visible. */
   server?: string;
   errors: ErrorNote[];
@@ -59,6 +61,8 @@ export function buildReport(env: Env): string {
     `connection: ${env.connection}`,
     ...(env.layout ? [`layout: ${env.layout}`] : []),
     `server: ${env.server ?? 'unknown'}`,
+    'steps before this report:',
+    ...(env.steps?.length ? env.steps : ['(none)']),
     'recent errors:',
     ...(env.errors.length ? env.errors.map((e) => `- ${new Date(e.at).toISOString()} ${e.text}`) : ['- none']),
   ];
