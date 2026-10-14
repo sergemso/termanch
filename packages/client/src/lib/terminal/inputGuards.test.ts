@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dropColorReplies } from './inputGuards';
+import { dropColorReplies, silenceColorQueries } from './inputGuards';
 
 describe('dropColorReplies', () => {
   it('drops foreground, background and cursor colour answers', () => {
@@ -19,5 +19,22 @@ describe('dropColorReplies', () => {
   });
   it('leaves ordinary keys and other sequences alone', () => {
     for (const s of ['a', '\r', '\x1b[A', '\x1b[?1;2c', '\x1b]52;c;aGk=\x07']) expect(dropColorReplies(s)).toBe(s);
+  });
+});
+
+describe('silenceColorQueries', () => {
+  it('swallows queries and leaves colour changes to xterm', () => {
+    const handlers = new Map<number, (d: string) => boolean>();
+    const parser = { registerOscHandler: (id: number, cb: (d: string) => boolean) => (handlers.set(id, cb), { dispose: () => handlers.delete(id) }) };
+    const silence = silenceColorQueries(parser);
+    expect([...handlers.keys()]).toEqual([4, 10, 11, 12]);
+    expect(handlers.get(10)!('?')).toBe(true);
+    expect(handlers.get(11)!('?')).toBe(true);
+    expect(handlers.get(4)!('150;?')).toBe(true);
+    expect(handlers.get(4)!('1;rgb:ff/00/00;2;?')).toBe(true);
+    expect(handlers.get(10)!('rgb:ff/ff/ff')).toBe(false);
+    expect(handlers.get(4)!('1;rgb:ff/00/00')).toBe(false);
+    silence.dispose();
+    expect(handlers.size).toBe(0);
   });
 });

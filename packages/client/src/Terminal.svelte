@@ -15,7 +15,7 @@
   import { DEBUG_KEY, debugEnabled } from './lib/viewport';
   import { KeyboardMode } from './lib/terminal/keyboardMode';
   import { crumb } from './lib/breadcrumbs';
-  import { dropColorReplies, setEnterKeyHint } from './lib/terminal/inputGuards';
+  import { dropColorReplies, setEnterKeyHint, silenceColorQueries } from './lib/terminal/inputGuards';
   import { WordTracker } from './lib/terminal/wordTracker';
   import { PinchZoom } from './lib/terminal/pinch';
   import { InputBatcher } from './lib/terminal/inputBatch';
@@ -322,6 +322,7 @@
     window.addEventListener('termanch-debug', syncDebug);
     cleanups.push(() => window.removeEventListener('termanch-debug', syncDebug));
 
+    cleanups.push(silenceColorQueries(term.parser).dispose);
     term.onData((data) => typed(data));
     term.onBell(() => bell && beep());
     term.onScroll(() => touch.refresh()); // handles follow their text
@@ -355,7 +356,9 @@
           crumb('attached');
           term?.reset();
           refit();
-          term?.focus(); // connecting lands in a live terminal
+          // Connecting lands in a live terminal. The page must not scroll to the field to do it.
+          if (term?.textarea) term.textarea.focus({ preventScroll: true });
+          else term?.focus();
         }
       }),
     );
@@ -471,5 +474,6 @@
   }
   :global(.xterm-helper-textarea) {
     opacity: 0 !important;
+    font-size: 16px !important; /* iOS zooms the whole page into a focused field under 16px; pinching back was the only cure (#99) */
   }
 </style>

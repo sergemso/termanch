@@ -350,6 +350,16 @@ try {
       // Connecting lands in a live terminal: the hidden input has focus without any tap.
       await page.waitForFunction(() => document.activeElement?.classList.contains('xterm-helper-textarea'), null, { timeout: 5000 });
       await page.getByRole('tab', { selected: true }).waitFor({ timeout: 5000 });
+      // #99: iOS zooms the page into a focused field under 16px, and the screen then sits shifted. The terminal's
+      // input must be 16px or more, the page must stay at scale 1, and nothing around the terminal may be scrolled.
+      const lay = await page.evaluate(() => {
+        const sc = (q) => { const e = document.querySelector(q); return e ? e.scrollLeft + e.scrollTop : 0; };
+        return { font: parseFloat(getComputedStyle(document.querySelector('.xterm-helper-textarea')).fontSize), scale: window.visualViewport.scale,
+          scrolled: ['.shell', 'main', '.workspace', '.terminal-pane', '.screen', '.xterm'].map(sc).some(Boolean) || window.scrollX + window.scrollY > 0 };
+      });
+      if (lay.font < 16) fail(`the terminal input is ${lay.font}px: iOS would zoom the page when it gets focus`);
+      if (lay.scale !== 1) fail(`the page is zoomed (${lay.scale}) after connecting`);
+      if (lay.scrolled) fail('a box around the terminal is scrolled after connecting');
       await page.getByRole('button', { name: 'Sessions', exact: true }).click();
       const heights = await page.evaluate(() => [...document.querySelectorAll('.sheet-header button.icon')].map((b) => Math.round(b.getBoundingClientRect().height)));
       if (heights.length !== 2 || heights[0] !== heights[1]) fail(`Refresh and New differ in size: ${heights}`);
