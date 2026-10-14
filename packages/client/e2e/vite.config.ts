@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'node:path';
 
 // Bundles the real Connection (WebRTC and WebSocket transports) and the real AppShell + KeyRow for the
@@ -7,7 +8,7 @@ import { resolve } from 'node:path';
 export default defineConfig({
   root: __dirname,
   base: './',
-  plugins: [svelte()],
+  plugins: [tailwindcss(), svelte()],
   build: {
     outDir: 'dist',
     emptyOutDir: true,
