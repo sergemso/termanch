@@ -31,5 +31,8 @@
 | 0028 | The server binary and installer before the native host mode | server, deployment, build | active |
 | 0029 | What Claude Code, herdr and Codex expose for agent events | agents, hooks, server | active |
 | 0031 | Claude Code gives its status line command the prompt cache expiry | agents, hooks | active |
+| 0032 | iOS Safari zooms the page into a focused field under 16px | ios, client, mobile | active |
+| 0033 | Svelte 5 in legacy mode rebuilds a key block whose key is an object | client | active |
+| 0034 | Without a hook, "working" means the pane printed something in the last 3 seconds | agents, server | active |
 
 <!-- bootstrap-generated: true -->
