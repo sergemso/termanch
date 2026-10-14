@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
+  import { rememberFocus } from './lib/focus';
   import type { HubSession } from './lib/hub';
   export let session: HubSession;
   /** Closing a session is not possible on every manager (herdr). */
@@ -12,7 +13,9 @@
   let dialog: HTMLDialogElement;
   /** Close session asks first, naming the session and its server (guardrail kill-session-needs-confirmation). */
   let confirming = confirmFirst;
+  const restoreFocus = rememberFocus();
   onMount(() => dialog.showModal());
+  onDestroy(restoreFocus);
 </script>
 <dialog bind:this={dialog} aria-label="Session actions" on:cancel|preventDefault={onclose}>
   <h2>{session.name}</h2><p>{session.serverName}</p>

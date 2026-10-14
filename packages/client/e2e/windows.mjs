@@ -66,6 +66,19 @@ try {
   await menu.waitFor({ state: 'hidden' });
   console.log('ok  the windows dropdown lists windows; closing a running one asks first and closes only that window');
 
+  // #107: a focused terminal stays focused through opening the dropdown and closing it by tapping outside or Escape.
+  const focusedTerminal = () => page.evaluate(() => document.activeElement?.classList.contains('xterm-helper-textarea'));
+  for (const close of ['tap outside', 'Escape']) {
+    await page.locator('.xterm-helper-textarea').focus();
+    await tab('alpha/session-0').click();
+    await menu.waitFor();
+    if (close === 'Escape') await page.keyboard.press('Escape');
+    else await page.mouse.click(5, 700);
+    await menu.waitFor({ state: 'hidden' });
+    if (!(await focusedTerminal())) fail(`the terminal lost focus after the windows menu closed by ${close}`);
+  }
+  console.log('ok  the terminal keeps focus through the windows menu (#107)');
+
   // + New window asks the server for one in this session and closes the menu.
   await tab('alpha/session-0').click();
   await menu.waitFor();

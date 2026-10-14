@@ -22,7 +22,7 @@ Status values: `pending`, `blocked (reason)`, `done (PR #n)`.
 <!-- order:start -->
 | # | Step | Title | Status | WSJF | Preds |
 |---|---|---|---|---|---|
-| 1 | [R02](roadmap/R02.md) | Triage bugs #107 (focus lost on tab tap) and #99 (canvas shifts on Sessions tab) | pending | 9.5 | - |
+| 1 | [R02](roadmap/R02.md) | Triage bugs #107 (focus lost on tab tap) and #99 (canvas shifts on Sessions tab) | blocked (owner's iPhone confirmation of #107 and #99) | 9.5 | - |
 | 2 | [R10](roadmap/R10.md) | Spike: connector payload and abuse review (O.1) | pending | 8.5 | R01 |
 | 3 | [R03](roadmap/R03.md) | Real-iPhone checklist and two-real-server e2e (G.10, H.11) | pending | 8.0 | R02 |
 | 4 | [R08](roadmap/R08.md) | Privacy notice and delete-my-data (S.6) | pending | 6.3 | - |
@@ -68,7 +68,7 @@ Status values: `pending`, `blocked (reason)`, `done (PR #n)`.
 | 44 | [R44](roadmap/R44.md) | Pro: reliable push and inbox retention (P.5) | blocked (R40, the free gate) | 1.2 | R43 |
 | 45 | [R45](roadmap/R45.md) | Pro: fleet view and usage reports (P.6) | blocked (R40, the free gate) | 1.2 | R43 |
 
-6 step(s) done (their files stay in `roadmap/`; `grep -l '^Status: done' roadmap/R*.md`).
+7 step(s) done (their files stay in `roadmap/`; `grep -l '^Status: done' roadmap/R*.md`).
 <!-- order:end -->
 
 ## Paid tiers (decisions 0089-0093, fact 0035)
