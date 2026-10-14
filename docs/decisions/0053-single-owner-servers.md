@@ -15,3 +15,5 @@ Registering a server binds it to the registering GitHub user id; every later con
 ## Why
 
 Without an owner check any GitHub user with a valid token could attach to a shell on the VPS.
+
+Refined by [[0094-session-guests-get-a-scoped-expiring-grant-not-ownership]]: a guest holds a scoped, expiring grant on one session; the server still has exactly one owner.
