@@ -37,6 +37,8 @@ bootstrap-generated: true
 | server | Backend Rust services |
 | ssp | Screen Synchronization Protocol |
 | terminal | ANSI/VT100/TUI emulation |
+| tiers | Free, Pro, Team and Enterprise boundaries |
+| billing | Payment, entitlements, invoicing |
 | transport | WebTransport, WebSocket, QUIC |
 | wasm | WebAssembly, Rust→WASM, wasm-bindgen |
 
