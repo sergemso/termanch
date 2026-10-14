@@ -97,3 +97,18 @@ describe('prefixLabel and newlineKeys', () => {
     expect(newlineKeys('codex')).toEqual({ seq: '\n', hint: 'Ctrl+J' });
   });
 });
+
+describe('Shift', () => {
+  it('upper-cases one typed character and leaves pastes alone', () => {
+    expect(applyMods('a', { ctrl: false, alt: false, shift: true })).toEqual({ out: 'A', used: true });
+    expect(applyMods('привет', { ctrl: false, alt: false, shift: true })).toEqual({ out: 'привет', used: false });
+  });
+  it('turns Tab into back-tab and cursor keys into modifier 2', async () => {
+    const { shiftSeq } = await import('./keys');
+    expect(shiftSeq(KEYS.tab)).toBe('\x1b[Z');
+    expect(shiftSeq(KEYS.up)).toBe('\x1b[1;2A');
+    expect(shiftSeq(KEYS.home)).toBe('\x1b[1;2H');
+    expect(shiftSeq(KEYS.esc)).toBeNull();
+    expect(shiftSeq('|')).toBeNull();
+  });
+});
