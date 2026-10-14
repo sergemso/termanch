@@ -49,7 +49,8 @@
   </div>
   <div class="grid">
     {#if page === 'more'}
-      <button class="k" on:pointerdown={tap(onpaste)}>Paste</button>
+      <!-- Reading the clipboard needs a click: iOS does not count a pointerdown as the user's tap. -->
+      <button class="k" on:pointerdown|preventDefault on:click={() => onpaste()}>Paste</button>
       <button class="k" on:pointerdown={tap(oncopy)}>Copy</button>
       <button class="k" on:pointerdown={tap(onselect)}>Select</button>
       <button class="k" aria-label={bell ? 'Mute bell' : 'Unmute bell'} aria-pressed={bell} on:pointerdown={tap(onbell)}>{bell ? '🔔' : '🔕'}</button>
