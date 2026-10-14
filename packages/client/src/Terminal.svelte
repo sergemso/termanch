@@ -288,7 +288,8 @@
     cleanups.push(() => themeObserver.disconnect());
     // WebGL is the fast renderer; where it is missing or its context is lost, xterm's DOM renderer takes over
     // instead of leaving a blank screen.
-    try {
+    crumb(`renderer ${$settings.renderer}`);
+    if ($settings.renderer === 'webgl') try {
       const gl = new WebglAddon();
       gl.onContextLoss(() => {
         try {
