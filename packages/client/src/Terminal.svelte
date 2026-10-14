@@ -14,6 +14,7 @@
   import { attachInputMirror, attachSwipeSupport } from './lib/swipe';
   import { DEBUG_KEY, debugEnabled } from './lib/viewport';
   import { KeyboardMode } from './lib/terminal/keyboardMode';
+  import { crumb } from './lib/breadcrumbs';
   import { dropColorReplies, setEnterKeyHint } from './lib/terminal/inputGuards';
   import { WordTracker } from './lib/terminal/wordTracker';
   import { PinchZoom } from './lib/terminal/pinch';
@@ -250,6 +251,7 @@
   }
 
   function sendResize(cols: number, rows: number) {
+    crumb(`resize ${cols}x${rows}`);
     batch.flush(); // typed text goes out before the new size, as it was typed
     if (activeSessionId) connection.send({ type: 'resize', cols, rows });
   }
@@ -295,6 +297,7 @@
           /* xterm 5.3 can throw while swapping renderers; the screen keeps its last frame until the next redraw */
         }
         if (webgl === gl) webgl = null;
+        crumb('renderer lost');
         refit();
       });
       term.loadAddon(gl);
@@ -349,6 +352,7 @@
         } else if (msg.type === 'session_attached') {
           // tmux repaints the screen on attach; start clean so a re-attach never doubles the content.
           previewing = false;
+          crumb('attached');
           term?.reset();
           refit();
           term?.focus(); // connecting lands in a live terminal

@@ -27,7 +27,8 @@
   import { buildReport, noteError, recentErrors } from './lib/report';
   import { runningBundle } from './lib/update';
   import { startUsageMeter } from './lib/usageMeter';
-  import { DEBUG_KEY, tapCounter } from './lib/viewport';
+  import { DEBUG_KEY, tapCounter, viewportReading } from './lib/viewport';
+  import { crumb, crumbText } from './lib/breadcrumbs';
   import { watchForUpdates } from './lib/update';
   import { isIosBrowser } from './lib/pwa';
 
@@ -45,13 +46,21 @@
   /** Version of the connected server (`0.1.0+abc1234`), shown so a stale image is noticed. */
   let serverVersion = '';
   function openReport() {
+    crumb('report opened');
     const vv = window.visualViewport;
     reportText = buildReport({
       version: runningBundle(),
       userAgent: navigator.userAgent,
       inner: `${window.innerWidth}x${window.innerHeight}`,
-      visual: vv ? `${Math.round(vv.width)}x${Math.round(vv.height)} top ${Math.round(vv.offsetTop)}` : 'none',
+      visual: viewportReading(vv, window, document.activeElement),
+      steps: crumbText(),
       connection: selectedServer ? connState : 'no server selected',
+      layout: ['.shell', '.workspace', '.terminal-pane', '.screen', '.xterm', '.xterm canvas'].map((q) => {
+        const e = document.querySelector(q);
+        if (!e) return `${q} -`;
+        const b = e.getBoundingClientRect();
+        return `${q} x${Math.round(b.left)} w${Math.round(b.width)} s${e.scrollLeft}`;
+      }).join('; '),
       server: serverVersion || undefined,
       errors: $recentErrors,
     });
@@ -259,6 +268,7 @@
       showToast('This server is reconnecting. You can retry it in Servers.', 'error');
       return;
     }
+    crumb('open session tab');
     sheetHeight = 'closed';
     if (hidden.has(key)) { hidden.delete(key); hidden = new Set(hidden); saveHidden(hidden); }
     if (activeServerId && activeServerId !== session.serverId) hub.send(activeServerId, { type: 'detach' });
@@ -280,6 +290,7 @@
 
   /** Detach: the tab closes and the stream stops; the session keeps running and stays in the Sessions sheet. */
   function detach(key: string) {
+    crumb('detach');
     forget(key);
     hidden = new Set(hidden).add(key); saveHidden(hidden);
     if (key === activeKey) {
@@ -291,12 +302,14 @@
 
   /** Close session: it and everything in it ends (the dialog has asked first). */
   function closeSession(key: string) {
+    crumb('close session');
     forget(key);
     hub.sendToSession(key, { type: 'close_session', session: key });
     if (key === activeKey) { activeKey = null; activeServerId = null; preview = null; sheetHeight = 'half'; }
   }
 
   function openWindowMenu(key: string) {
+    crumb('window menu opened');
     menuKey = key;
     hub.sendToSession(key, { type: 'windows', session: key });
   }
@@ -484,7 +497,7 @@
     </div>
   {:else}
     <NavigationBar sessions={tabSessions} agents={$allAgents} servers={$hubServers} windows={$allWindows} {expiring} {link} {activeKey} held={!!actionSession || !!menuSession || cardExpanded || sheetHeld} onopen={attach} onpeek={peek} ontabmenu={openWindowMenu} onactions={(key) => { actionConfirm = false; actionKey = key; }}
-      onlink={() => link && showToast(link.text, link.ok ? 'success' : 'error')} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { showWorkspace(); sheetHeight = sheetHeight === 'closed' ? 'half' : 'closed'; }} />
+      onlink={() => link && showToast(link.text, link.ok ? 'success' : 'error')} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { crumb('sessions sheet toggled'); showWorkspace(); sheetHeight = sheetHeight === 'closed' ? 'half' : 'closed'; }} />
     <NeedsYouBanner {waiting} {now} collapsed={keyboardOpen} onopen={attach} onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} />
 
     {#if iosHint && !selectedServer}
