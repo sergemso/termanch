@@ -288,7 +288,10 @@ mod tests {
         }
         changed.store(true, Ordering::SeqCst);
         wait.await;
-        assert!(t0.elapsed() < KEEPALIVE, "a change must not wait for the keepalive");
+        assert!(
+            t0.elapsed() < KEEPALIVE,
+            "a change must not wait for the keepalive"
+        );
 
         let t1 = tokio::time::Instant::now();
         wait_or_change(KEEPALIVE, || false).await;
