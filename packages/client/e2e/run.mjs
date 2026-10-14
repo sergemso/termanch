@@ -364,6 +364,12 @@ try {
       const heights = await page.evaluate(() => [...document.querySelectorAll('.sheet-header button.icon')].map((b) => Math.round(b.getBoundingClientRect().height)));
       if (heights.length !== 2 || heights[0] !== heights[1]) fail(`Refresh and New differ in size: ${heights}`);
       if (!(await page.getByText(/server 0\.1\.\d+\+/).count())) fail('the sidebar does not show the server version');
+      // #105: every hub update (an agent changing state, a session list) used to rebuild the terminal, which blanked and
+      // flickered the screen. Refresh makes the server answer with a session list; the same xterm must survive it.
+      await page.evaluate(() => { document.querySelector('.xterm').dataset.same = '1'; });
+      await page.locator('.session-sheet').getByRole('button', { name: 'Refresh', exact: true }).click();
+      await sleep(600);
+      if (!(await page.evaluate(() => document.querySelector('.xterm')?.dataset.same === '1'))) fail('the terminal was rebuilt by a hub update');
       await page.locator('.session-sheet').getByRole('button', { name: /^s1(\s|$)/ }).first().click(); // a tab now reads as the directory
       await page.locator('.xterm').waitFor({ timeout: 5000 });
       if (lap === 3) {
