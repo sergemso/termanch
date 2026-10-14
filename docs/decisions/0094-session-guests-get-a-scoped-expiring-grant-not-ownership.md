@@ -1,7 +1,8 @@
 ---
 id: 0094-session-guests-get-a-scoped-expiring-grant-not-ownership
 title: A session guest gets a scoped, expiring grant tied to a GitHub id, never ownership
-status: draft
+status: active
+accepted-by: Sergey Strebulaev <s@vivantel.dev>
 date: 2026-10-14
 track: product
 tags: [security, auth, sharing, roadmap]
@@ -38,6 +39,4 @@ Refines 0053 (it stays true: one owner per server) and implements the free shari
 
 Sharing hands a stranger a shell, so scope, expiry and server-side enforcement come before the feature (R38). A grant tied to a GitHub id keeps 0053's model (identity from GitHub, no bearer tokens) and needs no new account system.
 
-## Open for the owner
-
-Accept the defaults (1 h / 24 h, 5 grants, 20 KB/s, no scrollback, no root sessions), or change them. R38 can be built from this alone once accepted.
+Accepted 2026-10-14 with the defaults above (1 h default and 24 h maximum, 5 grants, 20 KB/s, no scrollback, no root sessions). R38 can be built from this alone.
