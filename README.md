@@ -103,7 +103,7 @@ termanch-server --connect-claude --yes    # applies them (backup kept)
 termanch-server --disconnect-claude       # removes exactly those again
 ```
 
-Only sessions created by Termanch carry the variables hooks need. Agent text in events is cleaned (control characters, secrets, addresses) and capped before it is stored or sent. Details: `docs/plans/termanch-v6-agent-events.md`.
+Only sessions created by Termanch carry the variables hooks need. Agent text in events is cleaned (control characters, secrets, addresses) and capped before it is stored or sent. Details: `docs/plans/archive/termanch-v6-agent-events.md`.
 
 ## Configuration
 
@@ -139,7 +139,7 @@ docker/           image (built by CI) and a sample compose file
 docs/             facts, decisions, guardrails, plans
 ```
 
-The plan and its status live in GitHub issues; see `docs/plans/termanch-v1.md`.
+The plan and its status live in GitHub issues; see `docs/plans/termanch-roadmap.md`.
 
 ## Roadmap
 

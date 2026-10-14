@@ -9,6 +9,7 @@
   export let onretry: (id: string) => void;
   export let onadd: () => void;
   export let onremove: (index: number) => void;
+  export let onshare: (index: number) => void;
 </script>
 
 <div class="server-list" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px;">
@@ -48,6 +49,11 @@
             <div style="display: flex; gap: 8px;">
               <button class="secondary" aria-pressed={status?.state === 'paused'} on:click={() => status?.state === 'paused' ? onresume(serverKey(server)) : onpause(serverKey(server))}>{status?.state === 'paused' ? 'Resume' : 'Pause'}</button>
               {#if status && status.state !== 'connected' && status.state !== 'paused'}<button class="secondary" on:click={() => onretry(serverKey(server))}>Retry</button>{/if}
+              {#if server.server_id}
+                <button class="secondary" aria-label="Send to another device" title="Send to another device" on:click={() => onshare(index)} style="padding: 8px;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M8 7l4-4 4 4"></path><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"></path></svg>
+                </button>
+              {/if}
               <button class="secondary" aria-label="Remove server" on:click={() => confirm(`Remove "${server.server_name}" from this browser? You can add it again with its link or QR.`) && onremove(index)} style="padding: 8px; color: var(--danger);">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               </button>
