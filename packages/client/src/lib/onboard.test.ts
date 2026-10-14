@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { installCommand, scanCommand, claimLink, parseClaim, parseServerLink, pollDelay, waitForServer, ClaimTimeout, CLAIM_WINDOW_MS, type WaitDeps } from './onboard';
+import { installCommand, scanCommand, claimLink, parseClaim, parseServerLink, serverLink, pollDelay, waitForServer, ClaimTimeout, CLAIM_WINDOW_MS, type WaitDeps } from './onboard';
 import type { DirRecord } from './directory';
 
 const S = 'A'.repeat(43);
@@ -101,5 +101,13 @@ describe('run choice in the install commands', () => {
     expect(scanCommand(O)).toBe(`curl -fsSL ${O}/install.sh | sh`);
     expect(scanCommand(O, 'host-user')).toBe(`curl -fsSL ${O}/install.sh | sh -s -- - ${O} host-user`);
     expect(scanCommand(O, 'host')).toBe(`curl -fsSL ${O}/install.sh | sh -s -- - ${O} host`);
+  });
+});
+
+describe('server link', () => {
+  it('round-trips the public id and never carries a secret', () => {
+    const id = 'K'.repeat(43);
+    expect(serverLink('https://app.example.dev/', id)).toBe(`https://app.example.dev/#server=${id}`);
+    expect(parseServerLink(serverLink('https://app.example.dev', id))).toBe(id);
   });
 });

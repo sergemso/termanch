@@ -1,7 +1,8 @@
 ---
 id: 0088-the-start-screen-resumes-the-last-session
 title: The start screen resumes the last session
-status: draft
+status: active
+accepted-by: Sergey Strebulaev <s@vivantel.dev>
 date: 2026-10-14
 track: product
 tags: [client, mobile]

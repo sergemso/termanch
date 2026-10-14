@@ -47,3 +47,5 @@ unprivileged-server-never-holds-root,"An unprivileged server never holds a way t
 updates-are-verified-and-reversible,"Native updates are verified, reversible and stoppable","security, build, deployment",active
 ui-never-moves-under-the-finger,"The interface never moves a control or switches the session under the user's finger","client, mobile",active
 user-settings-are-wrapped-not-replaced,"Termanch adds to a user's agent settings and never replaces what is there","hooks, security",active
+free-features-are-never-capped-for-a-tier,"A free feature is never removed or capped to create a paid tier","tiers, product",active
+paid-data-is-ciphertext-only,"Paid-tier data is stored as ciphertext only","tiers, privacy, security",active

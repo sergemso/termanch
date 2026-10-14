@@ -29,6 +29,11 @@ export function claimLink(origin: string, secret: string): string {
   return `${origin.replace(/\/$/, '')}/#claim=${secret}`;
 }
 
+/** The link that adds an already-registered server on another device (see `parseServerLink`). */
+export function serverLink(origin: string, serverId: string): string {
+  return `${origin.replace(/\/$/, '')}/#server=${serverId}`;
+}
+
 /** Accepts a claim link, a URL fragment (`#claim=...`) or the bare secret. */
 export function parseClaim(text: string): string | null {
   const t = text.trim();

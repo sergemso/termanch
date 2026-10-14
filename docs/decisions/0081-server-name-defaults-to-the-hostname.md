@@ -1,7 +1,8 @@
 ---
 id: 0081-server-name-defaults-to-the-hostname
 title: A server's display name defaults to the host's short hostname, and a name the owner types wins
-status: draft
+status: active
+accepted-by: Sergey Strebulaev <s@vivantel.dev>
 date: 2026-10-13
 track: product
 tags: [server, client, deployment]

@@ -81,13 +81,18 @@
 0076-native-releases-and-updater,"Native releases carry a signed manifest and a root-owned updater applies them with rollback","build, security, deployment",active
 0077-root-actions-by-request-file,"An unprivileged server asks for root actions through a request file, never through sudo","security, deployment, protocol",active
 0078-install-for-the-current-user,"A host install can run sessions as the user who ran the installer","deployment, security, client",active
-0079-agent-hooks-are-opt-in,"Agent hooks are installed only on the owner's explicit request, and the layer works without them","agents, hooks, security, roadmap",draft
+0079-agent-hooks-are-opt-in,"Agent hooks are installed only on the owner's explicit request, and the layer works without them","agents, hooks, security, roadmap",active
 0080-connector-credentials-from-a-root-owned-file,"Connector credentials come from a root-owned file read at start and are held in memory","security, secrets, notifications, roadmap",draft
-0081-server-name-defaults-to-the-hostname,"A server's display name defaults to the host's short hostname, and a name the owner types wins","server, client, deployment",draft
+0081-server-name-defaults-to-the-hostname,"A server's display name defaults to the host's short hostname, and a name the owner types wins","server, client, deployment",active
 0082-navigation-tabs-sheet-and-auto-connect,"Navigation is a tab strip and a session sheet over servers that connect by themselves","client, mobile, agents",active
 0083-cache-expiry-estimate-and-statusline-forwarder,"Prompt-cache expiry is an estimate, made exact by a wrapped status line forwarder","agents, hooks, privacy",active
 0084-tab-switch-shows-a-server-snapshot-first,"A tab switch shows a server snapshot at once, then attaches live","client, mobile, performance, protocol",active
-0085-tabs-speak-for-one-window-and-detach-differs-from-close,"A tab speaks for one tmux window, Detach differs from Close, and windows come from tmux control mode","client, mobile, agents, tmux, protocol",draft
-0086-a-problem-report-says-what-the-app-did-and-how-the-page-was-viewed,"A problem report says what the app did and how the page was viewed","client, privacy, mobile, ios",draft
-0087-the-terminal-is-built-once-and-never-answers-the-page,"The terminal is built once per connection, takes input at 16px and answers no colour queries","client, ios, rendering, terminal, mobile",draft
-0088-the-start-screen-resumes-the-last-session,"The start screen resumes the last session","client, mobile",draft
+0085-tabs-speak-for-one-window-and-detach-differs-from-close,"A tab speaks for one tmux window, Detach differs from Close, and windows come from tmux control mode","client, mobile, agents, tmux, protocol",active
+0086-a-problem-report-says-what-the-app-did-and-how-the-page-was-viewed,"A problem report says what the app did and how the page was viewed","client, privacy, mobile, ios",active
+0087-the-terminal-is-built-once-and-never-answers-the-page,"The terminal is built once per connection, takes input at 16px and answers no colour queries","client, ios, rendering, terminal, mobile",active
+0088-the-start-screen-resumes-the-last-session,"The start screen resumes the last session","client, mobile",active
+0089-paid-tiers-sell-only-what-costs-us-to-run,"Paid tiers sell only what costs us to run; the free product is never capped","tiers, billing, roadmap",active
+0090-pro-is-managed-relay-history-push-and-fleet-view,"Pro is managed relay, cloud history, reliable push with inbox, and fleet view, all client-encrypted","tiers, privacy, crypto, roadmap",active
+0091-team-and-enterprise-are-a-hosted-control-plane-over-mit-code,"Team and Enterprise sell a hosted control plane; the code stays MIT","tiers, license, security, roadmap",active
+0092-billing-starts-with-github-sponsors,"Billing starts with GitHub Sponsors; a merchant of record arrives with Team","billing, tiers, auth",active
+0093-paid-tiers-are-built-after-the-free-gate,"Paid tiers are designed now and built only after the free gate","tiers, roadmap",active

@@ -1,3 +1,5 @@
+> Archived 2026-10-14. Every open step was moved into `docs/plans/termanch-roadmap.md` (see the `[>]` markers); this file is history.
+
 # Termanch Plan: agent event layer (implemented 2026-10-13, merged in #79, released as v0.1.2, except the items under Status; decision 0079 still needs the owner's acceptance)
 
 Decisions: 0061 (state from process scans plus tool adapters), 0079 (hooks are opt-in; draft). Guardrails: `host-changes-are-journaled`, `internal-network-binding`, `security-secrets-handling`, `audit-logging-no-secrets`, `diagnostics-never-include-secrets`, `resource-constraints`. Feeds v7 (`termanch-v7-output-connectors.md`, steps O.*) and v8 (`termanch-v8-session-cards.md`, steps K.*). Nothing here is decided until the owner accepts it. A fresh session needs only this file, those artifacts and the repo.
@@ -53,7 +55,7 @@ Class: implement · Needs: P.2 · Check: `cargo test -p termanch-server scan`
 Do: 1. The 0061 scan as `state` events with `source=scan`. 2. Prompt heuristics as `prompt` events with `confidence=low` and a fresh prompt `id` each time the matched screen changes, covered by recorded screen fixtures per tool version.
 Done-when: fixtures for each tool produce the expected states, a changed screen produces a new prompt id, and nothing from the screen text leaves the server except the capped summary.
 
-### P.5 Codex and herdr adapters — [~] herdr done, Codex unverified
+### P.5 Codex and herdr adapters — [>] moved to docs/plans/termanch-roadmap.md as R21 (herdr done, Codex unverified)
 Class: implement · Needs: P.1, P.2 · Check: e2e with recorded samples from fact 0029.
 Do: one adapter per tool on the surface P.1 chose, reading its structured channel and emitting events through the same ingest path and sanitiser.
 Done-when: replaying each recorded sample yields the matching `state`, `tool` and `prompt` events; a tool without hooks still shows scan state.

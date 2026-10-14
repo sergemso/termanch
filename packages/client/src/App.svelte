@@ -18,7 +18,8 @@
   import { cacheRemaining, expiringSoon } from './lib/cache';
   import { settings, applyTheme } from './lib/settings';
   import type { ServerListItem } from './lib/protocol';
-  import { parseClaim, parseServerLink } from './lib/onboard';
+  import { parseClaim, parseServerLink, serverLink } from './lib/onboard';
+  import { sendServerLink } from './lib/share';
   import { ServerHub, serverKey, sessionDestinations, sessionKey, type HubServer } from './lib/hub';
   import { lookup } from './lib/directory';
   import { deviceKey, publicKeyB64, signChallenge, certExpiry, certUserId, avatarUrl } from './lib/device';
@@ -249,6 +250,15 @@
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Could not add the server', 'error');
     }
+  }
+
+  /** Sends the saved server to the owner's other device: the share sheet on a phone, a copied link elsewhere. */
+  async function shareServer(index: number) {
+    const server = servers[index];
+    if (!server?.server_id) return;
+    const result = await sendServerLink(serverLink(location.origin, server.server_id), server.server_name);
+    if (result === 'copied') showToast('Link copied. Open it on your other device and sign in with the same GitHub account.');
+    else if (result === 'failed') showToast('Could not share the link', 'error');
   }
 
   const LAST_KEY = 'termanch_last_session';
@@ -522,7 +532,7 @@
       {/snippet}
       {#if serversPage || servers.length === 0}
         {#if servers.length > 0}<button class="secondary" on:click={showWorkspace}>← Sessions</button>{/if}
-        <ServerList {servers} states={$hubServers} onpause={(id) => { hub.pause(id); }} onresume={(id) => hub.resume(id)} onretry={(id) => hub.retry(id)} onadd={() => { addPrefill = null; showAddServer = true; }} onremove={removeServer} />
+        <ServerList {servers} states={$hubServers} onpause={(id) => { hub.pause(id); }} onresume={(id) => hub.resume(id)} onretry={(id) => hub.retry(id)} onadd={() => { addPrefill = null; showAddServer = true; }} onremove={removeServer} onshare={shareServer} />
       {:else}
         <div class="workspace" class:mobile={narrow}>
           <div class="terminal-pane">

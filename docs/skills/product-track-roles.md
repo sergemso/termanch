@@ -18,5 +18,6 @@ Roles that weigh in on **product** track decisions (what the project is for, who
 | Mobile UX Engineer | iOS/Android behavior, gestures, battery, background, PWA |
 | Accessibility Advocate | Screen reader, contrast, keyboard navigation, voice input |
 | Community Maintainer | Contributor experience, documentation, issue triage, releases |
+| Billing and Finance Reviewer | Pricing, entitlements, tax and invoicing, payment vendors, seat billing |
 
 <!-- bootstrap-generated: true -->

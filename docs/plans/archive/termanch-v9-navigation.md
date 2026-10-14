@@ -1,3 +1,5 @@
+> Archived 2026-10-14. Every open step was moved into `docs/plans/termanch-roadmap.md` (see the `[>]` markers); this file is history.
+
 # Termanch Plan: navigation, session views and auto-connect
 
 Decisions: 0082 (navigation, supersedes 0070), 0083 (cache expiry and the status line forwarder), 0084 (snapshot on tab switch), 0079 (hooks are opt-in; draft, its consent covers 0083). Facts: 0029, 0031. Guardrails: `ui-never-moves-under-the-finger`, `user-settings-are-wrapped-not-replaced`, `connections-warn-never-drop`, `kill-session-needs-confirmation`, `soft-keyboard-never-hides-input`, `host-changes-are-journaled`, `diagnostics-never-include-secrets`. Builds on `termanch-v6-agent-events.md` (events) and `termanch-v8-session-cards.md` (cards). Step letters are G. A fresh session needs only this file, those artifacts and the repo.
@@ -55,31 +57,31 @@ Verification (2026-10-13): 184 client tests, local preview/harness builds and th
 
 Review fixes (2026-10-13): corrected claims replace only their connection; unavailable selections require a destination choice when multiple servers are connected; tabs and the sheet ignore releases from pointers they do not own; keyboard activation works after a long press. Needs me sorts by the continuous human-wait start, supplied as optional `waiting_since` by the server and preserved across activity and snapshots. Older servers retain the client-observed start while connected; a cold snapshot without that field can only estimate from its last event time. Regression checks: 189 client tests, Rust workspace tests, builds, Chrome navigation/sheet harness, isolated real-server flow and terminal touch checks pass. Phone checks remain emulated Chrome only; iPhone Safari/PWA native gestures, keyboard and foreground recovery remain unverified.
 
-### G.6 Client: proactive signals — [ ]
+### G.6 Client: proactive signals — [x] done: session-tabs H.7
 Class: implement · Needs: G.4, G.5 · Check: `cd packages/client && npx --yes pnpm@9 test`
 Context: Decision 0082; v8 already announces needs-you through an `aria-live` region.
 Do: 1. `NeedsYouBanner.svelte` under the tab strip: stacks ("3 need you"), Open, answer buttons when the prompt is hook-confirmed, dismiss, never moves the active tab. 2. Document title count and the PWA badge (`navigator.setAppBadge`, feature-checked). 3. Per-server degraded notice on group header and tabs. 4. Tests for the count, the stack and that none of it changes `activeSession`.
 Done-when: tests show the banner appears for a session that is not the active one, the title shows `(2) Termanch` for two, and no code path sets the active session from an event.
 
-### G.7 Client: snapshot first on a tab switch — [ ]
+### G.7 Client: snapshot first on a tab switch — [x] done: session-tabs H.8
 Class: implement · Needs: G.2, G.4 · Check: `cd packages/client && npx --yes pnpm@9 test`; browser check in G.10
 Context: Decision 0084. `Terminal.svelte` resets the terminal on `session_attached` and the server repaints.
 Do: 1. On `pointerdown` over a tab or card send `peek` with the hash of the last snapshot held for that session. 2. When the snapshot arrives before the attach completes, write it into the terminal dimmed (one wrapper class), keep the per-session last snapshot in memory only (cap 20), then on `session_attached` clear and let the live repaint replace it. 3. No snapshot (herdr or error) means the plain attach as today. 4. Never persist snapshots; never include them in a report.
 Done-when: unit tests cover the dim/replace order and the cap; the browser check measures time from touch-down to first painted text and it is under the plain-attach time on the same session.
 
-### G.8 Cache estimate, the `cache` event and the status line forwarder — [ ]
+### G.8 Cache estimate, the `cache` event and the status line forwarder — [>] moved to docs/plans/termanch-roadmap.md as R19 (the cache chip is done)
 Class: implement · Needs: G.1 · Check: `cargo test -p termanch-core event && cargo test -p termanch-server claude_hooks`; `cd packages/client && npx --yes pnpm@9 test`
 Context: Decisions 0083 and 0079, fact 0031, guardrail `user-settings-are-wrapped-not-replaced`. `claude_hooks.rs` has `connect`/`disconnect`/`merge`/`remove` for hooks and `events.rs::run_hook` forwards stdin to the socket.
 Do: 1. `EventKind::Cache {expires_at, ttl, warm, hit_ratio}` in core (unknown-kind rule applies), adapter `claude-statusline` mapping `prompt_cache`, sanitiser keeps only those numbers. 2. `--hook statusline`: reads the JSON, forwards `prompt_cache` only, then runs the user's original command (read from a state file written at Connect) with the same stdin and prints its output unchanged; the whole forward is capped at 2 s and never fails. 3. `connect` wraps an existing `statusLine` (preview shows both), `disconnect` restores the original bytes. 4. Client: `lib/cache.ts` (remaining = exact `expires_at` or estimate TTL minus time since `last_response_at`, TTL setting 5 min or 1 h), a chip on idle agent cards and tabs ("about 3 min" vs "3 min"), and the Keep warm button (one tap, configured reply via `reply`). 5. Tests: wrap and restore with an existing status line and with none, forwarded fields exactly `prompt_cache`, estimate versus exact.
 Done-when: tests show the original status line command still receives the same stdin and its output is unchanged, Disconnect restores the original file bytes, a forwarded JSON with a model name and a path forwards neither, and the chip says "about" only for an estimate.
 
-### G.9 Session actions: rename, kill, copy — [ ]
+### G.9 Session actions: rename, kill, copy — [x] done: session-tabs H.4
 Class: implement · Needs: G.4 · Check: `cargo test -p termanch-server session_actions && cd packages/client && npx --yes pnpm@9 test`
 Context: `kill-session-needs-confirmation`. The protocol has no `close_session` or `rename` yet; `SessionBackend` has `create`, `list`, `attach`, `capture`, `send_text`.
 Do: 1. `ClientMessage::CloseSession {session}` and `RenameSession {session, name}`; `SessionBackend::kill` and `rename` (tmux `kill-session`, `rename-session`; unsupported managers return an error shown as a toast). 2. Client long-press menu on tabs and cards: Rename, Kill (a confirmation naming the session and its server), Copy name. 3. Audit log entries without content. 4. Tests with a real tmux and the confirmation flow.
 Done-when: a real tmux session is renamed and killed through the handlers, the kill needs the confirmation in the client test, and herdr returns the unsupported error.
 
-### G.10 End-to-end, phone check and the docs — [ ]
+### G.10 End-to-end, phone check and the docs — [>] moved to docs/plans/termanch-roadmap.md as R03
 Class: review · Needs: G.1, G.2, G.3, G.4, G.5, G.6, G.7, G.8, G.9 · Check: `node e2e/run.mjs && node e2e/touch.mjs && node e2e/cards.mjs`
 Context: The owner tests on an iPhone; `docs/skills/mobile-ui-device-check.md` has the checklist.
 Do: 1. Browser e2e with two real servers (two server processes): both connect with no click, a session on each shows as a tab, a switch shows a snapshot before the live repaint, a needs-you event on the inactive one shows the banner and the count and does not change the active tab. 2. Update README (navigation, views, Connect also wraps the status line) and mark the steps. 3. List what the owner must check on the phone: tab strip scroll, sheet drag and keyboard, long-press menu, banner, badge.

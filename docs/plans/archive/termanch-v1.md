@@ -1,3 +1,5 @@
+> Archived 2026-10-14. Every open step was moved into `docs/plans/termanch-roadmap.md` (see the `[>]` markers); this file is history.
+
 # Termanch Plan (re-baselined on the MVP)
 
 **Goal**: A web terminal for managing remote AI coding agents from a phone browser; sessions survive disconnects. Self-hosted server, no subscriptions.
@@ -59,7 +61,7 @@ Done-when: device test passes; the e2e test (drop socket, reconnect, same screen
 
 ---
 
-### 3.1 Mobile terminal UX — [>]
+### 3.1 Mobile terminal UX — [x] done: v2 A.1 (PR #46)
 Moved to `docs/plans/termanch-v2-environment-and-ux.md` step A.1.
 Issue: #17
 Class: implement · Needs: 1.1, 2.2 · Check: `pnpm --filter termanch-client build && pnpm --filter termanch-client test`
@@ -73,7 +75,7 @@ Done-when: a user can run `ls`, `vim`-style Esc/Ctrl combos and scroll on a phon
 
 ---
 
-### 3.2 Installable PWA — [>]
+### 3.2 Installable PWA — [x] done: v2 A.2 (PR #51)
 Moved to `docs/plans/termanch-v2-environment-and-ux.md` step A.2.
 Issue: #18
 Class: implement · Needs: 1.1, 3.1 · Check: `pnpm --filter termanch-client build && ls packages/client/dist/manifest.webmanifest`
@@ -85,7 +87,7 @@ Done-when: installable on iOS and Android; cold start from cache works offline-s
 
 ---
 
-### 4.1 Agent detection and notifications — [>]
+### 4.1 Agent detection and notifications — [x] done: v6 P.1-P.6
 Moved to `docs/plans/termanch-v2-environment-and-ux.md` step B.7.
 Issue: #19
 Class: implement · Needs: 2.2 · Check: `cargo test -p termanch-server`
@@ -99,7 +101,7 @@ Done-when: running `claude` or `codex` in a tmux pane shows spawn and completion
 
 ---
 
-### 5.1 Container and one-command deploy — [~]
+### 5.1 Container and one-command deploy — [>] moved to docs/plans/termanch-roadmap.md as R34 (installer and CI gates are done)
 Status: installer and CI image done (8.5); self-hosted client docs and the size/RSS gates remain (see v2 step 0.2).
 Issue: #20
 Class: implement · Needs: 2.1, 4.1, 8.5 · Check: `docker compose -f docker/docker-compose.yml config`
@@ -113,7 +115,7 @@ Done-when: fresh 512MB VPS reaches a working terminal following the README only;
 
 ---
 
-### 6.1 End-to-end test and resource gates — [>]
+### 6.1 End-to-end test and resource gates — [x] done: v2 0.2 (PR #44)
 Moved to `docs/plans/termanch-v2-environment-and-ux.md` step 0.2.
 Issue: #21
 Class: review · Needs: 5.1 · Check: `pnpm --filter termanch-client test:e2e`
@@ -126,7 +128,7 @@ Done-when: gates enforced in CI.
 
 ---
 
-### 7.1 Verify herdr and other backend CLIs — [>]
+### 7.1 Verify herdr and other backend CLIs — [x] done: fact 0029, PR #82
 Moved to `docs/plans/termanch-v2-environment-and-ux.md` step B.1.
 Issue: #22
 Class: explore · Needs: 2.2 · Check: `test -s docs/facts/0017-backend-clis.md`
@@ -139,7 +141,7 @@ Done-when: each tool has a verdict, a tested snippet or a written reason it does
 
 ---
 
-### 7.2 Server-native backend — [ ]
+### 7.2 Server-native backend — [x] retired: replaced by the pinned static tmux, roadmap R23
 Issue: #23
 Class: plan · Needs: 2.2 · Check: `test -s docs/decisions/0055-native-backend.md`
 Context: "Our own alternative": sessions the server holds itself, for hosts without a multiplexer. Needs a design before code: PTYs live in the server process (die on restart unless handed to a helper), and replay needs terminal state (a VT parser such as `vte`, or a bounded raw ring) since there is no multiplexer to repaint.
@@ -177,7 +179,7 @@ Done-when: a forged or replayed announcement is rejected; a valid one is served 
 
 ---
 
-### 8.3 Server: managed quick tunnel (fallback transport, after 8.8) — [ ]
+### 8.3 Server: managed quick tunnel (fallback transport, after 8.8) — [>] moved to docs/plans/termanch-roadmap.md as R33
 Issue: #26
 Class: implement · Needs: 8.1, 8.2 · Check: `cargo test -p termanch-server`
 Context: Fallback for networks or VPSes without a reachable UDP port (DECISION-0057). The server supervises `cloudflared`, learns the URL, and announces it as the record's `ws_url`; nobody prints or types URLs.
@@ -219,7 +221,7 @@ Done-when: pasting the command on a fresh VPS results in a connected server in t
 
 ---
 
-### 8.6 Optional: Connect Cloudflare for stable tunnels — [ ]
+### 8.6 Optional: Connect Cloudflare for stable tunnels — [x] retired to the roadmap backlog (R33 covers hosts with no UDP port)
 Issue: #29
 Class: plan · Needs: 8.1 · Check: `test -s docs/decisions/0057-connect-cloudflare.md`
 Context: For users who do have a domain on Cloudflare (a public tunnel hostname needs a zone they own, FACT-0018) or want a stable URL. Scopes exist (Tunnel Write, DNS Write); public clients need PKCE and a verified domain TXT record.

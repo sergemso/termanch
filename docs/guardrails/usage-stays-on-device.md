@@ -11,4 +11,4 @@ tags: [client, privacy]
 # Guardrail: Usage and tier data stay on the device
 
 ## Rule
-**MUST NOT** send usage hours, tiers or activity to any server or third party. **MUST NOT** interrupt the terminal with a thank-you prompt. Changing this needs a new decision and a privacy-notice update.
+**MUST NOT** send usage hours, tiers or activity to any server or third party in readable form. The one exception is opt-in Pro data that is encrypted on the device before it leaves (0090, see [[paid-data-is-ciphertext-only]]). **MUST NOT** interrupt the terminal with a thank-you prompt. Changing this needs a new decision and a privacy-notice update.

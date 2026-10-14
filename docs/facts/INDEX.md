@@ -34,5 +34,6 @@
 | 0032 | iOS Safari zooms the page into a focused field under 16px | ios, client, mobile | active |
 | 0033 | Svelte 5 in legacy mode rebuilds a key block whose key is an object | client | active |
 | 0034 | Without a hook, "working" means the pane printed something in the last 3 seconds | agents, server | active |
+| 0035 | Which tier features need infrastructure beyond free tiers | tiers, scale, cloudflare, capacity | active |
 
 <!-- bootstrap-generated: true -->

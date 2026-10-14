@@ -1,3 +1,5 @@
+> Archived 2026-10-14. Every open step was moved into `docs/plans/termanch-roadmap.md` (see the `[>]` markers); this file is history.
+
 # Termanch Plan: native host mode (no Docker), signed releases and updater
 
 Decisions: 0075 (native host mode, Docker host mode retired), 0076 (signed manifest, root-owned updater with rollback), 0077 (root actions by request file). Guardrails: `unprivileged-server-never-holds-root`, `updates-are-verified-and-reversible`, `host-mode-explicit-consent`, `host-changes-are-journaled`, `releases-are-signed`, `resource-constraints`, `no-paid-services`. Fact 0028 (baseline). Related plans: `termanch-v2-environment-and-ux.md` (B.2 host mode merged; S.3 signed releases; S.7 journal moved here as N.3; B.3 Add Server UI needs no change: the install words `host` and `host-user` stay) and `termanch-v4-ops-and-feedback.md` (D.3 host cleanup is replaced by N.6). A fresh session needs only this file, those artifacts and the repo.
@@ -32,25 +34,25 @@ Context: `install.sh host-user|host` today installs Docker and starts a privileg
 Do: 1. New native branch for `host` and `host-user`: dry-run list, then create user `termanch` if chosen, install tmux with apt/dnf/yum/apk/pacman if missing, install the binary to `/usr/local/bin/termanch-server` (root-owned, 0755), create `/var/lib/termanch` for the run user, write `termanch.service` (`User=`, `KillMode=process`, restart on failure, environment for UDP port, client origin and claim secret handled as today) and start it. 2. Keep the UDP port selection and firewall steps from the Docker path (`ufw`, `firewalld`); keep the claim hand-over (`--claim`). 3. Container mode is unchanged. 4. Pin the embedded release public key in the script; the hosted copy is what Pages serves. 5. Tests: shellcheck-clean; a CI job that runs the installer inside a systemd-enabled container (for example `jrei/systemd-debian`) against a locally built release set and checks that the unit is active, the server answers `/health`, and `--revert` restores the starting state.
 Done-when: the CI job passes on Debian and Ubuntu images, for root and `termanch` users; installing twice does not duplicate anything.
 
-### N.5 Root helper and updater — [~] (PR for N.5 in review; v0.1.0 is the first release)
+### N.5 Root helper and updater — [x] done (PR #77; updater.rs, helper.rs, releases since v0.1.0)
 Class: implement · Needs: N.2, N.3 · Check: `cargo test -p termanch-server updater`
 Context: Decisions 0076 and 0077; guardrails `updates-are-verified-and-reversible` and `unprivileged-server-never-holds-root`. The helper is a subcommand of the same binary (`termanch-server --root-helper <action>`), run by root-owned systemd units: `termanch-update.timer`/`.service` (daily) and `termanch-request.path`/`.service` (watches the request directory).
 Do: 1. Updater: fetch the manifest, verify signature and hash, refuse when `freeze` is true or the version is not newer, keep the previous binary as `termanch-server.prev`, swap atomically (rename), restart the unit, poll `/health` for 30 s and roll back to `.prev` on failure; write journal entries. 2. Request handling: the directory `/var/lib/termanch/requests` (writable by the run user only for creating files), the path unit triggers the helper, which reads exactly one JSON file `{action, flags}`, accepts only `update-now` and `uninstall`, deletes the file, and never executes anything taken from it. 3. Unit files are written by the installer (N.4) and journaled. 4. Tests with a fake release server and a fake service manager: success, bad signature, frozen, health-check failure rolls back, malformed or unknown request ignored.
 Done-when: the unit tests pass, including the rollback and the unknown-action cases; in the N.4 CI job an update to a newer test release succeeds and a deliberately broken release rolls back.
 
-### N.6 Server requests and remote uninstall on the native host — [ ]
+### N.6 Server requests and remote uninstall on the native host — [>] moved to docs/plans/termanch-roadmap.md as R27
 Class: implement · Needs: N.5 · Check: `cargo test -p termanch-server request`
 Context: Decision 0072 (remote uninstall: owner connection, typed server name, certificate issued within the hour; stage 1 wipes the config, see `packages/server/src/uninstall.rs`) and 0077. This step replaces the nsenter route of plan v4 step D.3 for host mode; container mode keeps the copy-paste command.
 Do: 1. Add `ClientMessage::UpdateNow` (owner only) and wire `Uninstall` flags (`delete_user`, `remove_tmux`, `kill_sessions`) so that on a native host the server writes the request file (0077) after the 0072 checks and replies `UninstallStarted`. 2. The root helper reverts the journal (N.3) honouring the flags (user and home only when ticked and created by us; tmux only when we installed it), stops and removes the unit, the binary and `/var/lib/termanch`. 3. Show the progress in the app per stage (client work stays in plan v4 step D.4). 4. Tests: each flag, refusal without a fresh certificate, helper removes only journaled things.
 Done-when: in the N.4 CI job a remote uninstall leaves the machine as it started, and unticked flags leave the user and tmux in place.
 
-### N.7 Migrate Docker host installs — [ ]
+### N.7 Migrate Docker host installs — [>] moved to docs/plans/termanch-roadmap.md as R29
 Class: implement · Needs: N.4 · Check: `sh -n packages/client/public/install.sh`
 Context: Existing owners may have run the old host mode: container `termanch` started with `--pid=host --privileged`, `TERMANCH_RUN=host`, config in `/opt/termanch/home/.config/termanch`. Decision 0075 retires it.
 Do: 1. In the installer, when `host` or `host-user` is requested and such a container exists, offer the migration: stop the container, copy its config directory (server key, owner, revoked devices) to `/var/lib/termanch` with the right ownership, install the native service (N.4) using the same UDP port, verify `/health`, then remove the container and image (journaled). 2. If anything fails, restart the old container. 3. Test in the N.4 CI environment with a fake old install.
 Done-when: after migration the server id and owner are unchanged and the app reconnects without re-claiming; a forced failure leaves the old container running.
 
-### N.8 Remove the Docker host code — [ ]
+### N.8 Remove the Docker host code — [>] moved to docs/plans/termanch-roadmap.md as R30
 Class: implement · Needs: N.7 · Check: `cargo test --workspace && ! grep -rn "nsenter" packages/server/src`
 Context: After N.7 has been live for a release, `TERMANCH_RUN=host` with `Runner::host` and `nsenter` in `packages/server/src/backend.rs`, `main.rs`, `docker/Dockerfile`'s host-related notes and the installer's old privileged branch are dead code. The native server runs its own tmux directly.
 Do: 1. Remove the `nsenter`/`runuser` wrapping, `RunMode::Host`'s container semantics (native mode reports `host:<user>` in `auth_ok.mode` as before) and the privileged Docker branch; keep the startup self-check for the tmux binary. 2. Update decision 0058's summary table in docs, `README.md` and `SECURITY.md`. 3. Tests updated.
