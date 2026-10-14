@@ -402,9 +402,9 @@
     {#if selStatus}<div class="selstatus">{selStatus}</div>{/if}
     {#if connState !== 'connected'}<div class="connstate" role="status">{connState}</div>{/if}
   </div>
-  <KeyRow bind:mods bind:prefixArmed {profile} prefixLabel={prefixLabel(prefix)} onnewline={() => sendKey(newline.seq)} newlineHint={newline.hint} {bell} oncombo={combo} onkey={sendKey} onpaste={paste} oncopy={copy} onselect={openSelect} {fnOpen} onfn={() => keyboard.toggleFn()}
-    onkeyboard={() => keyboard.toggleSystem()} onbell={toggleBell} onfont={(d) => setFont(fontSize + d)} />
-  {#if fnOpen}<FnKeyboard bind:mods onkey={typed} onback={() => keyboard.closeFn()} />{/if}
+  <KeyRow bind:mods bind:prefixArmed {profile} prefixLabel={prefixLabel(prefix)} onnewline={() => sendKey(newline.seq)} newlineHint={newline.hint} onkey={sendKey} {fnOpen}
+    onfn={() => keyboard.toggleFn()} onkeyboard={() => keyboard.toggleSystem()} onfont={(d) => setFont(fontSize + d)} />
+  {#if fnOpen}<FnKeyboard bind:mods onkey={typed} onback={() => keyboard.closeFn()} {profile} {bell} onbell={toggleBell} oncombo={combo} onpaste={paste} oncopy={copy} onselect={openSelect} />{/if}
   {#if selectText !== null}<SelectView text={selectText} onclose={() => { selectText = null; term?.focus(); }} />{/if}
 </div>
 

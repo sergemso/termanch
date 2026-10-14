@@ -1,12 +1,20 @@
 <script lang="ts">
-  import { KEYS, type Mods } from './lib/keys';
+  import { KEYS, TMUX_COMBOS, type KeyProfile, type Mods } from './lib/keys';
 
   export let mods: Mods;
   export let onkey: (data: string) => void;
   export let onback: () => void;
+  /** Moved here from the key row: clipboard, selection, bell and tmux commands. */
+  export let profile: KeyProfile = 'shell';
+  export let bell = true;
+  export let onbell: () => void = () => {};
+  export let oncombo: (key: string) => void = () => {};
+  export let onpaste: () => void = () => {};
+  export let oncopy: () => void = () => {};
+  export let onselect: () => void = () => {};
 
   /** Two pages of a grid, so it fits where the system keyboard was. */
-  let page: 'nav' | 'sym' = 'nav';
+  let page: 'nav' | 'sym' | 'more' = 'nav';
 
   const tap = (fn: () => void) => (e: PointerEvent) => {
     e.preventDefault(); // keeps focus in the terminal's input
@@ -30,19 +38,34 @@
     ].map((row) => row.map((c): Key => [c, c])),
   ];
   $: rows = page === 'nav' ? NAV : SYM;
+  const CTRL_D: Key = ['^D', KEYS.ctrlD];
 </script>
 
 <div class="fnkb" role="group" aria-label="Function keyboard">
   <div class="tabs">
     <button class="k tab" class:on={page === 'nav'} on:pointerdown={tap(() => (page = 'nav'))}>Keys</button>
     <button class="k tab" class:on={page === 'sym'} on:pointerdown={tap(() => (page = 'sym'))}>Symbols</button>
+    <button class="k tab" class:on={page === 'more'} on:pointerdown={tap(() => (page = 'more'))}>More</button>
   </div>
   <div class="grid">
-    {#each rows as row}
-      {#each row as [label, seq]}
-        <button class="k" class:sym={page === 'sym'} on:pointerdown={tap(() => onkey(seq))}>{label}</button>
+    {#if page === 'more'}
+      <button class="k" on:pointerdown={tap(onpaste)}>Paste</button>
+      <button class="k" on:pointerdown={tap(oncopy)}>Copy</button>
+      <button class="k" on:pointerdown={tap(onselect)}>Select</button>
+      <button class="k" aria-label={bell ? 'Mute bell' : 'Unmute bell'} aria-pressed={bell} on:pointerdown={tap(onbell)}>{bell ? '🔔' : '🔕'}</button>
+      <button class="k" on:pointerdown={tap(() => onkey(CTRL_D[1]))}>{CTRL_D[0]}</button>
+      {#if profile === 'tmux'}
+        {#each TMUX_COMBOS as [label, key]}
+          <button class="k" on:pointerdown={tap(() => oncombo(key))}>{label}</button>
+        {/each}
+      {/if}
+    {:else}
+      {#each rows as row}
+        {#each row as [label, seq]}
+          <button class="k" class:sym={page === 'sym'} on:pointerdown={tap(() => onkey(seq))}>{label}</button>
+        {/each}
       {/each}
-    {/each}
+    {/if}
   </div>
   <div class="bottom">
     <button class="k" on:pointerdown={tap(onback)} aria-label="Back to the system keyboard">ABC</button>
