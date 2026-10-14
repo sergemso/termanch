@@ -61,6 +61,16 @@ It handles both install kinds. For the container it removes the container and `/
 
 Updates: the container updates when you run the install command again. On the machine itself a root-owned timer checks for a new signed release every day; if the new server does not come up healthy the old one is put back. Check now: `sudo termanch-server --root-helper update`.
 
+## Sessions, tabs and windows
+
+- **Tabs.** Each running session is a tab at the top, showing the folder and the agent of the window it speaks for; sessions from every saved server share one strip. Several sessions in the same folder are told apart by name. Tap an inactive tab to open it (its last screen shows at once, then the live one), tap the active tab for its windows, long-press for actions.
+- **Windows.** The dropdown of the active tab lists the tmux windows of the session: switch to one, close it (a running program or the last window asks first), or open a new one with **+ New window** in the folder of the current window.
+- **Detach or close.** Detach hides the tab and keeps the session running; Close session asks first and ends it.
+- **Needs you.** When an agent waits for an answer, a banner names the session and offers its choices without changing the tab you are on.
+- **Servers.** The Servers screen lists the saved servers; Add Server shows the install command for a container or for host mode and waits for the server to appear.
+
+These behaviours are tested in a real browser (`packages/client/e2e/`), including two real server processes with real tmux. The browser runs emulate a phone; the soft keyboard, safe areas and gestures on a real iPhone are checked by hand with `docs/skills/mobile-ui-device-check.md`.
+
 ## Is it safe to use?
 
 What a stranger on the internet can and cannot do, and what you accept by installing:
@@ -126,6 +136,8 @@ Client build: `VITE_GITHUB_CLIENT_ID`. The OAuth code exchange runs in a Pages F
 ```bash
 cargo test --workspace                 # needs tmux for the end-to-end tests
 cd packages/client && npx pnpm@9 install && ./node_modules/.bin/vitest run
+# browser end-to-end (needs a built server, `pnpm build`, `pnpm e2e:build` and Chrome)
+node e2e/run.mjs && node e2e/touch.mjs && node e2e/cards.mjs && node e2e/windows.mjs && node e2e/two-servers.mjs
 ```
 
 All builds and image publishing run in CI (`.github/workflows/`). Layout:
@@ -143,7 +155,7 @@ The plan and its status live in GitHub issues; see `docs/plans/termanch-roadmap.
 
 ## Roadmap
 
-Mobile UX and installable PWA (#17, #18), agent notifications (#19), tunnel fallback for UDP-blocked networks (#26), end-to-end tests and resource gates (#21), other session backends (#22, #23).
+Mobile UX, the installable PWA, agent notifications, end-to-end tests and resource gates are done. What comes next is ordered in `docs/plans/termanch-roadmap.md`.
 
 ## License
 

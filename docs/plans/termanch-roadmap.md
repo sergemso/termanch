@@ -24,7 +24,7 @@ Status values: `pending`, `blocked (reason)`, `done (PR #n)`.
 |---|---|---|---|---|---|
 | 1 | [R02](roadmap/R02.md) | Triage bugs #107 (focus lost on tab tap) and #99 (canvas shifts on Sessions tab) | pending | 9.5 | - |
 | 2 | [R10](roadmap/R10.md) | Spike: connector payload and abuse review (O.1) | pending | 8.5 | R01 |
-| 3 | [R03](roadmap/R03.md) | Real-iPhone checklist and two-real-server e2e (G.10, H.11) | pending | 8.0 | R02 |
+| 3 | [R03](roadmap/R03.md) | Real-iPhone checklist and two-real-server e2e (G.10, H.11) | blocked (owner's iPhone checklist, docs/skills/mobile-ui-device-check.md) | 8.0 | R02 |
 | 4 | [R37](roadmap/R37.md) | Session sharing: decision and threat review (new) | blocked (owner acceptance of draft decision 0094) | 7.0 | R01 |
 | 5 | [R08](roadmap/R08.md) | Privacy notice and delete-my-data (S.6) | pending | 6.3 | - |
 | 6 | [R20](roadmap/R20.md) | Card design pass: owner picks a variant (K.1) | pending | 6.0 | - |
