@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { errorMessage, mapResults, recognizerFactory, Voice, type Recognizer, type RecognizerEvent } from './voice';
+import { errorMessage, mapResults, nextVoiceLang, parseVoiceLang, pickLanguage, recognizerFactory, Voice, type Recognizer, type RecognizerEvent } from './voice';
 
 const ev = (resultIndex: number, ...rs: [string, boolean][]): RecognizerEvent => ({
   resultIndex,
@@ -125,5 +125,31 @@ describe('Voice', () => {
     voice.toggle();
     expect(voice.listening).toBe(false);
     expect(on.onError).toHaveBeenCalled();
+  });
+});
+
+describe('dictation language', () => {
+  it('follows the script of the typed text when the choice is auto', () => {
+    expect(pickLanguage('auto', 'latin', 'ru-RU')).toBe('en-US');
+    expect(pickLanguage('auto', 'cyrillic', 'en-US')).toBe('ru-RU');
+  });
+
+  it('falls back to the browser language, then English', () => {
+    expect(pickLanguage('auto', null, 'ru-RU')).toBe('ru-RU');
+    expect(pickLanguage('auto', null, '')).toBe('en-US');
+  });
+
+  it('a forced language wins over what was typed', () => {
+    expect(pickLanguage('en', 'cyrillic', 'ru-RU')).toBe('en-US');
+    expect(pickLanguage('ru', 'latin', 'en-US')).toBe('ru-RU');
+  });
+
+  it('cycles auto -> en -> ru -> auto and reads stored values safely', () => {
+    expect(nextVoiceLang('auto')).toBe('en');
+    expect(nextVoiceLang('en')).toBe('ru');
+    expect(nextVoiceLang('ru')).toBe('auto');
+    expect(parseVoiceLang('ru')).toBe('ru');
+    expect(parseVoiceLang('xx')).toBe('auto');
+    expect(parseVoiceLang(null)).toBe('auto');
   });
 });

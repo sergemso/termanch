@@ -17,7 +17,7 @@
   import { crumb } from './lib/breadcrumbs';
   import { dropColorReplies, setEnterKeyHint, silenceColorQueries } from './lib/terminal/inputGuards';
   import { WordTracker } from './lib/terminal/wordTracker';
-  import { recognizerFactory, Voice } from './lib/terminal/voice';
+  import { nextVoiceLang, parseVoiceLang, pickLanguage, recognizerFactory, Voice, type VoiceLang } from './lib/terminal/voice';
   import { linkAt } from './lib/terminal/links';
   import { cellAt } from './lib/selection';
   import { PinchZoom } from './lib/terminal/pinch';
@@ -160,12 +160,24 @@
 
   // Dictation (plan R53): the browser's own recognizer; final text is typed as if typed, never followed by Enter.
   const makeRecognizer = recognizerFactory();
+  const VOICE_LANG_KEY = 'termanch-voice-lang';
+  let voiceLang: VoiceLang = 'auto';
+  try {
+    voiceLang = parseVoiceLang(localStorage.getItem(VOICE_LANG_KEY));
+  } catch { /* storage can be blocked; the choice then lasts until reload */ }
+  let spoken = ''; // the language of the running session, for the bar
+  function cycleVoiceLang() {
+    voiceLang = nextVoiceLang(voiceLang);
+    try {
+      localStorage.setItem(VOICE_LANG_KEY, voiceLang);
+    } catch { /* see above */ }
+  }
   let listening = false;
   let interim = '';
   let voiceError = '';
   let voiceErrorTimer: ReturnType<typeof setTimeout> | undefined;
   const voice = makeRecognizer
-    ? new Voice(makeRecognizer, () => navigator.language || 'en-US', {
+    ? new Voice(makeRecognizer, () => (spoken = pickLanguage(voiceLang, words.script, navigator.language)), {
         onText: (t) => typed(t),
         onInterim: (t) => (interim = t),
         onState: (on) => ((listening = on), on && (voiceError = '')),
@@ -447,11 +459,11 @@
       {#if b}<button type="button" class="handle" aria-label="Selection end" style="left: {b.x}px; top: {b.y}px;" on:pointerdown={(e) => grabHandle('b', e)} on:pointermove={onPointerMove} on:pointerup={onPointerUp}></button>{/if}
     {/if}
     {#if selStatus}<div class="selstatus">{selStatus}</div>{/if}
-    {#if listening || voiceError}<div class="voicebar" role="status">{voiceError || interim || 'Listening…'}</div>{/if}
+    {#if listening || voiceError}<div class="voicebar" role="status">{voiceError || interim || `Listening (${spoken})…`}</div>{/if}
     {#if connState !== 'connected'}<div class="connstate" role="status">{connState}</div>{/if}
   </div>
   <KeyRow bind:mods bind:prefixArmed {profile} prefixLabel={prefixLabel(prefix)} onnewline={() => sendKey(newline.seq)} newlineHint={newline.hint} onkey={sendKey} {fnOpen}
-    onfn={() => keyboard.toggleFn()} onkeyboard={() => keyboard.toggleSystem()} voiceSupported={!!voice} {listening} onvoice={toggleVoice} onfont={(d) => setFont(fontSize + d)} />
+    onfn={() => keyboard.toggleFn()} onkeyboard={() => keyboard.toggleSystem()} voiceSupported={!!voice} {listening} onvoice={toggleVoice} {voiceLang} onvoicelang={cycleVoiceLang} onfont={(d) => setFont(fontSize + d)} />
   {#if fnOpen}<FnKeyboard bind:mods onkey={typed} onback={() => keyboard.closeFn()} {profile} {bell} onbell={toggleBell} oncombo={combo} onpaste={paste} oncopy={copy} onselect={openSelect} />{/if}
   {#if pasteDraft !== null}<PasteSheet text={pasteDraft} onsend={(t) => { pasteDraft = null; sendPaste(t); term?.focus(); }} onclose={() => { pasteDraft = null; term?.focus(); }} />{/if}
   {#if selectText !== null}<SelectView text={selectText} onclose={() => { selectText = null; term?.focus(); }} />{/if}

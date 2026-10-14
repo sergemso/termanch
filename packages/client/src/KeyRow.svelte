@@ -21,6 +21,9 @@
   export let voiceSupported = false;
   export let listening = false;
   export let onvoice: () => void = () => {};
+  /** The dictation language chip: Auto follows what was typed, EN and RU force one. */
+  export let voiceLang: 'auto' | 'en' | 'ru' = 'auto';
+  export let onvoicelang: () => void = () => {};
   export let onfont: (delta: number) => void = () => {};
 
   // pointerdown + preventDefault keeps focus on the terminal, so the soft keyboard stays open while keys are tapped.
@@ -49,6 +52,7 @@
   <button class="k" aria-label="Show or hide the keyboard" on:pointerdown={tap(onkeyboard)}>⌨</button>
   {#if voiceSupported}
     <button class="k mod" class:on={listening} aria-pressed={listening} aria-label={listening ? 'Stop dictation' : 'Dictate'} on:pointerdown={tap(onvoice)}>🎤</button>
+    <button class="k small" data-testid="voice-lang" aria-label={`Dictation language: ${voiceLang === 'auto' ? 'follows what you type' : voiceLang === 'en' ? 'English' : 'Russian'}`} on:pointerdown={tap(onvoicelang)}>{voiceLang === 'auto' ? '🌐' : voiceLang.toUpperCase()}</button>
   {/if}
   <button class="k small" aria-label="Smaller text" on:pointerdown={tap(() => onfont(-1))}>A−</button>
   <button class="k small" aria-label="Larger text" on:pointerdown={tap(() => onfont(1))}>A+</button>
@@ -60,7 +64,7 @@
     gap: 2px;
     padding: 3px 4px;
     overflow: hidden;
-    /* Sixteen keys share the width, so there is nothing to scroll; a drag must not move the page either. */
+    /* Seventeen keys share the width, so there is nothing to scroll; a drag must not move the page either. */
     touch-action: none;
     overscroll-behavior: contain;
     background: var(--bg-secondary);

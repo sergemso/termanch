@@ -76,6 +76,32 @@ export function errorMessage(code: string): string | null {
   }
 }
 
+/** The dictation language the person chose: `auto` follows the script of what was typed. */
+export type VoiceLang = 'auto' | 'en' | 'ru';
+const LANGS: VoiceLang[] = ['auto', 'en', 'ru'];
+
+export function nextVoiceLang(l: VoiceLang): VoiceLang {
+  return LANGS[(LANGS.indexOf(l) + 1) % LANGS.length];
+}
+
+/** Reads a stored choice; anything else is `auto`. */
+export function parseVoiceLang(v: string | null): VoiceLang {
+  return LANGS.includes(v as VoiceLang) ? (v as VoiceLang) : 'auto';
+}
+
+/**
+ * The recognizer takes one language per session and cannot detect it, and the web cannot read the keyboard layout on
+ * iOS. So: the person's choice, else the script of the text just typed (Latin -> English, Cyrillic -> Russian), else
+ * the browser's language.
+ */
+export function pickLanguage(choice: VoiceLang, script: 'latin' | 'cyrillic' | null, browserLang: string): string {
+  if (choice === 'en') return 'en-US';
+  if (choice === 'ru') return 'ru-RU';
+  if (script === 'latin') return 'en-US';
+  if (script === 'cyrillic') return 'ru-RU';
+  return browserLang || 'en-US';
+}
+
 export interface VoiceHandlers {
   /** Final text, to type as if typed (never followed by Enter). */
   onText: (text: string) => void;

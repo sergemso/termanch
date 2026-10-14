@@ -446,6 +446,16 @@ try {
         if ((await page.evaluate(() => document.querySelector('.xterm-helper-textarea').value)) !== 'п') fail('Backspace did not shorten the mirrored word');
         await page.keyboard.type(' x');
         if ((await page.evaluate(() => document.querySelector('.xterm-helper-textarea').value)) !== 'п x') fail('the hidden input does not hold the last two words');
+        // The dictation language chip (only where the browser has a speech recognizer) cycles auto -> EN -> RU -> auto.
+        if (await page.$('[data-testid="voice-lang"]')) {
+          const chip = () => page.evaluate(() => document.querySelector('[data-testid="voice-lang"]').textContent.trim());
+          const labels = [await chip()];
+          for (let i = 0; i < 3; i++) {
+            await page.evaluate(() => document.querySelector('[data-testid="voice-lang"]').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })));
+            labels.push(await chip());
+          }
+          if (labels.join(',') !== '🌐,EN,RU,🌐') fail(`the dictation language chip cycled ${labels.join(',')}`);
+        }
         // iOS now answers a tapped suggestion with the missing tail (captured: "па" + "спорт"); it is typed as it comes.
         await page.keyboard.press('Control+u');
         await page.keyboard.type('echo па');
