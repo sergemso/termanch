@@ -7,7 +7,7 @@
 
   import type { HubConnection, ServerState } from './lib/hub';
   import { b64ToBytes, textToB64 } from './lib/connection';
-  import { applyMods, bufferText, clampFont, FONT_DEFAULT, prefixBytes, type KeyProfile, type Mods } from './lib/keys';
+  import { applyMods, bufferText, clampFont, FONT_DEFAULT, newlineKeys, prefixBytes, prefixLabel, type KeyProfile, type Mods } from './lib/keys';
   import { beep, bellEnabled, installAudioUnlock, setBellEnabled, unlockAudio } from './lib/bell';
   import { copyText } from './lib/clipboard';
   import { attachInputLogger } from './lib/inputlog';
@@ -23,6 +23,7 @@
   import { FONT_FAMILY, terminalTheme } from './lib/terminal/theme';
   import { TouchSelection, type Selection } from './lib/terminal/touchSelection';
   import { settings } from './lib/settings';
+  import { agents } from './lib/agents';
   import KeyRow from './KeyRow.svelte';
   import FnKeyboard from './FnKeyboard.svelte';
   import InputLog from './InputLog.svelte';
@@ -125,6 +126,8 @@
     return prefixBytes(prefix) + data;
   }
 
+  $: newline = newlineKeys(activeSessionId ? $agents[activeSessionId]?.agent : undefined);
+
   function combo(key: string) {
     prefixArmed = false;
     sendInput(prefixBytes(prefix) + key);
@@ -144,7 +147,8 @@
   function typed(raw: string) {
     const data = dropColorReplies(raw);
     if (!data) return;
-    const { out, used } = applyMods(data, mods);
+    // A word that came in whole (swipe typing, a tapped suggestion) is taken back whole; see WordTracker.
+    const { out, used } = applyMods(data === '\x7f' ? '\x7f'.repeat(words.backspaceCount()) : data, mods);
     if (used) mods = { ctrl: false, alt: false };
     words.feed(out);
     sendInput(withPrefix(out));
@@ -159,7 +163,10 @@
   async function paste() {
     try {
       const text = await navigator.clipboard.readText();
-      if (text) term?.paste(text);
+      if (text) {
+        term?.paste(text);
+        words.clearInsert(); // a pasted word is not a swiped one
+      }
     } catch {
       /* permission denied: the browser's own paste (long-press in the terminal) still works */
     }
@@ -394,7 +401,7 @@
     {#if selStatus}<div class="selstatus">{selStatus}</div>{/if}
     {#if connState !== 'connected'}<div class="connstate" role="status">{connState}</div>{/if}
   </div>
-  <KeyRow bind:mods bind:prefixArmed {profile} {bell} oncombo={combo} onkey={sendKey} onpaste={paste} oncopy={copy} onselect={openSelect} {fnOpen} onfn={() => keyboard.toggleFn()}
+  <KeyRow bind:mods bind:prefixArmed {profile} prefixLabel={prefixLabel(prefix)} onnewline={() => sendKey(newline.seq)} newlineHint={newline.hint} {bell} oncombo={combo} onkey={sendKey} onpaste={paste} oncopy={copy} onselect={openSelect} {fnOpen} onfn={() => keyboard.toggleFn()}
     onkeyboard={() => keyboard.toggleSystem()} onbell={toggleBell} onfont={(d) => setFont(fontSize + d)} />
   {#if fnOpen}<FnKeyboard bind:mods onkey={typed} onback={() => keyboard.closeFn()} />{/if}
   {#if selectText !== null}<SelectView text={selectText} onclose={() => { selectText = null; term?.focus(); }} />{/if}

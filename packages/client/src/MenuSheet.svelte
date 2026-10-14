@@ -3,9 +3,11 @@
   import { settings, changeSettings } from './lib/settings';
   import { canInstall, promptInstall, isIosBrowser } from './lib/pwa';
   import { updateAvailable } from './lib/update';
+  import { APP_VERSION } from './lib/appVersion';
 
   export let user: string;
   export let avatar = '';
+  export let serverVersion = '';
   export let onservers: () => void;
   export let onreport: () => void;
   export let onlogout: () => void;
@@ -35,6 +37,7 @@
     {:else if isIosBrowser()}<p>Install: Share → Add to Home Screen.</p>
     {:else}<p>Install is available from your browser’s app menu.</p>{/if}
     <button class="secondary" disabled={!$updateAvailable} on:click={() => location.reload()}>{$updateAvailable ? 'Update available' : 'App is up to date'}</button>
+    <p class="ver">Termanch {APP_VERSION}{#if serverVersion} · server {serverVersion}{/if}</p>
     <div class="account">{#if avatar && !broken}<img src={avatar} alt="" width="28" height="28" referrerpolicy="no-referrer" on:error={() => broken = true} />{/if}<span>@{user}</span></div>
     <button class="secondary" on:click={() => choose(onlogout)}>Log out</button>
   </div>

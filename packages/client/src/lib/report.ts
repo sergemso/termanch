@@ -2,6 +2,7 @@
 // The user reads and submits it; nothing is sent by the app. Guardrail diagnostics-never-include-secrets:
 // no certificates, tokens, claim secrets, addresses, terminal output or session names.
 import { writable } from 'svelte/store';
+import { APP_VERSION } from './appVersion';
 
 const REPO = 'sergemso/termanch';
 /** GitHub rejects very long query strings; stay well under it. */
@@ -54,7 +55,7 @@ export interface Env {
 /** The text shown to the user and placed in the issue. */
 export function buildReport(env: Env): string {
   const lines = [
-    `app: ${env.version ?? 'dev'}`,
+    `app: ${APP_VERSION} (${env.version ?? 'dev'})`,
     `browser: ${env.userAgent}`,
     `window: ${env.inner}`,
     `visual viewport: ${env.visual}`,
