@@ -9,6 +9,7 @@ export type ClientMessage =
   | { type: 'reply'; session: string; text: string }
   | { type: 'windows'; session: string }
   | { type: 'select_window'; session: string; index: number }
+  | { type: 'new_window'; session: string }
   | { type: 'close_window'; session: string; index: number }
   | { type: 'close_session'; session: string }
   | { type: 'list_sessions' }

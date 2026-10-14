@@ -69,7 +69,7 @@ Status values: `pending`, `blocked (reason)`, `done (PR #n)`.
 | 45 | [R44](roadmap/R44.md) | Pro: reliable push and inbox retention (P.5) | blocked (R40, the free gate) | 1.2 | R43 |
 | 46 | [R45](roadmap/R45.md) | Pro: fleet view and usage reports (P.6) | blocked (R40, the free gate) | 1.2 | R43 |
 
-5 step(s) done (their files stay in `roadmap/`; `grep -l '^Status: done' roadmap/R*.md`).
+6 step(s) done (their files stay in `roadmap/`; `grep -l '^Status: done' roadmap/R*.md`).
 <!-- order:end -->
 
 ## Paid tiers (decisions 0089-0093, fact 0035)

@@ -76,6 +76,11 @@ pub trait SessionBackend: Send + Sync {
     async fn kill_window(&self, _id: &str, _index: u32) -> Result<()> {
         Err(anyhow!("this session manager has no windows"))
     }
+    /// Opens a window next to the others, in the directory of the session's current window, and makes it the
+    /// current one.
+    async fn new_window(&self, _id: &str) -> Result<()> {
+        Err(anyhow!("this session manager has no windows"))
+    }
 }
 
 /// Session ids/names we accept from clients; they end up in argv, never in a shell.
@@ -567,6 +572,33 @@ impl SessionBackend for TmuxBackend {
         Ok(true)
     }
 
+    async fn new_window(&self, id: &str) -> Result<()> {
+        if !valid_name(id) {
+            return Err(anyhow!("Unknown session"));
+        }
+        // tmux does not expand a format in -c, so ask for the current window's directory first. It is passed
+        // as one argument, never through a shell, and only when it is a sane absolute path.
+        let ask = [
+            "display-message",
+            "-p",
+            "-t",
+            &format!("={id}:"),
+            "#{pane_current_path}",
+        ]
+        .map(String::from);
+        let asked = self.runner.run("tmux", &ask).await?;
+        let dir = String::from_utf8_lossy(&asked.stdout).trim().to_string();
+        let mut args = vec!["new-window".to_string(), "-t".into(), format!("={id}:")];
+        if asked.status.success() && valid_dir(&dir) {
+            args.extend(["-c".to_string(), dir]);
+        }
+        let out = self.runner.run("tmux", &args).await?;
+        if !out.status.success() {
+            return Err(anyhow!("could not open a window"));
+        }
+        Ok(())
+    }
+
     async fn kill_window(&self, id: &str, index: u32) -> Result<()> {
         if !valid_name(id) {
             return Err(anyhow!("Unknown session"));
@@ -827,6 +859,13 @@ impl SessionBackend for CompositeBackend {
             .split_once(':')
             .ok_or_else(|| anyhow!("Unknown session"))?;
         self.part(kind)?.kill_window(name, index).await
+    }
+
+    async fn new_window(&self, id: &str) -> Result<()> {
+        let (kind, name) = id
+            .split_once(':')
+            .ok_or_else(|| anyhow!("Unknown session"))?;
+        self.part(kind)?.new_window(name).await
     }
 }
 

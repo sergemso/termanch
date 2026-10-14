@@ -290,6 +290,10 @@ impl SessionManager {
             ClientMessage::SelectWindow { session, index } => {
                 self.backend.select_window(&session, index).await?;
             }
+            ClientMessage::NewWindow { session } => {
+                info!(target: "audit", event = "new_window", github_id = identity.id, session = %session);
+                self.backend.new_window(&session).await?;
+            }
             ClientMessage::CloseWindow { session, index } => {
                 info!(target: "audit", event = "close_window", github_id = identity.id, session = %session, window = index);
                 self.backend.kill_window(&session, index).await?;

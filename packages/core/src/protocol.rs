@@ -62,6 +62,11 @@ pub enum ClientMessage {
         session: String,
         index: u32,
     },
+    /// Opens a new window in the session, in the directory of its current window, and makes it the one
+    /// attached terminals show.
+    NewWindow {
+        session: String,
+    },
     /// Closes one window of a session; closing the last one ends the session.
     CloseWindow {
         session: String,
@@ -311,6 +316,12 @@ mod tests {
                     index: 1,
                 },
                 "select_window",
+            ),
+            (
+                ClientMessage::NewWindow {
+                    session: "s".into(),
+                },
+                "new_window",
             ),
             (
                 ClientMessage::CloseWindow {

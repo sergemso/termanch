@@ -9,6 +9,7 @@
   /** False when the server cannot list windows (herdr, an old server): the menu then only offers Detach/Close. */
   export let supported = true;
   export let onselect: (index: number) => void;
+  export let onnewwindow: () => void;
   export let onclosewindow: (index: number) => void;
   export let ondetach: () => void;
   export let onclosesession: () => void;
@@ -54,6 +55,7 @@
         <li class="none">Loading windows…</li>
       {/each}
     </ul>
+    <button class="new" on:click={() => { onclose(); onnewwindow(); }}>+ New window</button>
   {:else}
     <p class="none">This session manager has no windows to list.</p>
   {/if}
@@ -77,6 +79,7 @@
   .x.ask { color: var(--bg); background: var(--danger); border-color: var(--danger); font-size: 0.75rem; }
   .danger { background: var(--danger); color: var(--bg); }
   header button { min-height: 44px; }
+  .new { display: block; width: calc(100% - 8px); min-height: 48px; margin: 0 4px 8px; }
   .here { color: var(--accent); }
   .none { padding: 12px; color: var(--fg-muted); list-style: none; }
   li { margin-bottom: 4px; }

@@ -66,6 +66,15 @@ try {
   await menu.waitFor({ state: 'hidden' });
   console.log('ok  the windows dropdown lists windows; closing a running one asks first and closes only that window');
 
+  // + New window asks the server for one in this session and closes the menu.
+  await tab('alpha/session-0').click();
+  await menu.waitFor();
+  await menu.getByRole('button', { name: '+ New window' }).click();
+  await menu.waitFor({ state: 'hidden' });
+  const opened = (await sent()).filter((m) => m.type === 'new_window');
+  if (opened.length !== 1 || opened[0].session !== 'session-0') fail(`wrong new_window: ${JSON.stringify(opened)}`);
+  console.log('ok  + New window in the dropdown asks the server for a window of this session');
+
   // Detach closes the tab and keeps the session; Close session asks, then kills.
   await tab('alpha/session-0').click();
   await menu.waitFor();
