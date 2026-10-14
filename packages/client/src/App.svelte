@@ -29,6 +29,7 @@
   import { startUsageMeter } from './lib/usageMeter';
   import { DEBUG_KEY, tapCounter, viewportReading } from './lib/viewport';
   import { crumb, crumbText } from './lib/breadcrumbs';
+  import { identityOf } from './lib/identity';
   import { watchForUpdates } from './lib/update';
   import { isIosBrowser } from './lib/pwa';
 
@@ -526,7 +527,7 @@
         <div class="workspace" class:mobile={narrow}>
           <div class="terminal-pane">
             {#if connection && connState !== 'paused'}
-              {#key connection}<Terminal {connection} {activeSessionId} {connState} {profile} prefix={selected?.prefix || 'C-b'} {preview} />{/key}
+              {#key identityOf(connection)}<Terminal {connection} {activeSessionId} {connState} {profile} prefix={selected?.prefix || 'C-b'} {preview} />{/key}
             {:else}
               <div class="card" style="margin: auto;">{activeKey ? 'This server is paused. Resume it in Servers.' : 'Choose a session to open its terminal.'}<button class="secondary" on:click={leaveServer}>Servers</button></div>
             {/if}
