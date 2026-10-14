@@ -436,7 +436,7 @@ try {
         });
         await page.keyboard.press('Enter');
         await waitFor(() => /^чем$/m.test(execFileSync('tmux', ['capture-pane', '-p', '-t', 's1'], { env: utf8, encoding: 'utf8' })), 'the swiped Cyrillic word in the shell output', 8000);
-        // The hidden input mirrors the word being typed (iOS builds its suggestions from it), never stale text.
+        // The hidden input mirrors the last two words typed (iOS builds its suggestions from it), never stale text.
         await page.keyboard.press('Control+u');
         await page.evaluate(() => { document.querySelector('.xterm-helper-textarea').value = 'утромпа'; });
         await page.keyboard.type('па');
@@ -445,7 +445,7 @@ try {
         await page.keyboard.press('Backspace');
         if ((await page.evaluate(() => document.querySelector('.xterm-helper-textarea').value)) !== 'п') fail('Backspace did not shorten the mirrored word');
         await page.keyboard.type(' x');
-        if ((await page.evaluate(() => document.querySelector('.xterm-helper-textarea').value)) !== 'x') fail('a space did not start a new word');
+        if ((await page.evaluate(() => document.querySelector('.xterm-helper-textarea').value)) !== 'п x') fail('the hidden input does not hold the last two words');
         // iOS now answers a tapped suggestion with the missing tail (captured: "па" + "спорт"); it is typed as it comes.
         await page.keyboard.press('Control+u');
         await page.keyboard.type('echo па');

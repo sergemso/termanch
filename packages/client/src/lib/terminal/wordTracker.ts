@@ -17,8 +17,16 @@ interface Inserted {
   trailing: number;
 }
 
+/** The last two words with the whitespace between and after them; what the keyboard may offer to replace as one phrase. */
+const PHRASE = /(?:\S+[ \t]+)?\S+[ \t]*$|[ \t]+$/u;
+
+/** Plain text of one line is kept this long at most. */
+const LINE_CAP = 200;
+
 export class WordTracker {
   private word: string[] = [];
+  /** Plain text typed on this line since the last Enter, escape sequence or reset. */
+  private line: string[] = [];
   private inserted: Inserted | null = null;
 
   get current(): string {
@@ -48,6 +56,16 @@ export class WordTracker {
     return m && [...m[1]].length > 1 ? data.slice(1) : data;
   }
 
+  /**
+   * What the hidden input should hold: the last two words, not only the one being typed. iOS offers a replacement for
+   * a phrase ("app works" -> "api works") by selecting it in the field; if the field held just the last word, the
+   * selection could not cover the first one and the replacement deleted too little.
+   */
+  get phrase(): string {
+    const m = PHRASE.exec(this.line.join(''));
+    return m ? m[0] : '';
+  }
+
   /** Forget that the last word came in whole (a paste, or anything that is not the keyboard's own insertion). */
   clearInsert(): void {
     this.inserted = null;
@@ -58,13 +76,23 @@ export class WordTracker {
     if (data.startsWith('\x1b')) return this.reset(); // cursor keys and other escape sequences move the cursor
     let rest = '';
     for (const ch of data) {
-      if (BACKSPACE.has(ch) && !rest) this.backspace();
-      else {
+      if (BACKSPACE.has(ch) && !rest) {
+        this.backspace();
+        this.line.pop();
+      } else {
         rest += ch;
-        if (ch <= ' ' || BACKSPACE.has(ch)) this.reset(); // space, Enter, Tab and other control characters end the word
-        else this.word.push(ch);
+        if (ch === ' ') {
+          this.endWord(); // a space ends the word but the line goes on
+          this.line.push(ch);
+        } else if (ch < ' ' || BACKSPACE.has(ch)) {
+          this.reset(); // Enter, Tab and other control characters end the line
+        } else {
+          this.word.push(ch);
+          this.line.push(ch);
+        }
       }
     }
+    if (this.line.length > LINE_CAP) this.line.splice(0, this.line.length - LINE_CAP);
     if (rest) this.noteInsert(rest);
   }
 
@@ -91,9 +119,14 @@ export class WordTracker {
     if (this.inserted && this.inserted.trailing > 0) this.word = [];
   }
 
-  reset(): void {
+  private endWord(): void {
     this.word = [];
     this.inserted = null;
+  }
+
+  reset(): void {
+    this.endWord();
+    this.line = [];
   }
 
   /**

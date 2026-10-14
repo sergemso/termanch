@@ -17,6 +17,7 @@
   import { crumb } from './lib/breadcrumbs';
   import { dropColorReplies, setEnterKeyHint, silenceColorQueries } from './lib/terminal/inputGuards';
   import { WordTracker } from './lib/terminal/wordTracker';
+  import { recognizerFactory, Voice } from './lib/terminal/voice';
   import { linkAt } from './lib/terminal/links';
   import { cellAt } from './lib/selection';
   import { PinchZoom } from './lib/terminal/pinch';
@@ -155,6 +156,29 @@
     if (used) mods = { ctrl: false, alt: false, shift: false };
     words.feed(out);
     sendInput(withPrefix(out));
+  }
+
+  // Dictation (plan R53): the browser's own recognizer; final text is typed as if typed, never followed by Enter.
+  const makeRecognizer = recognizerFactory();
+  let listening = false;
+  let interim = '';
+  let voiceError = '';
+  let voiceErrorTimer: ReturnType<typeof setTimeout> | undefined;
+  const voice = makeRecognizer
+    ? new Voice(makeRecognizer, () => navigator.language || 'en-US', {
+        onText: (t) => typed(t),
+        onInterim: (t) => (interim = t),
+        onState: (on) => ((listening = on), on && (voiceError = '')),
+        onError: (m) => {
+          voiceError = m;
+          clearTimeout(voiceErrorTimer);
+          voiceErrorTimer = setTimeout(() => (voiceError = ''), 5000);
+        },
+      })
+    : null;
+  function toggleVoice() {
+    voice?.toggle();
+    term?.focus();
   }
 
   /** Key-row keys: sent as they are, but the word being typed must know about them. */
@@ -344,6 +368,9 @@
       setEnterKeyHint(term.textarea);
       // Hiding the keyboard (OK, or its own hide key) must not leave the terminal inactive.
       const onBlur = (e: FocusEvent) => !disposed && keyboard.onBlur({ to: e.relatedTarget });
+      const onPageHide = () => voice?.stop();
+      window.addEventListener('pagehide', onPageHide);
+      cleanups.push(() => (window.removeEventListener('pagehide', onPageHide), voice?.stop()));
       term.textarea.addEventListener('blur', onBlur);
       const field = term.textarea;
       cleanups.push(() => field.removeEventListener('blur', onBlur));
@@ -420,10 +447,11 @@
       {#if b}<button type="button" class="handle" aria-label="Selection end" style="left: {b.x}px; top: {b.y}px;" on:pointerdown={(e) => grabHandle('b', e)} on:pointermove={onPointerMove} on:pointerup={onPointerUp}></button>{/if}
     {/if}
     {#if selStatus}<div class="selstatus">{selStatus}</div>{/if}
+    {#if listening || voiceError}<div class="voicebar" role="status">{voiceError || interim || 'Listening…'}</div>{/if}
     {#if connState !== 'connected'}<div class="connstate" role="status">{connState}</div>{/if}
   </div>
   <KeyRow bind:mods bind:prefixArmed {profile} prefixLabel={prefixLabel(prefix)} onnewline={() => sendKey(newline.seq)} newlineHint={newline.hint} onkey={sendKey} {fnOpen}
-    onfn={() => keyboard.toggleFn()} onkeyboard={() => keyboard.toggleSystem()} onfont={(d) => setFont(fontSize + d)} />
+    onfn={() => keyboard.toggleFn()} onkeyboard={() => keyboard.toggleSystem()} voiceSupported={!!voice} {listening} onvoice={toggleVoice} onfont={(d) => setFont(fontSize + d)} />
   {#if fnOpen}<FnKeyboard bind:mods onkey={typed} onback={() => keyboard.closeFn()} {profile} {bell} onbell={toggleBell} oncombo={combo} onpaste={paste} oncopy={copy} onselect={openSelect} />{/if}
   {#if pasteDraft !== null}<PasteSheet text={pasteDraft} onsend={(t) => { pasteDraft = null; sendPaste(t); term?.focus(); }} onclose={() => { pasteDraft = null; term?.focus(); }} />{/if}
   {#if selectText !== null}<SelectView text={selectText} onclose={() => { selectText = null; term?.focus(); }} />{/if}
@@ -461,6 +489,19 @@
   .selbar button {
     min-height: 34px;
     padding: 4px 14px;
+  }
+  .voicebar {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    bottom: 6px;
+    z-index: 5;
+    padding: 4px 10px;
+    font-size: 0.85rem;
+    background: var(--bg-secondary);
+    color: var(--fg);
+    border: 1px solid var(--accent);
+    pointer-events: none;
   }
   .connstate {
     position: absolute;

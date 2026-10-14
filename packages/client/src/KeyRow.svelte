@@ -17,6 +17,10 @@
   export let newlineHint = 'Alt+Enter';
 
   export let onkeyboard: () => void = () => {};
+  /** The dictation key: shown only when the browser has a speech recognizer. */
+  export let voiceSupported = false;
+  export let listening = false;
+  export let onvoice: () => void = () => {};
   export let onfont: (delta: number) => void = () => {};
 
   // pointerdown + preventDefault keeps focus on the terminal, so the soft keyboard stays open while keys are tapped.
@@ -43,6 +47,9 @@
   <button class="k" aria-label="Arrow up" on:pointerdown={tap(() => onkey(KEYS.up))}>↑</button>
   <button class="k" aria-label="Arrow down" on:pointerdown={tap(() => onkey(KEYS.down))}>↓</button>
   <button class="k" aria-label="Show or hide the keyboard" on:pointerdown={tap(onkeyboard)}>⌨</button>
+  {#if voiceSupported}
+    <button class="k mod" class:on={listening} aria-pressed={listening} aria-label={listening ? 'Stop dictation' : 'Dictate'} on:pointerdown={tap(onvoice)}>🎤</button>
+  {/if}
   <button class="k small" aria-label="Smaller text" on:pointerdown={tap(() => onfont(-1))}>A−</button>
   <button class="k small" aria-label="Larger text" on:pointerdown={tap(() => onfont(1))}>A+</button>
 </div>
@@ -53,7 +60,7 @@
     gap: 2px;
     padding: 3px 4px;
     overflow: hidden;
-    /* Fifteen keys share the width, so there is nothing to scroll; a drag must not move the page either. */
+    /* Sixteen keys share the width, so there is nothing to scroll; a drag must not move the page either. */
     touch-action: none;
     overscroll-behavior: contain;
     background: var(--bg-secondary);

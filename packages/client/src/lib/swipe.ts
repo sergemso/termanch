@@ -88,12 +88,12 @@ export function syncTextarea(field: MirrorTarget, word: string): boolean {
  * "па"). iOS builds suggestions from that text and answers differently depending on it: the whole word when the
  * field is empty, only the missing tail when it holds the typed prefix. Keeping the field equal to the word being
  * typed gives the keyboard the true context, so a tapped suggestion arrives as the tail or as a replacement of
- * exactly that word, both of which are handled. Runs after xterm's own listeners, never during composition.
+ * exactly that word or the last two words, both of which are handled. Runs after xterm's own listeners, never during composition.
  */
 export function attachInputMirror(area: HTMLTextAreaElement, words: WordTracker): () => void {
   let composing = false;
   const sync = () => {
-    if (!composing) queueMicrotask(() => !composing && syncTextarea(area, words.current));
+    if (!composing) queueMicrotask(() => !composing && syncTextarea(area, words.phrase));
   };
   const onStart = () => (composing = true);
   const onEnd = () => ((composing = false), sync());

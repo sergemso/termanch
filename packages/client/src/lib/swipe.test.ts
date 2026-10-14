@@ -42,6 +42,13 @@ describe('isWordKey', () => {
   });
 });
 
+describe('replacing two words at once', () => {
+  it('deletes both words and types the replacement', () => {
+    // the keyboard offered "api works" for the phrase "app works"; the field holds both words
+    expect(replacementKeys('app works', 0, 9, 'api works')).toBe('\x7f'.repeat(9) + 'api works');
+  });
+});
+
 describe('syncTextarea', () => {
   const field = (value: string) => {
     const f = { value, range: [-1, -1], setSelectionRange(a: number, b: number) { this.range = [a, b]; } };
