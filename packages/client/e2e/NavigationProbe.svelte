@@ -75,7 +75,7 @@
   <NavigationBar sessions={tabs} agents={$agents} servers={$servers} windows={$wins} ontabmenu={key => { menuKey = key; hub.sendToSession(key, { type: 'windows', session: key }); }} {activeKey} held={!!actions || expanded || sheetHeld} onopen={key => { activeKey = key; height = 'closed'; }} onactions={key => actions = key} onmenu={() => menu = true} onsessions={() => height = height === 'closed' ? 'half' : 'closed'} />
   <NeedsYouBanner {waiting} now={Date.now()} onopen={key => { activeKey = key; }} onanswer={(key, choice, prompt) => hub.sendToSession(key, { type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} />
   <main class:mobile>
-    <div class="terminal"><p>{activeKey}</p><div class="screen"></div><KeyRow bind:mods onkey={() => {}} onpaste={() => {}} oncopy={() => {}} /></div>
+    <div class="terminal"><p>{activeKey}</p><div class="screen"><textarea class="xterm-helper-textarea" aria-label="Terminal input"></textarea></div><KeyRow bind:mods onkey={() => {}} onpaste={() => {}} oncopy={() => {}} /></div>
     <SessionSheet sessions={$sessions} agents={$agents} servers={$servers} {activeKey} {mobile} bind:height held={!!actions} onexpanded={value => expanded = value} onheld={value => sheetHeld = value} onopen={key => { activeKey = key; height = 'closed'; }} onnew={() => {}} onrefresh={() => {}} onretry={id => hub.retry(id)} send={m => { if ('session' in m) hub.sendToSession(m.session, m); }} />
   </main>
   {#if menu}<MenuSheet user="test" onservers={() => {}} onreport={() => {}} onlogout={() => {}} onclose={() => menu = false} />{/if}

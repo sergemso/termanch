@@ -22,7 +22,7 @@ Status values: `pending`, `blocked (reason)`, `done (PR #n)`.
 <!-- order:start -->
 | # | Step | Title | Status | WSJF | Preds |
 |---|---|---|---|---|---|
-| 1 | [R02](roadmap/R02.md) | Triage bugs #107 (focus lost on tab tap) and #99 (canvas shifts on Sessions tab) | pending | 9.5 | - |
+| 1 | [R02](roadmap/R02.md) | Triage bugs #107 (focus lost on tab tap) and #99 (canvas shifts on Sessions tab) | blocked (owner's iPhone confirmation of #107 and #99) | 9.5 | - |
 | 2 | [R10](roadmap/R10.md) | Spike: connector payload and abuse review (O.1) | pending | 8.5 | R01 |
 | 3 | [R03](roadmap/R03.md) | Real-iPhone checklist and two-real-server e2e (G.10, H.11) | pending | 8.0 | R02 |
 | 4 | [R37](roadmap/R37.md) | Session sharing: decision and threat review (new) | blocked (owner acceptance of draft decision 0094) | 7.0 | R01 |

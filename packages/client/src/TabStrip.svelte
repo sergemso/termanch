@@ -101,7 +101,7 @@
       <button type="button" role="tab" data-key={session.key} aria-selected={activeKey === session.key}
         aria-label={`${text.label}${servers.length > 1 ? ' · ' + session.serverName : ''} · ${agent ? chip.label : 'No status'}${server && server.state !== 'connected' ? ' · ' + server.state + (server.reason ? ': ' + server.reason : '') : ''}`}
         title={text.hint} class:ring={expiring.has(session.key)} class:active={activeKey === session.key} class:degraded={server?.state !== 'connected'} disabled={!live.has(session.key)}
-        on:pointerdown={(e) => down(e, session.key)} on:pointermove={move}
+        on:mousedown|preventDefault on:pointerdown={(e) => down(e, session.key)} on:pointermove={move}
         on:click={(e) => {
           const suppress = e.detail > 0 && longPressed === session.key;
           longPressed = null;
