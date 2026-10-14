@@ -1,7 +1,8 @@
 ---
 id: 0085-tabs-speak-for-one-window-and-detach-differs-from-close
 title: A tab speaks for one tmux window, Detach differs from Close, and windows come from tmux control mode
-status: draft
+status: active
+accepted-by: Sergey Strebulaev <s@vivantel.dev>
 date: 2026-10-13
 track: product
 tags: [client, mobile, agents, tmux, protocol]

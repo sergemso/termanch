@@ -1,3 +1,5 @@
+> Archived 2026-10-14. Every open step was moved into `docs/plans/termanch-roadmap.md` (see the `[>]` markers); this file is history.
+
 # Termanch Plan: session tabs, parallel-agent cockpit and compact mobile chrome (implemented in one branch; decision 0085 is a draft)
 
 Builds on `termanch-v9-navigation.md` (G.*), `termanch-v8-session-cards.md` (K.*) and `termanch-v6-agent-events.md`. Pulls in the pending UI steps listed under "Moved in". Step letters are H. Nothing here is decided until the owner accepts it; contradictions found while merging are listed with their resolution. Guardrails: `ui-never-moves-under-the-finger`, `kill-session-needs-confirmation`, `soft-keyboard-never-hides-input`, `connections-warn-never-drop`. One squashed PR per step from its own branch off master, green CI, merge only on the owner's "merge". The owner tests on an iPhone; emulated Chrome is never claimed as a phone check.
@@ -109,7 +111,7 @@ Class: implement · Needs: H.4, H.5 · Check: `cargo test -p termanch-server && 
 Do: replace the three `prompt()` dialogs in `App.svelte:239` (server, name, backend) with a New session sheet: templates (Shell, Claude Code, Codex, Copilot, OpenCode, Gemini, custom) plus a directory picker from recent repos; created in the chosen cwd and named by the path tail. Add "Project" as group-by in `lib/views.ts`.
 Done-when: a user starts Claude Code in a chosen directory from the phone in under 5 taps and the new tab shows its icon and path.
 
-### H.11 End-to-end and phone checklist — [~] browser harness checks done; real two-server run and the phone check are the owner's
+### H.11 End-to-end and phone checklist — [>] moved to docs/plans/termanch-roadmap.md as R03
 Class: review · Needs: H.1–H.10 · Check: `node e2e/run.mjs && node e2e/touch.mjs && node e2e/cards.mjs`
 Do: e2e with two real servers: three sessions with agents in one repo (distinct tabs), Detach vs Close, window ✕, banner without tab change, label frozen during touch; update README; list for the owner what is verified only in emulated Chrome (tab scroll, dropdown, long-press, banner, keyboard, PWA height).
 

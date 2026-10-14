@@ -1,7 +1,8 @@
 ---
 id: 0086-a-problem-report-says-what-the-app-did-and-how-the-page-was-viewed
 title: A problem report says what the app did and how the page was viewed
-status: draft
+status: active
+accepted-by: Sergey Strebulaev <s@vivantel.dev>
 date: 2026-10-14
 track: product
 tags: [client, privacy, mobile, ios]

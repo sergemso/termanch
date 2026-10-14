@@ -1,7 +1,8 @@
 ---
 id: 0087-the-terminal-is-built-once-and-never-answers-the-page
 title: The terminal is built once per connection, takes input at 16px and answers no colour queries
-status: draft
+status: active
+accepted-by: Sergey Strebulaev <s@vivantel.dev>
 date: 2026-10-14
 track: product
 tags: [client, ios, rendering, terminal, mobile]

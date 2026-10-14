@@ -1,7 +1,8 @@
 ---
 id: 0079-agent-hooks-are-opt-in
 title: Agent hooks are installed only on the owner's explicit request, and the layer works without them
-status: draft
+status: active
+accepted-by: Sergey Strebulaev <s@vivantel.dev>
 date: 2026-10-13
 track: product
 tags: [agents, hooks, security, roadmap]

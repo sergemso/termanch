@@ -1,3 +1,5 @@
+> Archived 2026-10-14. Every open step was moved into `docs/plans/termanch-roadmap.md` (see the `[>]` markers); this file is history.
+
 # Termanch Plan: session card UX (DRAFT roadmap, needs owner review)
 
 Decisions: 0061, 0070 (session navigation), 0079. Guardrails: `kill-session-needs-confirmation`, `soft-keyboard-never-hides-input`, `minimum-browser-support`, `connections-warn-never-drop`. Extends v2 step A.3 (session list and templates) with the events of `termanch-v6-agent-events.md` (steps P.*) and shares the inbox of `termanch-v7-output-connectors.md` (step O.3). Step letters are K (free in v1-v5; the draft's U collided with v3). Nothing here is decided until the owner accepts it. A fresh session needs only this file, those artifacts and the repo.
@@ -23,7 +25,7 @@ Name, tool icon, **state chip** (working, needs you, done, error, plus stale), *
 
 ## Steps
 
-### K.1 Design pass with real screenshots — [~] one variant built and screenshotted at 390 px; the owner has not picked
+### K.1 Design pass with real screenshots — [>] moved to docs/plans/termanch-roadmap.md as R20
 Class: design · Needs: v6 P.1 sample events · Check: screenshots exist under `docs/plans/assets/cards/` and the owner picks one.
 Do: three card variants in the real client at 390 px wide (Playwright), in light and dark, with the states working, needs you, done, error and stale, including a long tool line and 20 sessions.
 Done-when: the owner names the variant; the choice is noted in this plan.
@@ -48,7 +50,7 @@ Class: implement · Needs: K.2 · Check: `cd packages/client && npx --yes pnpm@9
 Do: a text field with saved snippets ("continue", "run the tests") stored in the user's settings; sends go to the chosen session; the field stays above the soft keyboard.
 Done-when: tests cover snippet save, delete and send; the phone check shows the input visible with the keyboard open.
 
-### K.6 Inbox view shared with connectors — [ ] waits for v7 O.3 (the inbox store does not exist yet)
+### K.6 Inbox view shared with connectors — [>] moved to docs/plans/termanch-roadmap.md as R13
 Class: implement · Needs: v7 O.3, K.2 · Check: `cd packages/client && npx --yes pnpm@9 test`
 Do: an inbox list of events (needs you, done, error) with unread count and tap-to-open-session; the same store as the Web Push inbox.
 Done-when: tests show unread counts, mark-read on open, and the session opening from an item.
