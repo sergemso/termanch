@@ -241,7 +241,18 @@
     }
   }
 
+  const LAST_KEY = 'termanch_last_session';
+  // The start screen picks up where the last visit left off, unless the user has already chosen something.
+  let resumable: string | null = localStorage.getItem(LAST_KEY);
+  $: if (resumable && !activeKey && !serversPage && $allSessions.some(s => s.key === resumable) && $hubServers.find(s => s.id === hub.findSession(resumable!)?.serverId)?.state === 'connected') {
+    const key = resumable;
+    resumable = null;
+    void attach(key);
+  }
+  function forget(key: string) { if (localStorage.getItem(LAST_KEY) === key) localStorage.removeItem(LAST_KEY); }
+
   async function attach(key: string) {
+    resumable = null;
     const session = hub.findSession(key);
     if (!session) return;
     if ($hubServers.find(s => s.id === session.serverId)?.state !== 'connected') {
@@ -255,6 +266,7 @@
     preview = key === activeKey ? null : snapshots.text(key);
     activeKey = key;
     activeServerId = session.serverId;
+    localStorage.setItem(LAST_KEY, key);
     // Mount the receiving terminal before attach can produce a repaint on another server.
     await tick();
     if (activeKey === key) hub.sendToSession(key, { type: 'attach', session_id: key });
@@ -268,6 +280,7 @@
 
   /** Detach: the tab closes and the stream stops; the session keeps running and stays in the Sessions sheet. */
   function detach(key: string) {
+    forget(key);
     hidden = new Set(hidden).add(key); saveHidden(hidden);
     if (key === activeKey) {
       if (activeServerId) hub.send(activeServerId, { type: 'detach' });
@@ -278,6 +291,7 @@
 
   /** Close session: it and everything in it ends (the dialog has asked first). */
   function closeSession(key: string) {
+    forget(key);
     hub.sendToSession(key, { type: 'close_session', session: key });
     if (key === activeKey) { activeKey = null; activeServerId = null; preview = null; sheetHeight = 'half'; }
   }
@@ -340,6 +354,7 @@
   }
 
   function leaveServer() {
+    resumable = null;
     if (activeServerId) hub.send(activeServerId, { type: 'detach' });
     serversPage = true;
     sheetHeight = 'closed';

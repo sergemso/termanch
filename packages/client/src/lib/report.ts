@@ -62,14 +62,28 @@ export function buildReport(env: Env): string {
   return scrub(lines.join('\n'));
 }
 
+/** What the person tells us before GitHub opens, so they need not look back at the app while writing the issue. */
+export interface Description {
+  steps: string;
+  actual: string;
+  expected: string;
+}
+
+export function describeProblem(d: Description): string {
+  const part = (title: string, text: string) => `${title}\n${text.trim() || '-'}`;
+  if (!d.steps.trim() && !d.actual.trim() && !d.expected.trim()) return '';
+  return scrub([part('Steps to reproduce:', d.steps), part('Actual result:', d.actual), part('Expected result:', d.expected)].join('\n\n'));
+}
+
 export interface Plan {
   url: string;
   /** Set when the text was too long for the URL: copy it, the issue opens with a paste note. */
   copy?: string;
 }
 
-export function reportPlan(text: string): Plan {
+export function reportPlan(text: string, what = ''): Plan {
   const base = `https://github.com/${REPO}/issues/new?template=problem.yml`;
-  if (text.length <= MAX_URL_TEXT) return { url: `${base}&diagnostics=${encodeURIComponent(text)}` };
-  return { url: `${base}&diagnostics=${encodeURIComponent('(paste the copied diagnostics here)')}`, copy: text };
+  const head = what ? `&what=${encodeURIComponent(what.slice(0, 1500))}` : '';
+  if (text.length <= MAX_URL_TEXT) return { url: `${base}${head}&diagnostics=${encodeURIComponent(text)}` };
+  return { url: `${base}${head}&diagnostics=${encodeURIComponent('(paste the copied diagnostics here)')}`, copy: text };
 }

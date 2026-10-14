@@ -324,7 +324,7 @@ try {
     });
     await page.getByRole('button', { name: 'Menu', exact: true }).click();
     await page.getByRole('button', { name: 'Report a problem', exact: true }).click();
-    const reportText = await page.locator('[role=dialog][aria-label="Report a problem"] textarea').inputValue();
+    const reportText = await page.locator('[role=dialog][aria-label="Report a problem"] textarea.diagnostics').inputValue();
     if (!reportText.includes('app:') || !reportText.includes('window: 390x')) fail(`report text is missing diagnostics: ${reportText.slice(0, 120)}`);
     await page.getByRole('button', { name: 'Open GitHub issue' }).click();
     const opened = await page.evaluate(() => window.__opened[0] ?? '');

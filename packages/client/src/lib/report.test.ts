@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReport, reportPlan, scrub, MAX_URL_TEXT, type Env } from './report';
+import { buildReport, describeProblem, reportPlan, scrub, MAX_URL_TEXT, type Env } from './report';
 
 // Realistic samples: a device certificate, a claim secret, a GitHub token, addresses.
 const CERT = 'eyJ2IjoxLCJraWQiOiJrMSIsInN1YiI6NDIsImxvZ2luIjoib2N0byJ9.mGt9Nv_YUuWy4UuPrwU4roLVMdX5b0l8f92FM0oHyk8aa';
@@ -48,5 +48,15 @@ describe('buildReport and reportPlan', () => {
     const long = reportPlan('x'.repeat(MAX_URL_TEXT + 1));
     expect(long.copy).toHaveLength(MAX_URL_TEXT + 1);
     expect(long.url.length).toBeLessThan(400);
+  });
+});
+
+describe('describeProblem', () => {
+  it('structures the description and leaves it empty when nothing was written', () => {
+    expect(describeProblem({ steps: '', actual: ' ', expected: '' })).toBe('');
+    expect(describeProblem({ steps: '1. open', actual: 'shifts left', expected: '' })).toBe('Steps to reproduce:\n1. open\n\nActual result:\nshifts left\n\nExpected result:\n-');
+  });
+  it('puts the description into the issue address', () => {
+    expect(reportPlan('diag', 'Actual result:\nx').url).toContain('&what=Actual%20result%3A%0Ax&diagnostics=diag');
   });
 });
