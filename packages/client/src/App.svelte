@@ -3,7 +3,7 @@
   import Terminal from './Terminal.svelte';
   import ServerList from './ServerList.svelte';
   import AddServerModal from './AddServerModal.svelte';
-  import Toast from './Toast.svelte';
+  import { Toast } from './lib/ui';
   import SessionSheet from './SessionSheet.svelte';
   import type { SheetHeight } from './lib/sheet';
   import NavigationBar from './NavigationBar.svelte';

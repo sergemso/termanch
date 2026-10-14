@@ -5,6 +5,7 @@
   import { installCommand, scanCommand as scanCommandFor, parseClaim, parseServerLink, waitForServer, ClaimTimeout, type RunChoice } from './lib/onboard';
   import { decodeQrFile, startCameraScan } from './lib/scan';
   import { wsUrl } from './lib/servers';
+  import { Dialog } from './lib/ui';
 
   export let origin: string;
   /** A secret that arrived by link or earlier scan: start waiting for that server right away. */
@@ -142,13 +143,7 @@
   });
 </script>
 
-<div class="modal-overlay" on:click={onclose} style="position: absolute; inset: 0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 24px;">
-  <div class="modal" on:click={(e) => e.stopPropagation()} style="background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 16px; padding: 28px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-      <h2 style="font-size: 1.25rem;">Add Server</h2>
-      <button on:click={onclose} style="background: none; color: var(--fg-muted); padding: 4px; line-height: 1;">✕</button>
-    </div>
-
+<Dialog title="Add Server" {onclose}>
     <div style="display: flex; gap: 8px; margin-bottom: 16px;">
       <button class={tab === 'paste' ? '' : 'secondary'} on:click={() => choose('paste')} style="flex: 1; padding: 8px;">Paste a command</button>
       <button class={tab === 'scan' ? '' : 'secondary'} on:click={() => choose('scan')} style="flex: 1; padding: 8px;">Scan a QR</button>
@@ -237,8 +232,7 @@
       <input bind:value={manualClaim} placeholder="Registration token (first connection only)" style="width: 100%; margin-bottom: 8px;" />
       <button class="secondary" on:click={addByUrl} disabled={!manualUrl} style="width: 100%;">Add and connect</button>
     </details>
-  </div>
-</div>
+</Dialog>
 
 <style>
   .where { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin: 0 0 16px; }

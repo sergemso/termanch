@@ -315,7 +315,7 @@ try {
     if (!/ host$/.test((await cmd()) ?? '')) fail(`the root command is wrong: ${await cmd()}`);
     await page.getByRole('radio', { name: /In an isolated container/ }).check();
     if (/ host(-user)?$/.test((await cmd()) ?? '')) fail('going back to the container kept a host word');
-    await page.getByRole('button', { name: '✕' }).click();
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
 
     // Report a problem: shows scrubbed diagnostics and opens a prefilled issue on the project's repository.
     await page.evaluate(() => {
