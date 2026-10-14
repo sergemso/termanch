@@ -158,6 +158,14 @@
     --terminal-bg: #ffffff;
     --terminal-fg: #1f2328;
   }
+  /* Preflight also changes defaults the screens were tuned against on the phone: restore the browser's
+     (button and field text 13.33px, normal line height, inline media, default code size). */
+  html { line-height: normal; }
+  button, input, select, textarea { font-size: 13.3333px; line-height: normal; }
+  img, svg, video, canvas { display: revert; vertical-align: baseline; }
+  code, kbd, samp, pre { font-family: revert; font-size: revert; }
+  ::placeholder { color: revert; opacity: revert; }
+
   /* Preflight resets headings and lists; keep the browser look the screens were built with. */
   h1 { font-size: 2em; font-weight: bold; }
   h2 { font-size: 1.5em; font-weight: bold; }
