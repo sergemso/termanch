@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
+  import { rememberFocus } from './lib/focus';
   import AgentIcon from './AgentIcon.svelte';
   import { shortPath, type SessionWindows } from './lib/windows';
   import type { HubSession } from './lib/hub';
@@ -20,7 +21,9 @@
   let confirming: number | null = null;
   const SHELLS = new Set(['bash', 'zsh', 'fish', 'sh', 'dash', 'ash', 'ksh', 'tcsh', 'csh', 'nu']);
   const isShell = (cmd: string) => SHELLS.has(cmd.replace(/^-/, ''));
+  const restoreFocus = rememberFocus(); // before the dialog opens: closing it must not leave the terminal blurred
   onMount(() => dialog.showModal());
+  onDestroy(restoreFocus);
 
   $: windows = data?.windows ?? [];
   $: last = windows.length === 1;
