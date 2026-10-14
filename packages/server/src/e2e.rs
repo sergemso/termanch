@@ -853,6 +853,30 @@ async fn windows_close_window_and_close_session_go_through_the_handlers(kind: Ki
     let two = c.recv_type("window_list").await;
     assert_eq!(two["windows"].as_array().unwrap().len(), 2);
     assert_eq!(two["windows"][1]["name"], "second");
+    // A new window opens in the directory of the current one and becomes the current one.
+    // Window 1 was just made and may not have settled in its directory yet: ask from window 0.
+    c.send(json!({"type":"select_window","session":name,"index":0}))
+        .await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    c.send(json!({"type":"new_window","session":name})).await;
+    let mut three = serde_json::Value::Null;
+    for _ in 0..30 {
+        c.send(json!({"type":"windows","session":name})).await;
+        three = c.recv_type("window_list").await;
+        // A fresh pane reports tmux's own directory until its shell has started: wait for it to settle.
+        let w = three["windows"].as_array().unwrap();
+        if w.len() == 3 && w[2]["path"] == w[0]["path"] {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let w = three["windows"].as_array().unwrap();
+    assert_eq!(w.len(), 3, "{three}");
+    assert_eq!(w[2]["path"], w[0]["path"], "{three}");
+    assert_eq!(w[2]["active"], true, "{three}");
+    c.send(json!({"type":"close_window","session":name,"index":2}))
+        .await;
+    c.recv_type("sessions").await;
     c.send(json!({"type":"close_window","session":name,"index":1}))
         .await;
     c.recv_type("sessions").await;

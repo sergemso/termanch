@@ -96,4 +96,4 @@
 0091-team-and-enterprise-are-a-hosted-control-plane-over-mit-code,"Team and Enterprise sell a hosted control plane; the code stays MIT","tiers, license, security, roadmap",active
 0092-billing-starts-with-github-sponsors,"Billing starts with GitHub Sponsors; a merchant of record arrives with Team","billing, tiers, auth",active
 0093-paid-tiers-are-built-after-the-free-gate,"Paid tiers are designed now and built only after the free gate","tiers, roadmap",active
-0094-session-guests-get-a-scoped-expiring-grant-not-ownership,"A session guest gets a scoped, expiring grant tied to a GitHub id, never ownership","security, auth, sharing, roadmap",draft
+0094-session-guests-get-a-scoped-expiring-grant-not-ownership,"A session guest gets a scoped, expiring grant tied to a GitHub id, never ownership","security, auth, sharing, roadmap",active
