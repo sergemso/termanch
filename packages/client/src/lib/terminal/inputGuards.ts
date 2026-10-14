@@ -16,3 +16,18 @@ const COLOR_REPLY = /\x1b\](?:4;\d+|1[0-9]);rgb:[^\x07\x1b]*(?:\x07|\x1b\\)/g;
 export function dropColorReplies(data: string): string {
   return data.replace(COLOR_REPLY, '');
 }
+
+/** The slice of xterm's parser this needs, so a test can stand in for it. */
+export interface OscParser {
+  registerOscHandler(ident: number, callback: (data: string) => boolean): { dispose(): void };
+}
+
+/**
+ * Stops xterm answering colour queries at all (OSC 4, 10, 11, 12 with a `?`): the answer was never typed by
+ * anyone and, with the session open twice, one of them lands in the shell. Setting a colour (no `?`) is left to
+ * xterm. A handler that returns true ends the sequence without the built-in reply.
+ */
+export function silenceColorQueries(parser: OscParser): { dispose(): void } {
+  const handles = [4, 10, 11, 12].map((ident) => parser.registerOscHandler(ident, (data) => data.split(';').includes('?')));
+  return { dispose: () => handles.forEach((h) => h.dispose()) };
+}
