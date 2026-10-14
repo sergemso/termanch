@@ -17,7 +17,12 @@ use tracing::{info, warn};
 use crate::auth::AuthState;
 use crate::rtc::RtcInfo;
 
-const REFRESH_EVERY: Duration = Duration::from_secs(12 * 3600);
+/// A claimed server re-announces only when something changed (a new or ended claim) and otherwise once a
+/// week, so the records stay fresh while the directory sees about one request per server per week.
+const KEEPALIVE: Duration = Duration::from_secs(7 * 24 * 3600);
+/// The address, port and fingerprint are fixed for the process, so a change of any of them is a restart
+/// and announces on start.
+const UNCLAIMED_REFRESH: Duration = Duration::from_secs(300);
 
 /// The server's long-lived identity. Its public key is the id clients pin.
 pub struct ServerKey(SigningKey);
@@ -134,7 +139,7 @@ fn now_ms() -> u64 {
         .unwrap_or(1)
 }
 
-/// Keeps the directory current: on start, after failures with backoff, and every 12 hours.
+/// Keeps the directory current: on start, after failures with backoff, on a claim change, and every 7 days.
 /// `seq` is the wall clock in milliseconds (forced to increase), so a restart needs no stored counter.
 pub async fn run(
     key: Arc<ServerKey>,
@@ -174,16 +179,21 @@ pub async fn run(
             backoff = (backoff * 2).min(Duration::from_secs(600));
             w
         } else if auth.owner().is_none() {
-            Duration::from_secs(300)
+            UNCLAIMED_REFRESH
         } else {
-            REFRESH_EVERY
+            KEEPALIVE
         };
-        let started = tokio::time::Instant::now();
-        while started.elapsed() < wait {
-            tokio::time::sleep(Duration::from_secs(5)).await;
-            if announced && auth.active_claim() != claim {
-                break;
-            }
+        wait_or_change(wait, || announced && auth.active_claim() != claim).await;
+    }
+}
+
+/// Sleeps for `wait`, returning early as soon as `changed` reports true (checked every 5 s).
+async fn wait_or_change(wait: Duration, changed: impl Fn() -> bool) {
+    let started = tokio::time::Instant::now();
+    while started.elapsed() < wait {
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        if changed() {
+            break;
         }
     }
 }
@@ -261,6 +271,32 @@ mod tests {
             std::fs::write(&path, &json).unwrap();
         }
         assert_eq!(std::fs::read_to_string(&path).unwrap(), json);
+    }
+
+    /// With a fake clock: an unchanged claimed server waits the whole week, a change ends the wait within
+    /// seconds.
+    #[tokio::test(start_paused = true)]
+    async fn an_idle_claimed_server_announces_once_a_week_and_a_change_announces_at_once() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let changed = AtomicBool::new(false);
+        let t0 = tokio::time::Instant::now();
+        let day = Duration::from_secs(24 * 3600);
+        let mut wait = Box::pin(wait_or_change(KEEPALIVE, || changed.load(Ordering::SeqCst)));
+        tokio::select! {
+            _ = &mut wait => panic!("announced before the keepalive"),
+            _ = tokio::time::sleep(KEEPALIVE - day) => {}
+        }
+        changed.store(true, Ordering::SeqCst);
+        wait.await;
+        assert!(
+            t0.elapsed() < KEEPALIVE,
+            "a change must not wait for the keepalive"
+        );
+
+        let t1 = tokio::time::Instant::now();
+        wait_or_change(KEEPALIVE, || false).await;
+        let waited = t1.elapsed();
+        assert!(waited >= KEEPALIVE && waited < KEEPALIVE + Duration::from_secs(10));
     }
 
     /// The announcer against a stand-in directory: records verify, `seq` only grows, and the claim

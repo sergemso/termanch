@@ -22,7 +22,7 @@ Not verified: whether R2 needs a payment method on file, Pages build limit (500/
 
 ## Today (`directory.rs`)
 
-A claimed server re-announces every 12 h, an unclaimed one every 5 min: 2 requests/day/server, so 10^5 servers cost 2·10^5/day, over the limit. The binding limit is Workers requests (about 10^4 servers with the other traffic).
+A claimed server announces on start, when its claim changes, and every 7 days (`KEEPALIVE`); an unclaimed one every 5 min until it is claimed. Its address, port and fingerprint are fixed for the process, so a change of any of them is a restart. That is about 1/7 request/day/server (10^5 servers: 1.4·10^4/day); before 2026-10-14 it was every 12 h, 2·10^5/day at 10^5 servers, over the limit. The binding limit is still Workers requests once reads, polls and user-data writes are added (about 10^4 servers with the other traffic until the CDN reads of R17).
 
 ## Target model (decisions 0060 and 0068)
 
