@@ -125,3 +125,42 @@ describe('WordTracker: no space after a joining character', () => {
     expect(u.dropSpuriousSpace(' friendly')).toBe(' friendly');
   });
 });
+
+describe('WordTracker: the phrase the hidden input mirrors', () => {
+  it('holds the last two words, with the spaces between and after', () => {
+    const t = new WordTracker();
+    t.feed('one app');
+    expect(t.phrase).toBe('one app');
+    t.feed(' works');
+    expect(t.phrase).toBe('app works');
+    t.feed(' ');
+    expect(t.phrase).toBe('app works ');
+  });
+
+  it('follows a whole-word replacement of two words', () => {
+    const t = new WordTracker();
+    t.feed('app works');
+    t.feed('\x7f'.repeat(9) + 'api works');
+    expect(t.phrase).toBe('api works');
+  });
+
+  it('shrinks on Backspace and clears on Enter, Tab, escape sequences and reset', () => {
+    const t = new WordTracker();
+    t.feed('api works');
+    t.feed('\x7f\x7f');
+    expect(t.phrase).toBe('api wor');
+    for (const end of ['\r', '\t', '\x1b[A', '\x03']) {
+      t.feed('api works');
+      t.feed(end);
+      expect(t.phrase).toBe('');
+    }
+  });
+
+  it('leaves the single-word state alone', () => {
+    const t = new WordTracker();
+    t.feed('api works');
+    expect(t.current).toBe('works');
+    t.feed(' ');
+    expect(t.current).toBe('');
+  });
+});
