@@ -14,7 +14,7 @@
   import { attachInputMirror, attachSwipeSupport } from './lib/swipe';
   import { DEBUG_KEY, debugEnabled } from './lib/viewport';
   import { KeyboardMode } from './lib/terminal/keyboardMode';
-  import { setEnterKeyHint } from './lib/terminal/inputGuards';
+  import { dropColorReplies, setEnterKeyHint } from './lib/terminal/inputGuards';
   import { WordTracker } from './lib/terminal/wordTracker';
   import { PinchZoom } from './lib/terminal/pinch';
   import { InputBatcher } from './lib/terminal/inputBatch';
@@ -140,7 +140,9 @@
   $: if (!preview) previewing = false;
 
   /** Typed characters pass through the sticky Ctrl/Alt; key-row sequences are sent as they are. */
-  function typed(data: string) {
+  function typed(raw: string) {
+    const data = dropColorReplies(raw);
+    if (!data) return;
     const { out, used } = applyMods(data, mods);
     if (used) mods = { ctrl: false, alt: false };
     words.feed(out);
@@ -252,6 +254,24 @@
     if (activeSessionId) connection.send({ type: 'resize', cols, rows });
   }
 
+  /**
+   * Fits the terminal to its box. While xterm swaps renderers (a lost WebGL context) the fit throws, and no later
+   * resize comes to repeat it: the canvas stayed at its old size and sat shifted to the left (issue #99). So a
+   * failed fit is tried again on the next frames.
+   */
+  let refitFrame = 0;
+  function refit(attempt = 0) {
+    cancelAnimationFrame(refitFrame);
+    if (disposed || !term) return;
+    try {
+      fitAddon?.fit();
+    } catch {
+      if (attempt < 20) refitFrame = requestAnimationFrame(() => refit(attempt + 1));
+      return;
+    }
+    sendResize(term.cols, term.rows);
+  }
+
   $: if (term && $settings) term.options.theme = terminalTheme(document.documentElement.dataset.theme === 'light');
 
   onMount(() => {
@@ -275,6 +295,7 @@
           /* xterm 5.3 can throw while swapping renderers; the screen keeps its last frame until the next redraw */
         }
         if (webgl === gl) webgl = null;
+        refit();
       });
       term.loadAddon(gl);
       webgl = gl;
@@ -315,16 +336,9 @@
     terminalContainer.addEventListener('touchend', swallowClick, { passive: false });
     cleanups.push(() => terminalContainer.removeEventListener('touchend', swallowClick));
     cleanups.push(() => scroll.stopFling());
+    cleanups.push(() => cancelAnimationFrame(refitFrame));
 
-    const resizeObserver = new ResizeObserver(() => {
-      if (disposed || !term) return;
-      try {
-        fitAddon?.fit();
-      } catch {
-        return; // mid-teardown or a renderer swap; the next resize fits again
-      }
-      sendResize(term.cols, term.rows);
-    });
+    const resizeObserver = new ResizeObserver(() => refit());
     resizeObserver.observe(terminalContainer);
     cleanups.push(() => resizeObserver.disconnect());
 
@@ -336,7 +350,7 @@
           // tmux repaints the screen on attach; start clean so a re-attach never doubles the content.
           previewing = false;
           term?.reset();
-          if (term) sendResize(term.cols, term.rows);
+          refit();
           term?.focus(); // connecting lands in a live terminal
         }
       }),

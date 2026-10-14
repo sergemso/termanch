@@ -6,7 +6,14 @@ body:
     id: what
     attributes:
       label: What happened?
-      description: What you did, what you expected, what you saw.
+      description: Steps to reproduce, the actual result and the expected result.
+      value: |
+        Steps to reproduce:
+        1.
+
+        Actual result:
+
+        Expected result:
     validations:
       required: true
   - type: textarea
