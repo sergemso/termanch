@@ -8,6 +8,9 @@ const BACKSPACE = new Set(['\x7f', '\b']);
 /** One word that arrived in a single piece, with the spaces the keyboard put around it (`hello `, ` hello`). */
 const WHOLE_WORD = /^\s*(\S+?)(\s*)$/u;
 
+/** Characters after which a word goes on without a space: `device-`, `src/`, `$HOME`, `--opt=`. */
+const JOINERS = new Set(['-', '_', '/', '\\', '(', '[', '{', '@', '~', '$', '=']);
+
 /** A word the keyboard inserted whole (swipe typing, a tapped suggestion), and the spaces it left after it. */
 interface Inserted {
   chars: string[];
@@ -31,6 +34,18 @@ export class WordTracker {
     const w = this.inserted;
     if (!w) return 1;
     return w.trailing > 0 ? 1 : w.chars.length;
+  }
+
+  /**
+   * iOS puts a space before a swiped word when the text before the caret ends in a character it thinks ends a word. After
+   * `device-` or `src/` the word continues, so the space is wrong. Drops the leading space of a whole inserted word when
+   * the word being typed ends in a joining character; a space typed on its own is never touched.
+   */
+  dropSpuriousSpace(data: string): string {
+    const last = this.word[this.word.length - 1];
+    if (!last || !JOINERS.has(last) || !data.startsWith(' ')) return data;
+    const m = WHOLE_WORD.exec(data);
+    return m && [...m[1]].length > 1 ? data.slice(1) : data;
   }
 
   /** Forget that the last word came in whole (a paste, or anything that is not the keyboard's own insertion). */

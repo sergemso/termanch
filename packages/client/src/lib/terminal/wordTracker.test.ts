@@ -104,3 +104,24 @@ describe('WordTracker: Backspace after a word that came in whole', () => {
     expect(t.backspaceCount()).toBe(5);
   });
 });
+
+describe('WordTracker: no space after a joining character', () => {
+  it('drops the space iOS puts before a swiped word after "device-"', () => {
+    const t = new WordTracker();
+    t.feed('device-');
+    expect(t.dropSpuriousSpace(' friendly')).toBe('friendly');
+    expect(t.dropSpuriousSpace(' friendly ')).toBe('friendly ');
+  });
+
+  it('keeps the space after a letter, after a space, and when the user typed the space', () => {
+    const t = new WordTracker();
+    t.feed('hello');
+    expect(t.dropSpuriousSpace(' world')).toBe(' world');
+    const u = new WordTracker();
+    u.feed('device-');
+    expect(u.dropSpuriousSpace(' ')).toBe(' ');
+    expect(u.dropSpuriousSpace(' a')).toBe(' a');
+    u.feed(' ');
+    expect(u.dropSpuriousSpace(' friendly')).toBe(' friendly');
+  });
+});

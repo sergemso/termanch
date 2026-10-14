@@ -54,7 +54,7 @@
 
 <div class="row" role="toolbar" aria-label="Terminal keys">
   {#if profile === 'tmux'}
-    <button class="k mod" class:on={prefixArmed} aria-pressed={prefixArmed} aria-label={prefixLabel ? `tmux prefix ${prefixLabel}` : 'tmux prefix'} on:pointerdown={tap(() => (prefixArmed = !prefixArmed))}>Prefix{#if prefixLabel}&nbsp;{prefixLabel}{/if}</button>
+    <button class="k mod" class:on={prefixArmed} aria-pressed={prefixArmed} aria-label={prefixLabel ? `tmux prefix ${prefixLabel}` : 'tmux prefix'} on:pointerdown={tap(() => (prefixArmed = !prefixArmed))}>{prefixLabel || 'Prefix'}</button>
     <button class="k mod" class:on={combos} aria-expanded={combos} aria-label="tmux commands" on:pointerdown={tap(() => (combos = !combos))}>⋯</button>
     {#if combos}
       {#each TMUX_COMBOS as [label, key]}
@@ -62,9 +62,10 @@
       {/each}
     {/if}
   {/if}
-  <button class="k" aria-label={`New line without sending (${newlineHint})`} on:pointerdown={tap(onnewline)}>↵ Line</button>
+  <button class="k" aria-label={`New line without sending (${newlineHint})`} on:pointerdown={tap(onnewline)}>↵</button>
   <button class="k mod" class:on={mods.ctrl} aria-pressed={mods.ctrl} on:pointerdown={tap(() => (mods.ctrl = !mods.ctrl))}>Ctrl</button>
   <button class="k mod" class:on={mods.alt} aria-pressed={mods.alt} on:pointerdown={tap(() => (mods.alt = !mods.alt))}>Alt</button>
+  <button class="k mod" class:on={mods.shift} aria-pressed={!!mods.shift} on:pointerdown={tap(() => (mods.shift = !mods.shift))}>Shift</button>
   <button class="k mod" class:on={fnOpen} aria-pressed={fnOpen} on:pointerdown={tap(onfn)}>Fn</button>
   {#each keys as [label, seq]}
     <button class="k" on:pointerdown={tap(() => onkey(seq))}>{label}</button>
@@ -85,6 +86,10 @@
     gap: 6px;
     padding: 3px 8px;
     overflow-x: auto;
+    overflow-y: hidden;
+    /* Horizontal scroll only: no vertical drag, rubber-band or scroll chaining to the page. */
+    touch-action: pan-x;
+    overscroll-behavior: contain;
     background: var(--bg-secondary);
     border-top: 1px solid var(--border);
     -webkit-overflow-scrolling: touch;
@@ -96,9 +101,10 @@
   .k {
     position: relative;
     flex: 0 0 auto;
-    min-width: 44px;
+    min-width: 34px;
     min-height: 34px;
-    padding: 0 12px;
+    padding: 0 6px;
+    font-size: 0.85rem;
     background: var(--bg);
     color: var(--fg);
     border: 1px solid var(--border);

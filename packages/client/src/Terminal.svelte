@@ -7,9 +7,9 @@
 
   import type { HubConnection, ServerState } from './lib/hub';
   import { b64ToBytes, textToB64 } from './lib/connection';
-  import { applyMods, bufferText, clampFont, FONT_DEFAULT, newlineKeys, prefixBytes, prefixLabel, type KeyProfile, type Mods } from './lib/keys';
+  import { applyMods, bufferText, clampFont, FONT_DEFAULT, newlineKeys, prefixBytes, prefixLabel, shiftSeq, type KeyProfile, type Mods } from './lib/keys';
   import { beep, bellEnabled, installAudioUnlock, setBellEnabled, unlockAudio } from './lib/bell';
-  import { copyText } from './lib/clipboard';
+  import { copyText, pasteText } from './lib/clipboard';
   import { attachInputLogger } from './lib/inputlog';
   import { attachInputMirror, attachSwipeSupport } from './lib/swipe';
   import { DEBUG_KEY, debugEnabled } from './lib/viewport';
@@ -145,31 +145,32 @@
 
   /** Typed characters pass through the sticky Ctrl/Alt; key-row sequences are sent as they are. */
   function typed(raw: string) {
-    const data = dropColorReplies(raw);
+    const data = words.dropSpuriousSpace(dropColorReplies(raw));
     if (!data) return;
     // A word that came in whole (swipe typing, a tapped suggestion) is taken back whole; see WordTracker.
     const { out, used } = applyMods(data === '\x7f' ? '\x7f'.repeat(words.backspaceCount()) : data, mods);
-    if (used) mods = { ctrl: false, alt: false };
+    if (used) mods = { ctrl: false, alt: false, shift: false };
     words.feed(out);
     sendInput(withPrefix(out));
   }
 
   /** Key-row keys: sent as they are, but the word being typed must know about them. */
-  function sendKey(data: string) {
+  function sendKey(raw: string) {
+    let data = raw;
+    const shifted = mods.shift ? shiftSeq(raw) : null;
+    if (shifted) {
+      data = shifted;
+      mods = { ...mods, shift: false };
+    }
     words.feed(data);
     sendInput(withPrefix(data));
   }
 
   async function paste() {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        term?.paste(text);
-        words.clearInsert(); // a pasted word is not a swiped one
-      }
-    } catch {
-      /* permission denied: the browser's own paste (long-press in the terminal) still works */
-    }
+    const text = await pasteText();
+    if (!text) return;
+    term?.paste(text);
+    words.clearInsert(); // a pasted word is not a swiped one
   }
 
   /** Copies the selection, or the visible screen when nothing is selected. */

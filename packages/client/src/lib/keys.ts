@@ -16,6 +16,14 @@ export const KEYS = {
 export interface Mods {
   ctrl: boolean;
   alt: boolean;
+  shift?: boolean;
+}
+
+/** Shift with a key-row sequence (xterm): Tab is back-tab, cursor keys carry modifier 2. Null when Shift changes nothing. */
+export function shiftSeq(seq: string): string | null {
+  if (seq === KEYS.tab) return '\x1b[Z';
+  const m = /^\x1b\[([ABCDHF])$/.exec(seq);
+  return m ? `\x1b[1;2${m[1]}` : null;
 }
 
 /**
@@ -23,13 +31,14 @@ export interface Mods {
  * transformed (a paste or an escape sequence passes through); `used` tells the caller to clear the modifiers.
  */
 export function applyMods(data: string, mods: Mods): { out: string; used: boolean } {
-  if (!(mods.ctrl || mods.alt) || [...data].length !== 1) return { out: data, used: false };
-  let ch = data;
+  if (!(mods.ctrl || mods.alt || mods.shift) || [...data].length !== 1) return { out: data, used: false };
+  let ch = mods.shift ? data.toUpperCase() : data;
   if (mods.ctrl) {
     const code = data.toUpperCase().charCodeAt(0);
     if (code >= 0x40 && code <= 0x5f) ch = String.fromCharCode(code & 0x1f); // A-Z @ [ \ ] ^ _
     else if (data === ' ') ch = '\0';
     else if (data === '?') ch = '\x7f';
+    else ch = data;
   }
   return { out: mods.alt ? '\x1b' + ch : ch, used: true };
 }
