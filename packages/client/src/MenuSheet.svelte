@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { rememberFocus } from './lib/focus';
   import { settings, changeSettings } from './lib/settings';
   import { canInstall, promptInstall, isIosBrowser } from './lib/pwa';
   import { updateAvailable } from './lib/update';
@@ -16,6 +17,8 @@
   let showSettings = false;
   const initialRenderer = $settings.renderer;
   let broken = false;
+  const restoreFocus = rememberFocus(); // before the dialog opens: closing it must not leave the terminal blurred
+  onDestroy(restoreFocus);
   onMount(() => { dialog.showModal(); });
   function choose(action: () => void) { onclose(); action(); }
 </script>
