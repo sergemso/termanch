@@ -20,7 +20,7 @@ date: 2026-10-09
 2. **Shell hooks** (installed in `~/.bashrc`, `~/.zshrc`, `~/.config/fish/config.fish`):
    - `PROMPT_COMMAND` / `precmd` / `fish_prompt` emit OSC 1337 sequences for prompt markers
    - `preexec` / `preexec_interactive` capture command start
-   - Wrapper functions for `codex`, `claude`, `herdr` that notify agent socket on spawn/exit
+   - Wrapper functions for `codex`, `claude` that notify agent socket on spawn/exit
 
 3. **Agent detection**:
    - Scan `ps` for known agent process names

@@ -18,3 +18,5 @@ The separate `termanch-agent` daemon and its server link are parked; agent detec
 ## Why
 
 The agent-to-server link was a placeholder that never carried terminal data. One process is simpler on 512MB/1 vCPU, and the backend seam lets users keep the multiplexer they already use.
+
+> Note (2026-10-15): Amended by 0097 (draft): herdr is removed; the `command` backend stays generic.

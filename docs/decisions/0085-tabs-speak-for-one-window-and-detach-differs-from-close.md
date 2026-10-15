@@ -20,3 +20,5 @@ tags: [client, mobile, agents, tmux, protocol]
 ## Why
 
 Parallel agents in one repository look identical by name; the directory and the agent window say what a tab is. Detach and Close are different intents and one button could not carry both safely. Control mode gives window changes without polling; bundling a pinned tmux stays a later option (the minimum version is the cost). A permanent sheet strip took 96 px of a phone screen that the terminal needs.
+
+> Note (2026-10-15): Amended by 0097 (draft): the herdr bullet no longer applies.

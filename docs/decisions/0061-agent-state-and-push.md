@@ -17,3 +17,5 @@ tags: [agents, notifications, pwa, roadmap]
 ## Why
 
 Hooks alone are silent for unconfigured tools and output-idle heuristics misfire, so the scan is the floor and adapters raise accuracy. iOS delivers push only to installed PWAs (16.4+), which is why the PWA ships first.
+
+> Note (2026-10-15): Superseded in part by 0095 (state model, notifications) once the owner accepts it; 0079 and 0083 stand.
