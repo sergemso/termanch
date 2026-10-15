@@ -97,3 +97,6 @@
 0092-billing-starts-with-github-sponsors,"Billing starts with GitHub Sponsors; a merchant of record arrives with Team","billing, tiers, auth",active
 0093-paid-tiers-are-built-after-the-free-gate,"Paid tiers are designed now and built only after the free gate","tiers, roadmap",active
 0094-session-guests-get-a-scoped-expiring-grant-not-ownership,"A session guest gets a scoped, expiring grant tied to a GitHub id, never ownership","security, auth, sharing, roadmap",active
+0095-agent-status-is-activity-plus-attention,"Agent status is Activity plus Attention, with the current task, and notifications fire on Attention","agents, notifications, pwa, protocol, roadmap",draft
+0096-terminal-and-status-use-two-data-channels,"Terminal data and agent status travel on two data channels of one connection","transport, protocol, agents, roadmap",draft
+0097-herdr-is-removed,"herdr is removed as a session manager and as a status source","agents, sessions, architecture, roadmap",draft

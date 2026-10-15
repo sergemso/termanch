@@ -56,18 +56,19 @@ Status values: `pending`, `blocked (reason)`, `done (PR #n)`.
 | 32 | [R30](roadmap/R30.md) | Remove the Docker host code (N.8) | pending | 2.0 | R29 |
 | 33 | [R38](roadmap/R38.md) | Session sharing links, read-only and read-write (new) | pending | 1.8 | R37 |
 | 34 | [R39](roadmap/R39.md) | Image and file upload to a session, with threat review (new) | pending | 1.6 | - |
-| 35 | [R15](roadmap/R15.md) | Session and model connectors (O.5) | pending | 1.4 | R10, R11 |
-| 36 | [R24](roadmap/R24.md) | Environment profile on the native host (replaces B.4-B.6) | pending | 1.1 | R23 |
-| 37 | [R33](roadmap/R33.md) | Managed quick-tunnel fallback for hosts with no UDP port (8.3) | pending | 1.0 | R06 |
-| 38 | [R40](roadmap/R40.md) | The free gate check (P.1) | pending | 0.0 | R03, R12, R18 |
-| 39 | [R41](roadmap/R41.md) | Entitlement record and Sponsors webhook (P.2) | blocked (R40, the free gate) | 2.6 | R40 |
-| 40 | [R46](roadmap/R46.md) | Privacy notice and opt-ins for Pro data (P.7) | blocked (R40, the free gate) | 4.7 | R41, R08 |
-| 41 | [R42](roadmap/R42.md) | Pro: managed relay spike (P.3) | blocked (R40, the free gate) | 4.3 | R41 |
-| 42 | [R43](roadmap/R43.md) | Pro: encrypted history format and recovery key (P.4) | blocked (R40, the free gate) | 1.4 | R41 |
-| 43 | [R47](roadmap/R47.md) | Team: organisation, seats, merchant of record (P.8) | blocked (R40, the free gate) | 0.7 | R40, R41 |
-| 44 | [R48](roadmap/R48.md) | Enterprise design note (P.9) | blocked (R40, the free gate) | 1.5 | R47 |
-| 45 | [R44](roadmap/R44.md) | Pro: reliable push and inbox retention (P.5) | blocked (R40, the free gate) | 1.2 | R43 |
-| 46 | [R45](roadmap/R45.md) | Pro: fleet view and usage reports (P.6) | blocked (R40, the free gate) | 1.2 | R43 |
+| 35 | [R54](roadmap/R54.md) | Agent status redesign: Activity + Attention, two channels, push, drop herdr | pending | 1.6 | - |
+| 36 | [R15](roadmap/R15.md) | Session and model connectors (O.5) | pending | 1.4 | R10, R11 |
+| 37 | [R24](roadmap/R24.md) | Environment profile on the native host (replaces B.4-B.6) | pending | 1.1 | R23 |
+| 38 | [R33](roadmap/R33.md) | Managed quick-tunnel fallback for hosts with no UDP port (8.3) | pending | 1.0 | R06 |
+| 39 | [R40](roadmap/R40.md) | The free gate check (P.1) | pending | 0.0 | R03, R12, R18 |
+| 40 | [R41](roadmap/R41.md) | Entitlement record and Sponsors webhook (P.2) | blocked (R40, the free gate) | 2.6 | R40 |
+| 41 | [R46](roadmap/R46.md) | Privacy notice and opt-ins for Pro data (P.7) | blocked (R40, the free gate) | 4.7 | R41, R08 |
+| 42 | [R42](roadmap/R42.md) | Pro: managed relay spike (P.3) | blocked (R40, the free gate) | 4.3 | R41 |
+| 43 | [R43](roadmap/R43.md) | Pro: encrypted history format and recovery key (P.4) | blocked (R40, the free gate) | 1.4 | R41 |
+| 44 | [R47](roadmap/R47.md) | Team: organisation, seats, merchant of record (P.8) | blocked (R40, the free gate) | 0.7 | R40, R41 |
+| 45 | [R48](roadmap/R48.md) | Enterprise design note (P.9) | blocked (R40, the free gate) | 1.5 | R47 |
+| 46 | [R44](roadmap/R44.md) | Pro: reliable push and inbox retention (P.5) | blocked (R40, the free gate) | 1.2 | R43 |
+| 47 | [R45](roadmap/R45.md) | Pro: fleet view and usage reports (P.6) | blocked (R40, the free gate) | 1.2 | R43 |
 
 7 step(s) done (their files stay in `roadmap/`; `grep -l '^Status: done' roadmap/R*.md`).
 <!-- order:end -->

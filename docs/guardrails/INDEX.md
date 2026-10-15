@@ -49,3 +49,4 @@ ui-never-moves-under-the-finger,"The interface never moves a control or switches
 user-settings-are-wrapped-not-replaced,"Termanch adds to a user's agent settings and never replaces what is there","hooks, security",active
 free-features-are-never-capped-for-a-tier,"A free feature is never removed or capped to create a paid tier","tiers, product",active
 paid-data-is-ciphertext-only,"Paid-tier data is stored as ciphertext only","tiers, privacy, security",active
+notifications-carry-no-agent-text,"A notification or push payload never carries anything the agent wrote","notifications, privacy, security",active

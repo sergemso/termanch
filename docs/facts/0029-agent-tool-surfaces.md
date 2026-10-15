@@ -1,6 +1,6 @@
 ---
 id: 0029
-title: What Claude Code, herdr and Codex expose for agent events
+title: What Claude Code and Codex expose for agent events
 status: active
 tags: [agents, hooks, server]
 date: 2026-10-13
@@ -9,14 +9,13 @@ governed-by: 0061
 last-verified: 2026-10-13
 ---
 
-# What Claude Code, herdr and Codex expose for agent events
+# What Claude Code and Codex expose for agent events
 
-Measured on the dev VPS, 2026-10-13, in a throwaway working directory and a throwaway herdr home (the owner's sessions were not touched). Claude Code 2.1.296, herdr 0.9.3 (API protocol 22). Codex is not installed there, so its row is documentation only and unverified.
+Measured on the dev VPS, 2026-10-13, in a throwaway working directory and a throwaway herdr home (the owner's sessions were not touched). Claude Code 2.1.296. herdr was measured too and is dropped (decision 0097; see git history). Codex is not installed there, so its row is documentation only and unverified.
 
 | Tool | Surface | Verdict |
 |---|---|---|
 | Claude Code | `hooks` in a settings file (`--settings FILE` or `~/.claude/settings.json`): `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`. Each hook command receives one JSON object on stdin. | Primary source for Claude Code, opt-in (0079). |
-| herdr | Its own agent detection: `herdr --session NAME agent list` (JSON) and `herdr api snapshot`; per pane `agent`, `agent_status` in `idle`, `working`, `blocked`, `done`, `unknown`; socket event `pane.agent_status_changed`. No hook setup. | Primary source for sessions run by herdr. Read-only, needs no configuration. |
 | Codex | A `notify` program in `config.toml` is documented to receive one JSON argument per event (turn complete). Not verified here. | Unverified; scan state only until P.5 can test it. |
 
 ## Claude Code samples (real)
@@ -39,11 +38,6 @@ Captured interactively (tmux): `Notification` fires when a permission prompt app
 - Per-hook `timeout` is in seconds. One measurement (n=1): a hook sleeping 6 s with `timeout: 1` still delayed the end of a one-line run from about 3.8 s to 8.6 s, so a slow hook costs real seconds; our hook must be a single fast write to a local socket and exit 0.
 - The session is learned from the environment: the server will export `TERMANCH_SESSION`, `TERMANCH_EVENT_SOCKET` and a per-session token into the pane; hooks read them. Claude's own `session_id` is not our session name.
 
-## herdr as a Termanch backend (issue #22)
-
-- `herdr session list --json` lists sessions with `running`; `herdr --session NAME server` starts a headless server and keeps running after its starter exits; `herdr session attach NAME` repaints the whole screen and killing the attach client leaves the session running. Attaching to an unknown name also creates it.
-- `herdr` refuses to start inside another herdr (`HERDR_ENV` set): `nested herdr is disabled by default`. A server started from a herdr pane must drop `HERDR_*` variables.
-- The built-in `HerdrBackend` (`TERMANCH_BACKEND=herdr`) uses exactly these; its integration test runs a real herdr in a temporary home and is skipped when the binary is absent.
 
 ## Scan and screen notes (tmux 3.6)
 

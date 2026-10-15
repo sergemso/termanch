@@ -29,11 +29,13 @@
 | 0026 | Client UI baseline before the v3 UI work | client, mobile, ios | active |
 | 0027 | What iOS fires on a swipe-typing correction in xterm's textarea | client, mobile, ios, terminal | active |
 | 0028 | The server binary and installer before the native host mode | server, deployment, build | active |
-| 0029 | What Claude Code, herdr and Codex expose for agent events | agents, hooks, server | active |
+| 0029 | What Claude Code and Codex expose for agent events | agents, hooks, server | active |
 | 0031 | Claude Code gives its status line command the prompt cache expiry | agents, hooks | active |
 | 0032 | iOS Safari zooms the page into a focused field under 16px | ios, client, mobile | active |
 | 0033 | Svelte 5 in legacy mode rebuilds a key block whose key is an object | client | active |
 | 0034 | Without a hook, "working" means the pane printed something in the last 3 seconds | agents, server | active |
 | 0035 | Which tier features need infrastructure beyond free tiers | tiers, scale, cloudflare, capacity | active |
+| 0036 | The task name without a hook would come from tmux's pane title, which is not yet measured | agents, server | active |
+| 0037 | Terminal output and agent status share one ordered JSON channel, with output as base64 | transport, protocol, agents | active |
 
 <!-- bootstrap-generated: true -->

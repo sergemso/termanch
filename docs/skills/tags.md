@@ -11,7 +11,7 @@ bootstrap-generated: true
 | Tag | Meaning |
 |---|---|
 | architecture | System structure, component boundaries |
-| agents | Coding-agent tools (Claude Code, Codex, herdr) and their state or events |
+| agents | Coding-agent tools (Claude Code, Codex) and their state or events |
 | auth | Authentication, authorization, identity |
 | build | Compilation, packaging, CI/CD |
 | client | Browser-facing code (Svelte, WASM, UI) |
@@ -56,3 +56,5 @@ git-hooks — introduced by go-getter pack git-workflow@0.1.1
 procedural — introduced by go-getter pack git-workflow@0.1.1
 hooks — introduced by go-getter pack tracker@0.3.0
 roadmap — introduced by go-getter pack tracker@0.3.0
+notifications — push, inbox, badge and banner that tell the owner an agent needs them
+sessions — terminal sessions and the managers that own them
