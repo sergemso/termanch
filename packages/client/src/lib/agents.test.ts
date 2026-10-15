@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import { agents, applyEvents, applySnapshot, handleAgentMessage, isStale, resetAgents, syncRequest, type AgentMap } from './agents';
+import { agents, applyActivity, applyAttention, applyEvents, applySnapshot, attentionToAck, handleAgentMessage, isStale, resetAgents, runningMs, syncRequest, type AgentMap } from './agents';
+import { needsYou } from './tabs';
 import type { AgentEvent, ClientMessage, ServerMessage } from './protocol';
 
 const ev = (seq: number, rest: object, session = 's'): AgentEvent => ({ session, seq, ts: 1000 + seq, source: 'hook', confidence: 'high', ...rest }) as AgentEvent;
@@ -101,5 +102,63 @@ describe('the message handler', () => {
     expect(sent).toEqual([{ type: 'agent_sync', after: { s: 9 } }]);
     expect(handleAgentMessage({ type: 'pong' } as ServerMessage, send)).toBe(false);
     expect(handleAgentMessage({ type: 'from_the_future' } as unknown as ServerMessage, send)).toBe(false);
+  });
+});
+
+describe('server status (activity and attention)', () => {
+  const att = (kind: 'needs_input' | 'finished_unseen' | 'failed', id = 'a1', session = 's') => ({ id, session, kind, raised_at: 5000 });
+  const base = (): AgentMap => applyActivity({}, [{ session: 's', activity: 'working', ts: 10_000, task: { title: 'fix login', started_at: 4_000, source: 'hook' } }], 9_000);
+
+  it('derives the card state from activity and attention, and raw events no longer move it', () => {
+    let m = base();
+    expect(m.s.state).toBe('working');
+    m = applyAttention(m, [att('needs_input')]);
+    expect(m.s.state).toBe('needs_input');
+    expect(m.s.waitingSince).toBe(5000);
+    expect(needsYou(m.s)).toBe(true);
+    m = applyEvents(m, [{ session: 's', seq: 1, ts: 1, source: 'hook', confidence: 'high', kind: 'state', state: 'idle' } as never]).map;
+    expect(m.s.state).toBe('needs_input');
+    m = applyAttention(m, []);
+    m = applyActivity(m, [{ session: 's', activity: 'idle', ts: 11_000 }], 11_000);
+    expect(m.s.state).toBe('idle');
+    expect(needsYou(m.s)).toBe(false);
+  });
+
+  it('counts a finished item as attention and picks the most urgent item of a session', () => {
+    let m = applyAttention(base(), [att('finished_unseen', 'a1'), att('failed', 'a2')]);
+    expect(m.s.attention?.id).toBe('a2');
+    m = applyAttention(m, [att('finished_unseen', 'a1')]);
+    m = applyActivity(m, [{ session: 's', activity: 'idle', ts: 12_000 }], 12_000);
+    expect(m.s.state).toBe('done');
+    expect(needsYou(m.s)).toBe(true);
+  });
+
+  it('shows a silent working session as unknown, never as stale', () => {
+    const m = applyActivity(base(), [{ session: 's', activity: 'unknown', ts: 80_000 }], 80_000);
+    expect(m.s.state).toBe('unknown');
+    expect(isStale(m.s, 999_999)).toBe(false);
+  });
+
+  it('acknowledges a finished item only for a foreground session on a visible page, once', () => {
+    const m = applyAttention(base(), [att('finished_unseen')]);
+    const done = new Set<string>();
+    expect(attentionToAck(m.s, false, true, done)).toEqual([]);
+    expect(attentionToAck(m.s, true, false, done)).toEqual([]);
+    expect(attentionToAck(m.s, true, true, done)).toEqual(['a1']);
+    expect(attentionToAck(m.s, true, true, new Set(['a1']))).toEqual([]);
+  });
+
+  it('never acknowledges a question by looking at it', () => {
+    const m = applyAttention(base(), [att('needs_input')]);
+    expect(attentionToAck(m.s, true, true, new Set())).toEqual([]);
+  });
+
+  it('computes the running time on the server clock, so a skewed device clock does not matter', () => {
+    // The server says it is 10_000 when this device thinks it is 9_000: the device is 1 s behind.
+    const m = base();
+    expect(m.s.clockOffset).toBe(1_000);
+    // The task started at server time 4_000; at device time 19_000 the server clock reads 20_000.
+    expect(runningMs(m.s, 19_000)).toBe(16_000);
+    expect(runningMs({ ...m.s, task: undefined }, 19_000)).toBeNull();
   });
 });

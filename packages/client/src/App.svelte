@@ -16,6 +16,7 @@
   import { serverAtLeast, NEW_WINDOW_VERSION } from './lib/serverVersion';
   import { loadHidden, openTabs, saveHidden } from './lib/tabs';
   import { announce, waitingList } from './lib/notify';
+  import { attentionToAck } from './lib/agents';
   import { cacheRemaining, expiringSoon } from './lib/cache';
   import { settings, applyTheme } from './lib/settings';
   import type { ServerListItem } from './lib/protocol';
@@ -147,6 +148,19 @@
   $: tabSessions = openTabs($allSessions, $allAgents, hidden);
   $: waiting = waitingList($allSessions, $allAgents);
   $: announce(waiting.length);
+  // Looking at a session clears its finished or failed item on the server; a question stays until it is answered.
+  let pageVisible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
+  const acked = new Set<string>();
+  function sendAttention(key: string, m: import('./lib/protocol').ClientMessage) {
+    const s = hub.findSession(key);
+    if (s) hub.send(s.serverId, m);
+  }
+  $: if (activeKey && !serversPage) {
+    for (const id of attentionToAck($allAgents[activeKey], true, pageVisible, acked)) {
+      acked.add(id);
+      sendAttention(activeKey, { type: 'ack', attention_id: id });
+    }
+  }
   $: expiring = new Set($allSessions.filter(s => expiringSoon(cacheRemaining($allAgents[s.key], now, $settings.cacheTtlMs))).map(s => s.key));
   $: activeSession = $allSessions.find(s => s.key === activeKey);
   $: profile = backendOf(activeSession) === 'tmux' ? 'tmux' as const : 'shell' as const;
@@ -394,6 +408,8 @@
   }
 
   onMount(() => {
+    const visible = () => (pageVisible = document.visibilityState !== 'hidden');
+    document.addEventListener('visibilitychange', visible);
     const mq = window.matchMedia('(max-width: 720px)');
     const media = () => (narrow = mq.matches);
     media();
@@ -428,6 +444,7 @@
     window.addEventListener('unhandledrejection', report);
     return () => {
       clearInterval(clock);
+      document.removeEventListener("visibilitychange", visible);
       vv?.removeEventListener('resize', kb);
       stopTheme();
       themeMedia.removeEventListener('change', themeChanged);
@@ -518,7 +535,7 @@
   {:else}
     <NavigationBar sessions={tabSessions} agents={$allAgents} servers={$hubServers} windows={$allWindows} {expiring} {link} {activeKey} held={!!actionSession || !!menuSession || cardExpanded || sheetHeld} onopen={attach} onpeek={peek} ontabmenu={openWindowMenu} onactions={(key) => { actionConfirm = false; actionKey = key; }}
       onlink={() => link && showToast(link.text, link.ok ? 'success' : 'error')} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { crumb('sessions sheet toggled'); showWorkspace(); sheetHeight = sheetHeight === 'closed' ? 'half' : 'closed'; }} />
-    <NeedsYouBanner {waiting} {now} collapsed={keyboardOpen} onopen={attach} onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} />
+    <NeedsYouBanner {waiting} {now} collapsed={keyboardOpen} onopen={attach} ondismiss={(key, id) => sendAttention(key, { type: 'dismiss', attention_id: id })} onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} />
 
     {#if iosHint && !selectedServer}
       <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); font-size: 0.85rem;">

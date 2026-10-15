@@ -2,7 +2,8 @@ import { chipFor } from './cards';
 import type { AgentMap, SessionAgent } from './agents';
 import type { HubSession } from './hub';
 
-export const needsYou = (agent?: SessionAgent) => agent?.state === 'needs_input' || agent?.state === 'error';
+/** With server status, an open Attention item; otherwise (an older server) the raw state. */
+export const needsYou = (agent?: SessionAgent) => agent?.serverStatus ? !!agent.attention : agent?.state === 'needs_input' || agent?.state === 'error';
 export const needsYouCount = (agents: AgentMap) => Object.values(agents).filter(needsYou).length;
 /** Only needs-you moves to the front; otherwise tabs mirror the servers' session order. */
 export function tabIds(sessions: HubSession[], agents: AgentMap): string[] {

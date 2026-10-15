@@ -42,6 +42,10 @@ try {
   if (order[0] !== 'api-refactor') fail(`needs-you card is not first: ${order}`);
   else console.log('ok  chips carry words and "needs you" comes first');
 
+  // 1b. A card with server status shows its task and how long it has run.
+  if (!text.includes('Wire the touch controller in') || !/running 1 min/.test(text)) fail('the card shows no task title and running time');
+  else console.log('ok  a card shows its task and running time');
+
   // 2. The stale card says so and offers no answers.
   if (!(await page.innerText('body')).includes('no update for 4 min')) fail('the stale card does not say how long it has been quiet');
   else console.log('ok  a card with no news says "no update for N min"');

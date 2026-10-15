@@ -1,6 +1,6 @@
 import { derived, writable } from 'svelte/store';
 import { Connection, type ConnectionOptions, type ConnState } from './connection';
-import { applyEvents, applySnapshot, syncRequest, type AgentMap } from './agents';
+import { applyActivity, applyAttention, applyEvents, applySnapshot, syncRequest, type AgentMap } from './agents';
 import type { ClientMessage, ServerListItem, ServerMessage, SessionInfo } from './protocol';
 import type { Target } from './transport';
 import { applyWindowList, forgetWindows, type WindowMap } from './windows';
@@ -150,10 +150,12 @@ export class ServerHub {
     e.connection = connection;
     e.unsubscribe = connection.subscribe(msg => {
       if (!current()) return;
-      const changed = msg.type === 'sessions' || msg.type === 'agent_snapshot' || msg.type === 'agent_events' || msg.type === 'window_list';
+      const changed = msg.type === 'sessions' || msg.type === 'agent_snapshot' || msg.type === 'agent_events' || msg.type === 'window_list' || msg.type === 'activity' || msg.type === 'attention';
       if (msg.type === 'sessions') { e.sessions = msg.sessions; e.windows = forgetWindows(e.windows, msg.sessions.map(s => s.id)); }
       if (msg.type === 'window_list') e.windows = applyWindowList(e.windows, msg);
       if (msg.type === 'agent_snapshot') e.agents = applySnapshot(e.agents, msg.states);
+      if (msg.type === 'activity') e.agents = applyActivity(e.agents, msg.sessions, Date.now());
+      if (msg.type === 'attention') e.agents = applyAttention(e.agents, msg.items);
       if (msg.type === 'agent_events') {
         const result = applyEvents(e.agents, msg.events); e.agents = result.map;
         if (result.gap) connection.send({ type: 'agent_sync', after: syncRequest(e.agents) });

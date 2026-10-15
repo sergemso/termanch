@@ -1,7 +1,7 @@
 // The agent event store (plan v6, P.6): the latest state per session, kept up to date from the server's
 // snapshot and event stream. No UI here (cards are v8). Text in events is untrusted: render it as text only.
 import { get, writable } from 'svelte/store';
-import type { AgentEvent, AgentState, ClientMessage, ServerMessage, SessionAgentState } from './protocol';
+import type { Activity, AgentEvent, AgentState, Attention, ClientMessage, ServerMessage, SessionActivity, SessionAgentState, Task } from './protocol';
 
 export interface SessionAgent {
   state: AgentState;
@@ -23,6 +23,14 @@ export interface SessionAgent {
   timeline?: { name: string; summary: string; phase: string; ts: number }[];
   plan?: { text: string; status: string }[];
   message?: string;
+  /** Set once the server sends Activity or Attention (decision 0095): `state` is then derived from them, not from raw events. */
+  serverStatus?: boolean;
+  activity?: Activity;
+  task?: Task;
+  /** The most urgent open Attention item of the session. */
+  attention?: Attention;
+  /** Server clock minus this device's clock (ms) when the Activity arrived, for running times. */
+  clockOffset?: number;
 }
 
 export type AgentMap = Record<string, SessionAgent>;
@@ -36,7 +44,64 @@ export const agents = writable<AgentMap>({});
 
 /** The latest state is `working` but nothing has been heard for a minute: it may be out of date. */
 export function isStale(a: SessionAgent, nowMs: number, skewMs = 0): boolean {
-  return a.state === 'working' && (a.stale || nowMs + skewMs - a.ts > STALE_AFTER_MS);
+  // With server status a silent `working` already arrives as `unknown`.
+  return !a.serverStatus && a.state === 'working' && (a.stale || nowMs + skewMs - a.ts > STALE_AFTER_MS);
+}
+
+const URGENCY: Record<string, number> = { needs_input: 0, failed: 1, finished_unseen: 2 };
+
+/** With server status, the legacy `state` is what Activity and Attention say, so cards and tabs read one thing. */
+function derived(a: SessionAgent): SessionAgent {
+  if (!a.serverStatus) return a;
+  const kind = a.attention?.kind;
+  let state: AgentState;
+  if (kind === 'needs_input') state = 'needs_input';
+  else if (kind === 'failed') state = 'error';
+  else if (a.activity === 'working') state = 'working';
+  else if (a.activity === 'blocked') state = 'needs_input';
+  else if (a.activity === 'idle') state = kind === 'finished_unseen' ? 'done' : 'idle';
+  else state = 'unknown';
+  const waitingSince = kind === 'needs_input' || kind === 'failed' ? a.attention?.raised_at : undefined;
+  return { ...a, state, stale: false, waitingSince };
+}
+
+/** Activity of sessions, as the server derived it. An unknown activity value counts as `unknown`. */
+export function applyActivity(map: AgentMap, sessions: SessionActivity[], receivedAt: number): AgentMap {
+  const next: AgentMap = { ...map };
+  for (const s of sessions) {
+    const cur = next[s.session] ?? { state: 'unknown' as AgentState, seq: 0, stale: false, ts: s.ts };
+    next[s.session] = derived({ ...cur, serverStatus: true, activity: s.activity, task: s.task, agent: s.agent ?? cur.agent,
+      clockOffset: s.ts - receivedAt, ts: Math.max(cur.ts, s.ts) });
+  }
+  return next;
+}
+
+/** The server sends all open items at once: a session without one has none. */
+export function applyAttention(map: AgentMap, items: Attention[]): AgentMap {
+  const best = new Map<string, Attention>();
+  for (const it of items) {
+    const cur = best.get(it.session);
+    if (!cur || (URGENCY[it.kind] ?? 9) < (URGENCY[cur.kind] ?? 9)) best.set(it.session, it);
+  }
+  const next: AgentMap = {};
+  for (const [k, a] of Object.entries(map)) next[k] = derived({ ...a, serverStatus: true, attention: best.get(k) });
+  for (const [k, it] of best) {
+    if (!next[k]) next[k] = derived({ state: 'unknown', seq: 0, stale: false, ts: it.raised_at, serverStatus: true, attention: it });
+  }
+  return next;
+}
+
+/** Items to acknowledge: finished or failed ones of a session that is shown in the foreground of a visible page. A
+ *  `needs_input` is never acknowledged by looking; only the prompt going away clears it. */
+export function attentionToAck(a: SessionAgent | undefined, foreground: boolean, pageVisible: boolean, done: Set<string>): string[] {
+  const it = a?.attention;
+  if (!foreground || !pageVisible || !it || it.kind === 'needs_input' || done.has(it.id)) return [];
+  return [it.id];
+}
+
+/** How long the current task has run, on the server's clock; null without a task. */
+export function runningMs(a: SessionAgent, nowMs: number): number | null {
+  return a.task ? Math.max(0, nowMs + (a.clockOffset ?? 0) - a.task.started_at) : null;
 }
 
 /** A snapshot replaces what we know about a session's state but keeps the details we already have. */
@@ -46,8 +111,8 @@ export function applySnapshot(map: AgentMap, states: SessionAgentState[]): Agent
     const old = map[s.session];
     // A lower seq than ours means the server restarted its counters: what we hold is from before, drop it.
     const keep = old && old.seq <= s.seq ? old : {};
-    next[s.session] = { ...keep, state: s.state, seq: s.seq, stale: s.stale, ts: s.ts, agent: s.agent, lastResponseAt: s.last_response_at,
-      waitingSince: waiting(s.state) ? s.waiting_since ?? (old && old.seq <= s.seq && waiting(old.state) ? old.waitingSince ?? old.ts : s.ts) : undefined };
+    next[s.session] = derived({ ...keep, state: s.state, seq: s.seq, stale: s.stale, ts: s.ts, agent: s.agent, lastResponseAt: s.last_response_at,
+      waitingSince: waiting(s.state) ? s.waiting_since ?? (old && old.seq <= s.seq && waiting(old.state) ? old.waitingSince ?? old.ts : s.ts) : undefined });
   }
   return next;
 }
@@ -64,10 +129,11 @@ export function applyEvents(map: AgentMap, events: AgentEvent[]): { map: AgentMa
     const ev = e as Record<string, unknown>;
     switch (e.kind) {
       case 'state':
-        a.waitingSince = waiting(ev.state as AgentState) ? (waiting(a.state) ? a.waitingSince ?? cur?.ts ?? e.ts : e.ts) : undefined;
+        if (!a.serverStatus) a.waitingSince = waiting(ev.state as AgentState) ? (waiting(a.state) ? a.waitingSince ?? cur?.ts ?? e.ts : e.ts) : undefined;
         if (ev.state === 'done' || (a.state === 'working' && (ev.state === 'idle' || ev.state === 'needs_input'))) a.lastResponseAt = e.ts;
-        a.state = ev.state as AgentState;
-        if (a.state !== 'needs_input') delete a.prompt;
+        // With server status the state is derived from Activity and Attention; a raw event only moves the details.
+        if (!a.serverStatus) a.state = ev.state as AgentState;
+        if (ev.state !== 'needs_input') delete a.prompt;
         break;
       case 'tool':
         a.tool = { name: String(ev.name ?? ''), summary: String(ev.summary ?? ''), phase: String(ev.phase ?? '') };

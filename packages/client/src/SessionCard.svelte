@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { SessionInfo } from './lib/protocol';
-  import type { SessionAgent } from './lib/agents';
+  import { runningMs, type SessionAgent } from './lib/agents';
   import { ageText, chipFor, isDone, progress, staleText, toolLine } from './lib/cards';
   import { cacheRemaining, cacheText, expiringSoon } from './lib/cache';
   import { representativeWindow, shortPath, type SessionWindows } from './lib/windows';
@@ -26,6 +26,7 @@
   $: chip = chipFor(agent, now);
   $: prog = progress(agent.plan);
   $: line = toolLine(agent);
+  $: running = chip.tone === 'work' ? runningMs(agent, now) : null;
   $: rep = representativeWindow(windows);
   $: remaining = cacheRemaining(agent, now, ttlMs);
   // Only a prompt the agent's own hook confirmed gets answer buttons, and never one that may be out of date.
@@ -41,9 +42,11 @@
       {#if session.backend}<span class="badge">{session.backend}</span>{/if}
       <span class="chip {chip.tone}" class:stale={chip.stale}><span aria-hidden="true">{chip.icon}</span> {chip.label}</span>
     </span>
+    {#if agent.task}<span class="task">{agent.task.title}</span>{/if}
     {#if line}<span class="line">{line}</span>{/if}
     <span class="meta">
       {#if rep?.path}<span class="path" title={rep.path}>{shortPath(rep.path)}</span>{/if}
+      {#if running !== null}<span>{running < 10_000 ? 'just started' : `running ${ageText(0, running)}`}</span>{/if}
       <span>{ageText(agent.ts, now)}</span>
       {#if remaining !== null}<span class="cache" class:soon={expiringSoon(remaining)}>{cacheText(remaining)}</span>{/if}
       {#if prog}<span>plan {prog}</span>{/if}
@@ -162,6 +165,12 @@
   }
   .chip.stale {
     border-style: dashed;
+  }
+  .task {
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .line {
     font-size: 0.8rem;

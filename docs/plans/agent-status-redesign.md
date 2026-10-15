@@ -45,7 +45,7 @@ Context: Today one negotiated data channel carries JSON (`rtc.rs:322`, `rtc.ts:9
 Do: 1. Server `rtc.rs`: open a second negotiated channel (`status`); route `Output` and input as binary on `term` and everything else on `status`, each with its own bounded queue; under pressure coalesce `term`, never delay `status`. 2. `websocket.rs`: one socket, a one-byte lane tag per frame. 3. Add `channels` to `AuthOk`; a server without it, or a client that does not ask, keeps the single pipe. 4. Client `rtc.ts` and `transport.ts`: open both, fall back to the single pipe when `channels` is absent. 5. Update `packages/server/src/e2e.rs` for both paths.
 Done-when: an e2e test shows an `Activity` message arriving within the A.1 target while a burst of output is flowing; an old server (no `channels`) still works in a client test; a new server with an old client still works; WebSocket carries both lanes.
 
-### A.5 Client: store, cards, tabs and banner read Activity and Attention — [ ]
+### A.5 Client: store, cards, tabs and banner read Activity and Attention — [x]
 Class: implement · Needs: A.3, A.4 · Check: `cd packages/client && npx --yes pnpm@9 test`
 Context: `agents.ts` holds a flat state and recomputes "needs you" in `tabs.ts` `needsYou`; `notify.ts` builds the title count and badge; `SessionCard.svelte` renders cards.
 Do: 1. `agents.ts`: store Activity, `task` and Attention items; running time from `started_at` plus the clock offset. 2. Cards show the task title and running time; `needsYou`, `waitingList`, the title count, the app badge and `NeedsYouBanner.svelte` read Attention. 3. Send `ack` when a session is shown in the foreground and the page is visible; dismiss action on an item. 4. Drop `stale` handling in favour of `unknown`.
