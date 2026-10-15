@@ -112,6 +112,62 @@ pub struct SessionAgentState {
     pub waiting_since: Option<u64>,
 }
 
+/// What an agent does now (decision 0095). `Unknown` also covers a `working` signal that went quiet for 60 s.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Activity {
+    Working,
+    Blocked,
+    Idle,
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AttentionKind {
+    NeedsInput,
+    FinishedUnseen,
+    Failed,
+    #[serde(other)]
+    Unknown,
+}
+
+/// The current piece of work of a session: the first line of the prompt, or the plan item in progress.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct Task {
+    pub title: String,
+    /// ms since the epoch, on the server's clock.
+    pub started_at: u64,
+    pub source: Source,
+}
+
+/// A durable, server-owned item that asks for the owner (decision 0095).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct Attention {
+    pub id: String,
+    pub session: String,
+    pub kind: AttentionKind,
+    pub raised_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task: Option<Task>,
+    /// The question of a `needs_input`; never sent in a push.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+}
+
+/// The derived Activity of one session with its task, as the status channel carries it.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct SessionActivity {
+    pub session: String,
+    pub activity: Activity,
+    pub ts: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task: Option<Task>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,5 +237,34 @@ mod tests {
                 state: AgentState::Unknown
             }
         );
+    }
+
+    #[test]
+    fn activity_and_attention_round_trip_with_wire_names_and_ignore_unknown_values() {
+        let a = Attention {
+            id: "a1".into(),
+            session: "s".into(),
+            kind: AttentionKind::FinishedUnseen,
+            raised_at: 7,
+            task: Some(Task {
+                title: "fix it".into(),
+                started_at: 3,
+                source: Source::Hook,
+            }),
+            prompt: None,
+        };
+        let v = serde_json::to_value(&a).unwrap();
+        assert_eq!(v["kind"], "finished_unseen");
+        assert_eq!(v["task"]["source"], "hook");
+        assert!(v.get("prompt").is_none());
+        assert_eq!(serde_json::from_value::<Attention>(v).unwrap(), a);
+        let u: Attention =
+            serde_json::from_str(r#"{"id":"a","session":"s","kind":"levitating","raised_at":1}"#)
+                .unwrap();
+        assert_eq!(u.kind, AttentionKind::Unknown);
+        let act: SessionActivity =
+            serde_json::from_str(r#"{"session":"s","activity":"dreaming","ts":1}"#).unwrap();
+        assert_eq!(act.activity, Activity::Unknown);
+        assert_eq!(serde_json::to_value(Activity::Blocked).unwrap(), "blocked");
     }
 }

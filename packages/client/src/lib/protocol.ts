@@ -18,7 +18,9 @@ export type ClientMessage =
   | { type: 'attach'; session_id: string }
   | { type: 'detach' }
   | { type: 'input'; data: string }
-  | { type: 'resize'; cols: number; rows: number };
+  | { type: 'resize'; cols: number; rows: number }
+  | { type: 'ack'; attention_id: string }
+  | { type: 'dismiss'; attention_id: string };
 
 export type ServerMessage =
   | { type: 'challenge'; nonce: string; server_id: string }
@@ -32,6 +34,8 @@ export type ServerMessage =
   | { type: 'window_list'; session: string; windows: WindowInfo[]; representative?: number | null }
   | { type: 'agent_snapshot'; states: SessionAgentState[] }
   | { type: 'agent_events'; events: AgentEvent[] }
+  | { type: 'activity'; sessions: SessionActivity[] }
+  | { type: 'attention'; items: Attention[] }
   | { type: 'agent_event'; event: AgentEventType; agent: string; session_id: string }
   | { type: 'error'; message: string }
   | { type: 'pong' };
@@ -70,6 +74,37 @@ export interface SessionAgentState {
   last_response_at?: number;
   /** Start of the continuous human wait; absent on older servers. */
   waiting_since?: number;
+}
+
+/** Decision 0095: what an agent does now. Unknown values are treated as `unknown`. */
+export type Activity = 'working' | 'blocked' | 'idle' | 'unknown';
+
+export type AttentionKind = 'needs_input' | 'finished_unseen' | 'failed' | 'unknown';
+
+/** The current piece of work of a session; `started_at` is ms since the epoch on the server's clock. */
+export interface Task {
+  title: string;
+  started_at: number;
+  source: string;
+}
+
+export interface SessionActivity {
+  session: string;
+  activity: Activity;
+  ts: number;
+  task?: Task;
+  agent?: string;
+}
+
+/** A durable, server-owned item that asks for the owner. */
+export interface Attention {
+  id: string;
+  session: string;
+  kind: AttentionKind;
+  raised_at: number;
+  task?: Task;
+  /** The question of a `needs_input`. */
+  prompt?: string;
 }
 
 /** Plan v6: `seq` and `ts` come from the server; unknown `kind`s and extra fields are ignored. */

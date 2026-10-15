@@ -223,6 +223,8 @@ impl SessionManager {
                 send_r(tx, &ServerMessage::DeviceRevoked { device }).await?;
             }
             ClientMessage::Ping => send_r(tx, &ServerMessage::Pong).await?,
+            // Handled by the attention store (plan A.3); accepted so a newer client is not an error.
+            ClientMessage::Ack { .. } | ClientMessage::Dismiss { .. } => {}
             ClientMessage::Answer {
                 session,
                 prompt_id,

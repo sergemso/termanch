@@ -103,6 +103,15 @@ pub enum ClientMessage {
         cols: u16,
         rows: u16,
     },
+    /// A device shows this session in the foreground: clears its `finished_unseen` and `failed` items, never
+    /// a `needs_input` (decision 0095).
+    Ack {
+        attention_id: String,
+    },
+    /// Explicitly dismiss an attention item.
+    Dismiss {
+        attention_id: String,
+    },
 }
 
 /// Server → Client (WebSocket)
@@ -178,6 +187,14 @@ pub enum ServerMessage {
     /// New agent events, in `seq` order per session. A gap in `seq` means the client should `agent_sync`.
     AgentEvents {
         events: Vec<crate::events::AgentEvent>,
+    },
+    /// The derived Activity (with task) of every session; answers `agent_sync`, then follows each change.
+    Activity {
+        sessions: Vec<crate::events::SessionActivity>,
+    },
+    /// The open attention items, and again whenever one is raised or cleared.
+    Attention {
+        items: Vec<crate::events::Attention>,
     },
     /// Legacy message of the parked termanch-agent.
     AgentEvent {
@@ -288,6 +305,23 @@ mod tests {
         assert_eq!(v["type"], "agent_snapshot");
         let v = serde_json::to_value(ServerMessage::AgentEvents { events: vec![] }).unwrap();
         assert_eq!(v["type"], "agent_events");
+        let v = serde_json::to_value(ServerMessage::Activity { sessions: vec![] }).unwrap();
+        assert_eq!(v["type"], "activity");
+        let v = serde_json::to_value(ServerMessage::Attention { items: vec![] }).unwrap();
+        assert_eq!(v["type"], "attention");
+        let v = serde_json::to_value(ClientMessage::Ack {
+            attention_id: "a".into(),
+        })
+        .unwrap();
+        assert_eq!(
+            (v["type"].as_str(), v["attention_id"].as_str()),
+            (Some("ack"), Some("a"))
+        );
+        let v = serde_json::to_value(ClientMessage::Dismiss {
+            attention_id: "a".into(),
+        })
+        .unwrap();
+        assert_eq!(v["type"], "dismiss");
         let v = serde_json::to_value(ServerMessage::SessionAttached {
             session_id: "x".into(),
         })
