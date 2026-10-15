@@ -34,11 +34,21 @@ fn tool_summary(name: &str, input: &Value) -> String {
     }
 }
 
-/// Claude Code hook payloads (fact 0029). The prompt and tool output are never copied.
+/// Claude Code hook payloads (fact 0029). Only the first line of the prompt becomes the task title; tool output is never copied.
 pub fn claude(d: &Value) -> Option<Adapted> {
     let kinds = match text(d, "hook_event_name") {
         "SessionStart" => vec![state(AgentState::Idle)],
-        "UserPromptSubmit" => vec![state(AgentState::Working)],
+        "UserPromptSubmit" => {
+            let mut k = vec![state(AgentState::Working)];
+            // The first line names the task; the rest of the prompt is never copied.
+            let first = text(d, "prompt").lines().next().unwrap_or("").trim();
+            if !first.is_empty() {
+                k.push(EventKind::Task {
+                    title: first.to_string(),
+                });
+            }
+            k
+        }
         "PreToolUse" => {
             let name = text(d, "tool_name").to_string();
             let summary = tool_summary(&name, d.get("tool_input").unwrap_or(&Value::Null));
@@ -274,7 +284,12 @@ mod tests {
         let k = |f: &str| claude(&sample(f)).unwrap().2;
         assert_eq!(
             k("claude-userpromptsubmit.json"),
-            vec![state(AgentState::Working)]
+            vec![
+                state(AgentState::Working),
+                EventKind::Task {
+                    title: "Run the bash command: echo hello. Then say done.".into()
+                }
+            ]
         );
         assert_eq!(
             k("claude-pretooluse.json"),
@@ -310,13 +325,15 @@ mod tests {
     }
 
     #[test]
-    fn nothing_from_the_prompt_or_tool_output_is_copied() {
-        for f in ["claude-userpromptsubmit.json", "claude-posttooluse.json"] {
-            let d = sample(f);
-            let out = serde_json::to_string(&claude(&d).unwrap().2).unwrap();
-            assert!(!out.contains("Run the bash command"), "{f}");
-            assert!(!out.contains("\"hello\""), "{f}");
-        }
+    fn only_the_first_prompt_line_and_no_tool_output_is_copied() {
+        let out =
+            serde_json::to_string(&claude(&sample("claude-posttooluse.json")).unwrap().2).unwrap();
+        assert!(!out.contains("\"hello\""));
+        let d = json!({"hook_event_name": "UserPromptSubmit", "prompt": "fix the login\nsecond line with detail"});
+        let out = serde_json::to_string(&claude(&d).unwrap().2).unwrap();
+        assert!(out.contains("fix the login") && !out.contains("second line"));
+        let empty = json!({"hook_event_name": "UserPromptSubmit", "prompt": ""});
+        assert_eq!(claude(&empty).unwrap().2, vec![state(AgentState::Working)]);
     }
 
     #[test]

@@ -116,6 +116,7 @@ impl SessionManager {
         tokio::pin!(idle);
         let mut agent_rx = self.events.as_ref().map(|h| h.subscribe());
         let mut window_rx = self.windows.as_ref().map(|h| h.subscribe());
+        let mut status_rx = self.events.as_ref().map(|h| h.subscribe_status());
 
         loop {
             tokio::select! {
@@ -153,6 +154,16 @@ impl SessionManager {
                     };
                     if !send(&link.tx, &msg).await { break; }
                 }
+                change = next_status(&mut status_rx) => {
+                    let msgs = match change {
+                        Some(c) => vec![status_message(c)],
+                        // Fell behind: send the whole picture again.
+                        None => self.status_messages(),
+                    };
+                    for m in msgs {
+                        if !send(&link.tx, &m).await { return Ok(()); }
+                    }
+                }
                 update = next_window(&mut window_rx) => {
                     let msg = match update {
                         Some(u) => window_message(u),
@@ -175,6 +186,21 @@ impl SessionManager {
 
         info!("Connection closed for {}", identity.login);
         Ok(())
+    }
+
+    /// Every session's Activity and the open Attention items, for a client that is new or fell behind.
+    fn status_messages(&self) -> Vec<ServerMessage> {
+        let Some(hub) = &self.events else {
+            return Vec::new();
+        };
+        vec![
+            ServerMessage::Activity {
+                sessions: hub.activities(),
+            },
+            ServerMessage::Attention {
+                items: hub.attention_items(),
+            },
+        ]
     }
 
     #[allow(clippy::too_many_arguments)] // one connection's state, passed explicitly
@@ -223,8 +249,11 @@ impl SessionManager {
                 send_r(tx, &ServerMessage::DeviceRevoked { device }).await?;
             }
             ClientMessage::Ping => send_r(tx, &ServerMessage::Pong).await?,
-            // Handled by the attention store (plan A.3); accepted so a newer client is not an error.
-            ClientMessage::Ack { .. } | ClientMessage::Dismiss { .. } => {}
+            ClientMessage::Ack { attention_id } | ClientMessage::Dismiss { attention_id } => {
+                if let Some(hub) = &self.events {
+                    hub.ack(&attention_id);
+                }
+            }
             ClientMessage::Answer {
                 session,
                 prompt_id,
@@ -269,6 +298,9 @@ impl SessionManager {
                     }
                 }
                 send_r(tx, &ServerMessage::AgentSnapshot { states }).await?;
+                for m in self.status_messages() {
+                    send_r(tx, &m).await?;
+                }
                 if !events.is_empty() {
                     send_r(tx, &ServerMessage::AgentEvents { events }).await?;
                 }
@@ -420,6 +452,27 @@ async fn next_events(
         }
     }
     Some(out)
+}
+
+async fn next_status(
+    rx: &mut Option<tokio::sync::broadcast::Receiver<crate::events::StatusChange>>,
+) -> Option<crate::events::StatusChange> {
+    use tokio::sync::broadcast::error::RecvError;
+    let Some(rx) = rx else {
+        return std::future::pending().await;
+    };
+    match rx.recv().await {
+        Ok(c) => Some(c),
+        Err(RecvError::Lagged(_)) => None,
+        Err(RecvError::Closed) => std::future::pending().await,
+    }
+}
+
+fn status_message(c: crate::events::StatusChange) -> ServerMessage {
+    match c {
+        crate::events::StatusChange::Activity(a) => ServerMessage::Activity { sessions: vec![a] },
+        crate::events::StatusChange::Attention(items) => ServerMessage::Attention { items },
+    }
 }
 
 fn window_message(u: crate::control::WindowUpdate) -> ServerMessage {

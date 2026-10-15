@@ -72,6 +72,10 @@ pub enum EventKind {
     Message {
         summary: String,
     },
+    /// The current task of the session, from the first line of the prompt (decision 0095).
+    Task {
+        title: String,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -165,6 +169,9 @@ pub struct SessionActivity {
     pub task: Option<Task>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
+    /// What scan or screen suspect without a hook to confirm it: low confidence, never pushed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hint: Option<AttentionKind>,
 }
 
 #[cfg(test)]

@@ -94,6 +94,8 @@ export interface SessionActivity {
   ts: number;
   task?: Task;
   agent?: string;
+  /** What scan or screen suspect without a hook: low confidence, never pushed. */
+  hint?: AttentionKind;
 }
 
 /** A durable, server-owned item that asks for the owner. */

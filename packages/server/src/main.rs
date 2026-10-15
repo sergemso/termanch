@@ -547,6 +547,16 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     });
+    // A `working` signal that goes quiet decays to `unknown` without any event to trigger it.
+    tokio::spawn({
+        let hub = hub.clone();
+        async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                hub.refresh(events::now_ms());
+            }
+        }
+    });
     let kinds = resolve_backends(&args.backend, &mode).await?;
     // With several managers every session id is `manager:name`; with one it stays the plain name.
     let prefix_of = |k: &str| {
