@@ -344,16 +344,19 @@
       refitPending = true;
       refitFrame = requestAnimationFrame(() => {
         refitPending = false;
-        refit(0);
+        doRefit(0);
       });
       return;
     }
+    doRefit(attempt);
+  }
+  function doRefit(attempt: number) {
     cancelAnimationFrame(refitFrame);
     if (disposed || !term) return;
     try {
       fitAddon?.fit();
     } catch {
-      if (attempt < 20) refitFrame = requestAnimationFrame(() => refit(attempt + 1));
+      if (attempt < 20) refitFrame = requestAnimationFrame(() => doRefit(attempt + 1));
       return;
     }
     sendResize(term.cols, term.rows);
