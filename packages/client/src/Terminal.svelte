@@ -462,9 +462,11 @@
           term?.write(msg.bytes);
         } else if (msg.type === 'session_attached') {
           // tmux repaints the screen on attach; start clean so a re-attach never doubles the content.
+          // If we just painted a preview, it already reset the terminal; skip the second reset to avoid a flash.
+          const wasPreviewing = previewing;
           previewing = false;
           crumb('attached');
-          term?.reset();
+          if (!wasPreviewing) term?.reset();
           refit();
           // Connecting lands in a live terminal. The page must not scroll to the field to do it.
           if (term?.textarea) term.textarea.focus({ preventScroll: true });
