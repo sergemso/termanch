@@ -60,6 +60,13 @@
   let fitAddon: FitAddon | null = null;
   let webgl: WebglAddon | null = null;
   let disposed = false;
+
+/** Captures and clears previewing state atomically to prevent terser constant propagation */
+function captureAndClearPreviewing(): boolean {
+  const was = previewing;
+  previewing = false;
+  return was;
+}
   /** Everything to undo on teardown, in the order it was set up. */
   const cleanups: (() => void)[] = [];
 
@@ -485,8 +492,7 @@
         } else if (msg.type === 'session_attached') {
           // tmux repaints the screen on attach; start clean so a re-attach never doubles the content.
           // If we just painted a preview, it already reset the terminal; skip the second reset to avoid a flash.
-          const wasPreviewing = previewing;
-          previewing = false;
+          const wasPreviewing = captureAndClearPreviewing();
           crumb('attached');
           if (!wasPreviewing) term?.reset();
           refit();

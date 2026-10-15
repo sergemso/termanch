@@ -3,7 +3,6 @@ name: Deploy to Cloudflare Pages
 on:
   push:
     branches: [master]
-    # Docs, server and image changes do not change what is deployed to Pages.
     paths: ['packages/client/**', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.github/workflows/deploy-pages.yaml']
   workflow_dispatch:
 
@@ -26,9 +25,19 @@ jobs:
         with:
           node-version: '20'
           cache: 'pnpm'
+          # Include source files in cache key so any source change invalidates cache
+          cache-dependency-path: |
+            packages/client/pnpm-lock.yaml
+            packages/client/src/**
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Clear Vite cache
+        run: |
+          rm -rf packages/client/node_modules/.vite
+          rm -rf packages/client/node_modules/.cache
+          rm -rf packages/client/dist
 
       - name: Build client
         run: pnpm --filter termenbox-client run build
@@ -38,13 +47,10 @@ jobs:
       - name: Install Wrangler
         run: npm install -g wrangler
 
-      # Pages Functions are read from ./functions of the directory wrangler runs in, so deploy from the
-      # client package. The directory's D1 binding is written here so each deployment (hosted or
-      # self-hosted) points at its own database.
       - name: Configure Pages project
         working-directory: packages/client
         run: |
-          cat > wrangler.toml <<EOF
+          cat > wrangler.toml <<EOFF
           name = "${{ vars.TERMENBOX_PAGES_PROJECT_NAME || 'termenbox' }}"
           pages_build_output_dir = "dist"
           compatibility_date = "2026-10-01"
@@ -54,7 +60,7 @@ jobs:
           database_name = "termanch-directory"
           database_id = "${{ vars.TERMENBOX_D1_DATABASE_ID }}"
           migrations_dir = "migrations"
-          EOF
+          EOFF
 
       - name: Apply directory migrations
         if: ${{ vars.TERMENBOX_D1_DATABASE_ID != '' }}
@@ -64,8 +70,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      # The OAuth code exchange (a Pages Function) reads these at runtime. GitHub stays the single source;
-      # unset ones are left alone on the project.
       - name: Sync Pages Function secrets
         working-directory: packages/client
         env:
