@@ -8,9 +8,11 @@ use axum::{
     http::HeaderMap,
 };
 
-use crate::link;
+use crate::link::{self, Inbound, LANE_TERM};
 
 const PING_EVERY: Duration = Duration::from_secs(20);
+/// Queued terminal chunks are joined into frames of about this size.
+const TERM_FRAME: usize = 16 * 1024;
 
 /// WebSocket adapter: pumps the socket into a `Link`. Used behind a tunnel and in tests.
 pub async fn handle_websocket(
@@ -29,9 +31,18 @@ pub async fn handle_websocket(
 
     loop {
         tokio::select! {
+            biased;
             msg = socket.recv() => match msg {
                 Some(Ok(Message::Text(text))) => {
-                    if end.to_session.send(text).await.is_err() { break; }
+                    if end.to_session.send(Inbound::Json(text)).await.is_err() { break; }
+                }
+                // Binary frames start with a lane tag; a tag this server does not know is ignored.
+                Some(Ok(Message::Binary(frame))) => {
+                    if frame.first() == Some(&LANE_TERM)
+                        && end.to_session.send(Inbound::Term(frame[1..].to_vec())).await.is_err()
+                    {
+                        break;
+                    }
                 }
                 Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
                 _ => {}
@@ -52,6 +63,23 @@ pub async fn handle_websocket(
             _ = ping.tick() => {
                 if socket.send(Message::Ping(Vec::new())).await.is_err() { break; }
             }
+            // Last in the biased order: terminal bytes never go ahead of a waiting status message or a ping.
+            term = end.term_from_session.recv() => match term {
+                Some(mut frame) => {
+                    // Under pressure the queued chunks travel as one frame.
+                    while frame.len() < TERM_FRAME {
+                        match end.term_from_session.try_recv() {
+                            Ok(more) => frame.extend(more),
+                            Err(_) => break,
+                        }
+                    }
+                    let mut tagged = Vec::with_capacity(frame.len() + 1);
+                    tagged.push(LANE_TERM);
+                    tagged.extend(frame);
+                    if socket.send(Message::Binary(tagged)).await.is_err() { break; }
+                }
+                None => break,
+            },
         }
     }
     drop(end);

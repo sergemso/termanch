@@ -91,3 +91,75 @@ describe('heartbeat', () => {
     expect(states).toContain('reconnecting');
   });
 });
+
+describe('terminal lane', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  async function connect(lanes: boolean, channels?: string[]) {
+    vi.useFakeTimers();
+    vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'visible' }));
+    vi.stubGlobal('window', { addEventListener: () => {}, removeEventListener: () => {} });
+    const sent: string[] = [];
+    const term: Uint8Array[] = [];
+    let termOpen = true;
+    const t: Transport = {
+      kind: 'ws',
+      onmessage: null,
+      onclose: null,
+      send: (x) => void sent.push(x),
+      close: () => {},
+      ...(lanes ? { lanes: true, onterm: null, sendTerm: (b: Uint8Array) => (termOpen ? (term.push(b), true) : false) } : {}),
+    };
+    const heard: string[] = [];
+    const c = new Connection({
+      target: async () => ({ wsUrl: 'ws://x' }),
+      openers: { rtc: async () => t, ws: async () => t },
+      credentials: async () => ({ cert: 'c', sign: async () => 's' }),
+      onState: () => {},
+      onReady: () => {},
+      onFatal: () => {},
+    });
+    c.subscribe((m) => heard.push(m.type === 'term' ? `term:${new TextDecoder().decode(m.bytes)}` : m.type));
+    c.start();
+    await vi.advanceTimersByTimeAsync(10);
+    t.onmessage!(JSON.stringify({ type: 'challenge', nonce: 'n', server_id: 's' }));
+    await vi.advanceTimersByTimeAsync(10);
+    t.onmessage!(JSON.stringify({ type: 'auth_ok', user: 'u', server_name: 's', ...(channels ? { channels } : {}) }));
+    return { c, t, sent, term, heard, close: () => (termOpen = false) };
+  }
+
+  it('asks for the lane only on a carrier that has one', async () => {
+    const a = await connect(true, ['term']);
+    expect(JSON.parse(a.sent.find((s) => s.includes('"auth"'))!).channels).toBe(true);
+    a.c.close();
+    const b = await connect(false);
+    expect(JSON.parse(b.sent.find((s) => s.includes('"auth"'))!).channels).toBeUndefined();
+    b.c.close();
+  });
+
+  it('sends keystrokes as raw bytes and hands received bytes to listeners once the server agreed', async () => {
+    const { c, t, sent, term, heard } = await connect(true, ['term']);
+    c.send({ type: 'input', data: textToB64('ls\r') });
+    expect(term.map((b) => new TextDecoder().decode(b))).toEqual(['ls\r']);
+    expect(sent.some((s) => s.includes('"input"'))).toBe(false);
+    t.onterm!(new TextEncoder().encode('hello'));
+    expect(heard).toContain('term:hello');
+    c.close();
+  });
+
+  it('keeps the JSON pipe when the server did not list the lane (an older server) or the lane is not open', async () => {
+    const old = await connect(true);
+    old.c.send({ type: 'input', data: textToB64('a') });
+    expect(old.term).toEqual([]);
+    expect(old.sent.some((s) => s.includes('"input"'))).toBe(true);
+    old.c.close();
+    const shut = await connect(true, ['term']);
+    shut.close();
+    shut.c.send({ type: 'input', data: textToB64('b') });
+    expect(shut.sent.some((s) => s.includes('"input"'))).toBe(true);
+    shut.c.close();
+  });
+});

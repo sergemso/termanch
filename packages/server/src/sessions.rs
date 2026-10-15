@@ -11,7 +11,7 @@ use std::sync::Arc;
 use crate::backend::{RunMode, SessionBackend};
 use crate::control::WindowHub;
 use crate::events::EventHub;
-use crate::link::{Link, LinkTx};
+use crate::link::{Inbound, Link, LinkTx};
 use crate::pty::Attachment;
 
 /// Clients ping every 5 s, so a minute of silence means the peer is gone.
@@ -121,8 +121,19 @@ impl SessionManager {
         loop {
             tokio::select! {
                 msg = link.rx.recv() => {
-                    let Some(text) = msg else { break };
+                    let Some(msg) = msg else { break };
                     idle.as_mut().reset(tokio::time::Instant::now() + IDLE_TIMEOUT);
+                    let text = match msg {
+                        Inbound::Json(text) => text,
+                        Inbound::Term(bytes) => {
+                            if let Some(att) = attachment.as_mut() {
+                                if let Err(e) = att.write(&bytes) {
+                                    if !send(&link.tx, &ServerMessage::Error { message: e.to_string() }).await { break; }
+                                }
+                            }
+                            continue;
+                        }
+                    };
                     let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) else { continue };
                     if let (true, ClientMessage::Attach { session_id }) = (self.mode.is_host(), &client_msg) {
                         // Who got a shell on the host and as whom; never what they typed.
@@ -132,10 +143,16 @@ impl SessionManager {
                         if !send(&link.tx, &ServerMessage::Error { message: e.to_string() }).await { break; }
                     }
                 }
-                out = next_output(&mut attachment) => {
+                // Room first, then the bytes: a client that reads slowly stops the terminal, not the status messages.
+                out = async {
+                    let permit = link.tx.reserve_output().await;
+                    (permit, next_output(&mut attachment).await)
+                }, if attachment.is_some() => {
+                    let (permit, out) = out;
                     match out {
                         Some(bytes) => {
-                            if !send(&link.tx, &ServerMessage::Output { data: B64.encode(bytes) }).await { break; }
+                            let Some(permit) = permit else { break };
+                            permit.send(bytes);
                         }
                         None => {
                             // The attach client exited: session killed, or detached from inside.

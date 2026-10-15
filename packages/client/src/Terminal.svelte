@@ -418,6 +418,8 @@
       connection.subscribe((msg) => {
         if (msg.type === 'output') {
           term?.write(b64ToBytes(msg.data));
+        } else if (msg.type === 'term') {
+          term?.write(msg.bytes);
         } else if (msg.type === 'session_attached') {
           // tmux repaints the screen on attach; start clean so a re-attach never doubles the content.
           previewing = false;

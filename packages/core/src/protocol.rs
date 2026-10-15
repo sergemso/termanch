@@ -12,6 +12,10 @@ pub enum ClientMessage {
         cert: String,
         signature: String,
         server_token: String,
+        /// Asks for terminal bytes on their own lane (decision 0096); absent from older clients, which keep
+        /// the single JSON pipe.
+        #[serde(default)]
+        channels: bool,
     },
     /// Owner-only: refuse this device key from now on.
     RevokeDevice {
@@ -132,6 +136,9 @@ pub enum ServerMessage {
     },
     AuthOk {
         user: String,
+        /// The lanes this connection uses besides JSON (`term`); absent means the single pipe.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        channels: Vec<String>,
         server_name: String,
         /// `container` or `host:<user>`; absent from older servers.
         #[serde(default)]
@@ -262,6 +269,7 @@ mod tests {
         assert_eq!(v["type"], "list_sessions");
         let v = serde_json::to_value(ServerMessage::AuthOk {
             user: "u".into(),
+            channels: vec![],
             server_name: "s".into(),
             mode: "container".into(),
             version: "0.1.0+dev".into(),
@@ -434,6 +442,7 @@ mod tests {
             cert: "cert".into(),
             signature: "sig".into(),
             server_token: "server".into(),
+            channels: true,
         };
         let json = serde_json::to_string(&msg).unwrap();
         let parsed: ClientMessage = serde_json::from_str(&json).unwrap();
@@ -453,5 +462,22 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         let parsed: ServerMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, parsed);
+    }
+
+    #[test]
+    fn an_auth_from_an_older_client_asks_for_no_lanes() {
+        let m: ClientMessage =
+            serde_json::from_str(r#"{"type":"auth","cert":"c","signature":"s","server_token":""}"#)
+                .unwrap();
+        assert!(matches!(
+            m,
+            ClientMessage::Auth {
+                channels: false,
+                ..
+            }
+        ));
+        let ok: ServerMessage =
+            serde_json::from_str(r#"{"type":"auth_ok","user":"u","server_name":"s"}"#).unwrap();
+        assert!(matches!(ok, ServerMessage::AuthOk { channels, .. } if channels.is_empty()));
     }
 }

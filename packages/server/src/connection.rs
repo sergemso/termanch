@@ -4,16 +4,20 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::RngCore;
 use termanch_core::protocol::{ClientMessage, ServerMessage};
 
-use crate::link::Link;
+use crate::link::{Inbound, Link};
 use crate::AppState;
 
 const AUTH_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The next message within the auth window; `None` on timeout, close, or unparseable input.
 async fn next(link: &mut Link) -> Option<ClientMessage> {
-    let text = tokio::time::timeout(AUTH_TIMEOUT, link.rx.recv())
+    // Terminal bytes before the handshake is done are not a handshake.
+    let Inbound::Json(text) = tokio::time::timeout(AUTH_TIMEOUT, link.rx.recv())
         .await
-        .ok()??;
+        .ok()??
+    else {
+        return None;
+    };
     serde_json::from_str(&text).ok()
 }
 
@@ -47,15 +51,17 @@ pub async fn run(mut link: Link, state: AppState) {
     if !send(&link, &challenge).await {
         return;
     }
-    let (cert, signature, claim) = match next(&mut link).await {
+    let (cert, signature, claim, lanes) = match next(&mut link).await {
         Some(ClientMessage::Auth {
             cert,
             signature,
             server_token,
+            channels,
         }) => (
             cert,
             signature,
             Some(server_token).filter(|t| !t.is_empty()),
+            channels,
         ),
         Some(_) => {
             send(
@@ -93,6 +99,7 @@ pub async fn run(mut link: Link, state: AppState) {
     tracing::info!("Authenticated {}", identity.login);
     let ok = ServerMessage::AuthOk {
         user: identity.login.clone(),
+        channels: if lanes { vec!["term".into()] } else { vec![] },
         server_name: state.server_name.clone(),
         mode: state.mode.clone(),
         version: crate::version(),
@@ -103,6 +110,10 @@ pub async fn run(mut link: Link, state: AppState) {
     };
     if !send(&link, &ok).await {
         return;
+    }
+    // Queued behind `auth_ok`, so the client reads it before the first raw byte.
+    if lanes {
+        link.tx.enable_lanes();
     }
 
     if let Err(e) = state.sessions.serve(link, identity, &state.auth).await {

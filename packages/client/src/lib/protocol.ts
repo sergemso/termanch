@@ -1,6 +1,6 @@
 export type ClientMessage =
   | { type: 'hello' }
-  | { type: 'auth'; cert: string; signature: string; server_token: string }
+  | { type: 'auth'; cert: string; signature: string; server_token: string; channels?: boolean }
   | { type: 'revoke_device'; device: string }
   | { type: 'uninstall'; confirm_name: string; delete_user?: boolean; remove_tmux?: boolean; kill_sessions?: boolean }
   | { type: 'agent_sync'; after: Record<string, number> }
@@ -26,10 +26,12 @@ export type ServerMessage =
   | { type: 'challenge'; nonce: string; server_id: string }
   | { type: 'device_revoked'; device: string }
   | { type: 'uninstall_done'; mode: string }
-  | { type: 'auth_ok'; user: string; server_name: string; mode?: string; version?: string; backends?: string[]; control_mode?: boolean; tmux_version?: string; prefix?: string }
+  | { type: 'auth_ok'; channels?: string[]; user: string; server_name: string; mode?: string; version?: string; backends?: string[]; control_mode?: boolean; tmux_version?: string; prefix?: string }
   | { type: 'sessions'; sessions: SessionInfo[] }
   | { type: 'session_attached'; session_id: string }
   | { type: 'output'; data: string }
+  /** Never on the wire as JSON: terminal bytes from the `term` lane, as `Connection` hands them to listeners. */
+  | { type: 'term'; bytes: Uint8Array }
   | { type: 'snapshot'; session: string; text: string; hash: string; unchanged?: boolean }
   | { type: 'window_list'; session: string; windows: WindowInfo[]; representative?: number | null }
   | { type: 'agent_snapshot'; states: SessionAgentState[] }

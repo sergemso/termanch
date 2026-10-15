@@ -61,6 +61,7 @@ impl ServerClient {
             cert: String::new(),
             signature: String::new(),
             server_token: self.server_token.clone(),
+            channels: false,
         };
         ws_tx
             .send(Message::Text(serde_json::to_string(&auth_msg)?))

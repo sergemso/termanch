@@ -19,7 +19,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 use crate::auth::AuthState;
 use crate::cert::testing::{now, Device, Signer};
-use crate::rtc::{self, RtcInfo, CHANNEL_ID, SERVER_PWD, SERVER_UFRAG};
+use crate::rtc::{self, RtcInfo, CHANNEL_ID, SERVER_PWD, SERVER_UFRAG, TERM_CHANNEL_ID};
 use crate::sessions::SessionManager;
 use crate::{router, AppState};
 
@@ -188,11 +188,23 @@ impl Conn {
     }
 
     async fn login_for(&mut self, server_id: &str, who: &Who, cert: &str, claim: &str) {
+        self.login_lanes(server_id, who, cert, claim, false).await
+    }
+
+    /// Like `login_for`, asking (or not) for terminal bytes on their own lane.
+    async fn login_lanes(
+        &mut self,
+        server_id: &str,
+        who: &Who,
+        cert: &str,
+        claim: &str,
+        channels: bool,
+    ) {
         self.send(json!({"type":"hello"})).await;
         let ch = self.recv_type("challenge").await;
         let nonce = ch["nonce"].as_str().unwrap();
         self.send(json!({
-            "type":"auth","cert":cert,"server_token":claim,
+            "type":"auth","cert":cert,"server_token":claim,"channels":channels,
             "signature": who.device.sign(server_id, nonce),
         }))
         .await;
@@ -201,7 +213,19 @@ impl Conn {
     async fn send(&mut self, v: Value) {
         match self {
             Conn::Ws(ws) => ws.send(Message::Text(v.to_string())).await.unwrap(),
-            Conn::Rtc(c) => c.send(v.to_string()),
+            Conn::Rtc(c) => c.send(Frame::Text(v.to_string())),
+        }
+    }
+
+    /// Terminal input on the `term` lane.
+    async fn send_term(&mut self, bytes: &[u8]) {
+        match self {
+            Conn::Ws(ws) => {
+                let mut frame = vec![crate::link::LANE_TERM];
+                frame.extend_from_slice(bytes);
+                ws.send(Message::Binary(frame)).await.unwrap()
+            }
+            Conn::Rtc(c) => c.send(Frame::Term(bytes.to_vec())),
         }
     }
 
@@ -212,12 +236,18 @@ impl Conn {
                     Ok(Some(Ok(Message::Text(t)))) => {
                         return Some(serde_json::from_str(&t).unwrap())
                     }
+                    Ok(Some(Ok(Message::Binary(b))))
+                        if b.first() == Some(&crate::link::LANE_TERM) =>
+                    {
+                        return Some(term_message(&b[1..]))
+                    }
                     Ok(Some(Ok(_))) => continue,
                     _ => return None,
                 }
             },
             Conn::Rtc(c) => match tokio::time::timeout(Duration::from_secs(5), c.rx.recv()).await {
-                Ok(Some(t)) => Some(serde_json::from_str(&t).unwrap()),
+                Ok(Some(Frame::Text(t))) => Some(serde_json::from_str(&t).unwrap()),
+                Ok(Some(Frame::Term(b))) => Some(term_message(&b)),
                 _ => None,
             },
         }
@@ -250,7 +280,7 @@ impl Conn {
             let Some(v) = self.recv().await else {
                 return false;
             };
-            if v["type"] == "output" {
+            if v["type"] == "output" || v["type"] == "term" {
                 seen.push_str(&String::from_utf8_lossy(
                     &B64.decode(v["data"].as_str().unwrap()).unwrap(),
                 ));
@@ -266,8 +296,19 @@ impl Conn {
 /// A WebRTC data-channel client built the way the browser builds it: from the server's IP, port and
 /// pinned fingerprint only, with its own ICE ufrag/pwd set to one random string.
 struct RtcClient {
-    to_net: mpsc::UnboundedSender<String>,
-    rx: mpsc::UnboundedReceiver<String>,
+    to_net: mpsc::UnboundedSender<Frame>,
+    rx: mpsc::UnboundedReceiver<Frame>,
+}
+
+/// What travels on the data channels: text on the status channel, bytes on the `term` channel.
+enum Frame {
+    Text(String),
+    Term(Vec<u8>),
+}
+
+/// A `term` frame as the tests read it: `{"type":"term","data":<base64>}`.
+fn term_message(bytes: &[u8]) -> Value {
+    json!({"type": "term", "data": B64.encode(bytes)})
 }
 
 fn parse_fingerprint(s: &str) -> Fingerprint {
@@ -293,6 +334,7 @@ impl RtcClient {
         rtc.add_local_candidate(Candidate::host(local, "udp").unwrap());
         rtc.add_remote_candidate(Candidate::host(server, "udp").unwrap());
         let cid: ChannelId;
+        let term_cid: ChannelId;
         {
             let mut d = rtc.direct_api();
             d.set_ice_controlling(true);
@@ -312,27 +354,35 @@ impl RtcClient {
                 negotiated: Some(CHANNEL_ID),
                 ..Default::default()
             });
+            term_cid = d.create_data_channel(ChannelConfig {
+                label: "term".into(),
+                negotiated: Some(TERM_CHANNEL_ID),
+                ..Default::default()
+            });
         }
 
-        let (to_net, mut from_app) = mpsc::unbounded_channel::<String>();
-        let (to_app, rx) = mpsc::unbounded_channel::<String>();
+        let (to_net, mut from_app) = mpsc::unbounded_channel::<Frame>();
+        let (to_app, rx) = mpsc::unbounded_channel::<Frame>();
         let (open_tx, open_rx) = tokio::sync::oneshot::channel::<()>();
         let mut open_tx = Some(open_tx);
         tokio::spawn(async move {
             let mut buf = vec![0u8; 2000];
-            let mut pending: Vec<String> = vec![];
+            let mut pending: Vec<Frame> = vec![];
             let mut open = false;
             loop {
                 let mut next = Instant::now() + Duration::from_millis(100);
                 loop {
                     if open {
-                        if let Some(mut ch) = rtc.channel(cid) {
-                            while let Some(m) = pending.first() {
-                                if ch.write(false, m.as_bytes()).unwrap_or(false) {
-                                    pending.remove(0);
-                                } else {
-                                    break;
-                                }
+                        while let Some(m) = pending.first() {
+                            let (id, binary, bytes) = match m {
+                                Frame::Text(t) => (cid, false, t.as_bytes()),
+                                Frame::Term(b) => (term_cid, true, b.as_slice()),
+                            };
+                            let Some(mut ch) = rtc.channel(id) else { break };
+                            if ch.write(binary, bytes).unwrap_or(false) {
+                                pending.remove(0);
+                            } else {
+                                break;
                             }
                         }
                     }
@@ -351,7 +401,11 @@ impl RtcClient {
                             }
                         }
                         Ok(Output::Event(Event::ChannelData(d))) => {
-                            let _ = to_app.send(String::from_utf8_lossy(&d.data).into_owned());
+                            let _ = to_app.send(if d.id == term_cid {
+                                Frame::Term(d.data.to_vec())
+                            } else {
+                                Frame::Text(String::from_utf8_lossy(&d.data).into_owned())
+                            });
                         }
                         Ok(Output::Event(_)) => {}
                         Err(_) => return,
@@ -383,8 +437,8 @@ impl RtcClient {
         }
     }
 
-    fn send(&self, text: String) {
-        let _ = self.to_net.send(text);
+    fn send(&self, frame: Frame) {
+        let _ = self.to_net.send(frame);
     }
 }
 
@@ -904,6 +958,154 @@ async fn windows_close_window_and_close_session_go_through_the_handlers(kind: Ki
     c.recv_type("error").await;
 }
 
+/// A client that asks for lanes gets `channels` in `auth_ok`, sends keystrokes and reads output as raw bytes on
+/// the `term` lane, and an Attention raised during a flood of output still arrives within a second. A client that
+/// does not ask is told nothing about lanes and keeps getting base64 JSON output.
+async fn terminal_bytes_use_their_own_lane_and_status_is_not_held_up_by_output(kind: Kind) {
+    use tokio::io::AsyncWriteExt;
+    if std::process::Command::new("tmux")
+        .arg("-V")
+        .output()
+        .is_err()
+    {
+        eprintln!("tmux not installed; skipping");
+        return;
+    }
+    let f = fixture().await;
+    let name = format!("ln{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
+    let _cleanup = KillOnDrop(name.clone());
+    let alice = f.who(1, "alice");
+
+    let mut old = Conn::open(kind, &f).await;
+    old.login(&f, &alice, &f.claim).await;
+    assert!(old.recv_type("auth_ok").await.get("channels").is_none());
+
+    let mut c = Conn::open(kind, &f).await;
+    c.login_lanes(&f.server_id, &alice, &alice.cert, "", true)
+        .await;
+    let ok = c.recv_type("auth_ok").await;
+    assert_eq!(ok["channels"], json!(["term"]));
+    c.send(json!({"type":"new_session","name":name})).await;
+    c.recv_type("sessions").await;
+    c.send(json!({"type":"attach","session_id":name})).await;
+    c.recv_type("session_attached").await;
+    c.send_term(b"echo lane-$((20+22))\n").await;
+    let mut raw = String::new();
+    for _ in 0..100 {
+        let v = c.recv().await.expect("closed");
+        assert_ne!(
+            v["type"], "output",
+            "output must not be JSON on a lane connection"
+        );
+        if v["type"] == "term" {
+            raw.push_str(&String::from_utf8_lossy(
+                &B64.decode(v["data"].as_str().unwrap()).unwrap(),
+            ));
+            if raw.contains("lane-42") {
+                break;
+            }
+        }
+    }
+    assert!(raw.contains("lane-42"), "{raw:?}");
+
+    // A flood of output, and in the middle of it a hook says the agent needs the owner.
+    c.send_term(b"head -c 4000000 /dev/zero | tr '\\0' 'x'; echo\n")
+        .await;
+    let line = json!({"session": name, "token": f.hub.token(&name), "adapter": "claude",
+        "data": {"hook_event_name": "Notification", "message": "needs a decision"}})
+    .to_string()
+        + "\n";
+    let mut s = tokio::net::UnixStream::connect(&f.events_socket)
+        .await
+        .unwrap();
+    let (mut bytes, mut chunks) = (0usize, 0usize);
+    // Wait until the flood is really flowing, then send the event.
+    while bytes < 200_000 {
+        let v = c.recv().await.expect("closed");
+        if v["type"] == "term" {
+            bytes += B64.decode(v["data"].as_str().unwrap()).unwrap().len();
+            chunks += 1;
+        }
+    }
+    let sent = Instant::now();
+    s.write_all(line.as_bytes()).await.unwrap();
+    let mut during = 0usize;
+    let waited = loop {
+        let v = c.recv().await.expect("closed");
+        if v["type"] == "attention" && v["items"][0]["kind"] == "needs_input" {
+            break sent.elapsed();
+        }
+        if v["type"] == "term" {
+            during += 1;
+        }
+        assert!(
+            sent.elapsed() < Duration::from_secs(5),
+            "no attention message"
+        );
+    };
+    eprintln!("lanes {kind:?}: attention after {waited:?}, {during} term messages in between, {chunks} before");
+    assert!(waited < Duration::from_secs(1), "{waited:?}");
+    assert_eq!(
+        v_first_prompt(&mut c).await,
+        Some("needs a decision".to_string())
+    );
+
+    let _ = std::process::Command::new("tmux")
+        .args(["kill-session", "-t", &name])
+        .output();
+}
+
+/// The prompt text of the open `needs_input` item, from the next `attention` message.
+async fn v_first_prompt(c: &mut Conn) -> Option<String> {
+    for _ in 0..2000 {
+        let v = c.recv().await?;
+        if v["type"] == "attention" {
+            if let Some(p) = v["items"][0]["prompt"].as_str() {
+                return Some(p.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// The single JSON pipe still carries a long flood of output, then the command after it.
+async fn a_flood_of_output_on_the_single_pipe_still_reaches_the_client(kind: Kind) {
+    if std::process::Command::new("tmux")
+        .arg("-V")
+        .output()
+        .is_err()
+    {
+        eprintln!("tmux not installed; skipping");
+        return;
+    }
+    let f = fixture().await;
+    let name = format!("fl{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
+    let _cleanup = KillOnDrop(name.clone());
+    let alice = f.who(1, "alice");
+    let mut c = Conn::open(kind, &f).await;
+    c.login(&f, &alice, &f.claim).await;
+    c.recv_type("auth_ok").await;
+    c.send(json!({"type":"new_session","name":name})).await;
+    c.recv_type("sessions").await;
+    c.send(json!({"type":"attach","session_id":name})).await;
+    c.recv_type("session_attached").await;
+    c.send(json!({"type":"input","data":B64.encode("timeout 5 sh -c 'while :; do seq 1 5000; done'; echo end-$((40+2))\n")})).await;
+    let start = Instant::now();
+    let mut seen = String::new();
+    while start.elapsed() < Duration::from_secs(20) {
+        let Some(v) = c.recv().await else { break };
+        if v["type"] == "output" {
+            seen.push_str(&String::from_utf8_lossy(
+                &B64.decode(v["data"].as_str().unwrap()).unwrap(),
+            ));
+            if seen.contains("end-42") {
+                return;
+            }
+        }
+    }
+    panic!("end-42 never arrived: {} bytes", seen.len());
+}
+
 macro_rules! over_both_transports {
     ($($name:ident),*) => {$(
         mod $name {
@@ -923,7 +1125,9 @@ over_both_transports!(
     agent_events_flow_from_a_session_tool_to_the_client,
     a_burst_of_input_messages_does_not_drop_the_connection,
     peek_shows_a_session_screen_without_attaching,
-    windows_close_window_and_close_session_go_through_the_handlers
+    windows_close_window_and_close_session_go_through_the_handlers,
+    terminal_bytes_use_their_own_lane_and_status_is_not_held_up_by_output,
+    a_flood_of_output_on_the_single_pipe_still_reaches_the_client
 );
 
 // --- WebRTC-specific ----------------------------------------------------------------------------

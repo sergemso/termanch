@@ -23,7 +23,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::Notify;
 use tracing::{debug, warn};
 
-use crate::link::{self, LinkEnd};
+use crate::link::{self, Inbound, LinkEnd};
 use crate::AppState;
 
 /// Fixed by the protocol: the client puts these into the description it builds locally.
@@ -31,6 +31,10 @@ pub const SERVER_UFRAG: &str = "termanch";
 pub const SERVER_PWD: &str = "termanch-direct-v1-0123456789";
 /// Negotiated data channel id, the same on both sides (no in-band negotiation).
 pub const CHANNEL_ID: u16 = 0;
+/// The second negotiated channel, for terminal bytes (decision 0096); unused by a client that did not ask.
+pub const TERM_CHANNEL_ID: u16 = 1;
+/// Queued terminal chunks are joined into messages of about this size (the SCTP limit is 64 KiB).
+const TERM_MESSAGE: usize = 16 * 1024;
 /// A single message above this closes the connection; clients send small JSON.
 const MAX_MESSAGE: usize = 64 * 1024;
 /// Client messages the session has not read yet wait here, bounded by bytes: a terminal answers a palette query with
@@ -150,11 +154,14 @@ struct Peer {
     /// Present once the data channel is open (the session task starts then).
     end: Option<LinkEnd>,
     cid: Option<ChannelId>,
+    term_cid: Option<ChannelId>,
+    /// Terminal bytes taken from the session that the channel had no room for yet.
+    term_pending: Option<Vec<u8>>,
     created: Instant,
     last_rx: Instant,
     queue: VecDeque<String>,
     /// Inbound messages the session had no room for yet.
-    backlog: VecDeque<String>,
+    backlog: VecDeque<Inbound>,
     backlog_bytes: usize,
     closing: bool,
     dirty: bool,
@@ -322,12 +329,19 @@ impl Server {
                 negotiated: Some(CHANNEL_ID),
                 ..Default::default()
             });
+            d.create_data_channel(ChannelConfig {
+                label: "term".into(),
+                negotiated: Some(TERM_CHANNEL_ID),
+                ..Default::default()
+            });
         }
         debug!("new peer {src}");
         Some(Peer {
             rtc,
             end: None,
             cid: None,
+            term_cid: None,
+            term_pending: None,
             created: now,
             last_rx: now,
             queue: VecDeque::new(),
@@ -337,6 +351,13 @@ impl Server {
             dirty: true,
             timeout: now,
         })
+    }
+}
+
+fn inbound_len(m: &Inbound) -> usize {
+    match m {
+        Inbound::Json(t) => t.len(),
+        Inbound::Term(b) => b.len(),
     }
 }
 
@@ -392,6 +413,40 @@ impl Peer {
             }
         }
 
+        // Terminal bytes go after the status messages and are joined under pressure.
+        if let (Some(tcid), Some(end)) = (self.term_cid, self.end.as_mut()) {
+            loop {
+                if self.term_pending.is_none() {
+                    let mut buf = Vec::new();
+                    while buf.len() < TERM_MESSAGE {
+                        match end.term_from_session.try_recv() {
+                            Ok(chunk) => buf.extend(chunk),
+                            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => break,
+                            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
+                                self.closing = true;
+                                break;
+                            }
+                        }
+                    }
+                    if buf.is_empty() {
+                        break;
+                    }
+                    self.term_pending = Some(buf);
+                }
+                let Some(mut ch) = self.rtc.channel(tcid) else {
+                    break;
+                };
+                match ch.write(true, self.term_pending.as_deref().unwrap_or_default()) {
+                    Ok(true) => self.term_pending = None,
+                    Ok(false) => break,
+                    Err(_) => {
+                        self.rtc.disconnect();
+                        return false;
+                    }
+                }
+            }
+        }
+
         let mut transmits = 0;
         loop {
             match self.rtc.poll_output() {
@@ -423,7 +478,7 @@ impl Peer {
         }
 
         // The session finished (for example after an auth error): let the last messages out first.
-        if self.closing && self.queue.is_empty() {
+        if self.closing && self.queue.is_empty() && self.term_pending.is_none() {
             let drained = match self.cid.and_then(|c| self.rtc.channel(c)) {
                 Some(mut ch) => ch.buffered_amount() == 0,
                 None => true,
@@ -456,13 +511,19 @@ impl Peer {
                 }
             }
         }
-        self.backlog_bytes = self.backlog.iter().map(String::len).sum();
+        self.backlog_bytes = self.backlog.iter().map(inbound_len).sum();
     }
 
     /// False means drop this peer.
     fn on_event(&mut self, e: Event, state: &AppState, wake: &Arc<Notify>) -> bool {
         match e {
             Event::IceConnectionStateChange(IceConnectionState::Disconnected) => return false,
+            Event::ChannelOpen(cid, label) if label == "term" => {
+                self.term_cid = Some(cid);
+                if let Some(mut ch) = self.rtc.channel(cid) {
+                    ch.set_buffered_amount_low_threshold(32 * 1024);
+                }
+            }
             Event::ChannelOpen(cid, _) => {
                 self.cid = Some(cid);
                 if let Some(mut ch) = self.rtc.channel(cid) {
@@ -473,14 +534,26 @@ impl Peer {
                 self.end = Some(end);
             }
             Event::ChannelData(d) => {
-                if d.data.len() > MAX_MESSAGE || d.binary {
+                if d.data.len() > MAX_MESSAGE {
                     return false;
                 }
-                let Ok(text) = String::from_utf8(d.data.to_vec()) else {
-                    return false;
+                // The status channel carries text, the term channel bytes; anything else is a broken client.
+                let msg = if Some(d.id) == self.term_cid {
+                    if !d.binary {
+                        return false;
+                    }
+                    Inbound::Term(d.data.to_vec())
+                } else {
+                    if d.binary {
+                        return false;
+                    }
+                    let Ok(text) = String::from_utf8(d.data.to_vec()) else {
+                        return false;
+                    };
+                    Inbound::Json(text)
                 };
-                self.backlog_bytes += text.len();
-                self.backlog.push_back(text);
+                self.backlog_bytes += inbound_len(&msg);
+                self.backlog.push_back(msg);
                 // More than this waiting means the client floods faster than the session reads.
                 if self.backlog_bytes > BACKLOG_BYTES || self.backlog.len() > BACKLOG_MESSAGES {
                     return false;

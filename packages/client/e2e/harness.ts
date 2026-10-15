@@ -64,8 +64,9 @@ const api = {
       onFatal: (m) => (api.fatal = m),
     });
     connection.subscribe((m: ServerMessage) => {
-      if (m.type !== 'output') api.received.push(JSON.stringify(m).slice(0, 160));
+      if (m.type !== 'output' && m.type !== 'term') api.received.push(JSON.stringify(m).slice(0, 160));
       if (m.type === 'output') api.output += decoder.decode(b64ToBytes(m.data), { stream: true });
+      if (m.type === 'term') api.output += decoder.decode(m.bytes, { stream: true });
       if (m.type === 'sessions') api.sessions = m.sessions;
       if (m.type === 'session_attached' && !mounted) connection?.send({ type: 'resize', cols: 120, rows: 30 });
     });

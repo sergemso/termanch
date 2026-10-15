@@ -8,6 +8,8 @@ import type { Transport } from './transport';
 export const SERVER_UFRAG = 'termanch';
 export const SERVER_PWD = 'termanch-direct-v1-0123456789';
 export const CHANNEL_ID = 0;
+/** The channel for terminal bytes; an older server never creates it, and nothing is sent on it unless `auth_ok` lists it. */
+export const TERM_CHANNEL_ID = 1;
 /** How long an ICE 'disconnected' may last before the connection counts as dropped. */
 export const DISCONNECT_GRACE_MS = 3000;
 
@@ -50,11 +52,17 @@ class RtcTransport implements Transport {
   readonly kind = 'rtc' as const;
   onmessage: ((text: string) => void) | null = null;
   onclose: (() => void) | null = null;
+  readonly lanes = true;
+  onterm: ((bytes: Uint8Array) => void) | null = null;
   private closed = false;
   private dropTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private pc: RTCPeerConnection, private dc: RTCDataChannel) {
+  constructor(private pc: RTCPeerConnection, private dc: RTCDataChannel, private term?: RTCDataChannel) {
     dc.onmessage = (e) => typeof e.data === 'string' && this.onmessage?.(e.data);
+    if (term) {
+      term.binaryType = 'arraybuffer';
+      term.onmessage = (e) => e.data instanceof ArrayBuffer && this.onterm?.(new Uint8Array(e.data));
+    }
     dc.onclose = () => this.finish();
     pc.oniceconnectionstatechange = () => {
       const state = pc.iceConnectionState;
@@ -68,6 +76,12 @@ class RtcTransport implements Transport {
 
   send(text: string) {
     if (this.dc.readyState === 'open') this.dc.send(text);
+  }
+
+  sendTerm(bytes: Uint8Array): boolean {
+    if (this.term?.readyState !== 'open') return false;
+    this.term.send(new Uint8Array(bytes));
+    return true;
   }
 
   close() {
@@ -88,6 +102,7 @@ class RtcTransport implements Transport {
 export async function openRtc(record: DirRecord, timeoutMs: number): Promise<Transport> {
   const pc = new RTCPeerConnection({ iceServers: [] });
   const dc = pc.createDataChannel('t', { negotiated: true, id: CHANNEL_ID });
+  const term = pc.createDataChannel('term', { negotiated: true, id: TERM_CHANNEL_ID });
   try {
     const offer = await pc.createOffer();
     const sdp = setIceCredentials(offer.sdp!, randomUfrag());
@@ -107,7 +122,7 @@ export async function openRtc(record: DirRecord, timeoutMs: number): Promise<Tra
         }
       };
     });
-    return new RtcTransport(pc, dc);
+    return new RtcTransport(pc, dc, term);
   } catch (e) {
     pc.close();
     throw e;
