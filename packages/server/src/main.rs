@@ -32,6 +32,7 @@ mod link;
 mod locale;
 mod netutil;
 mod pty;
+mod push;
 mod release;
 mod requests;
 mod rtc;
@@ -208,6 +209,11 @@ struct Args {
 
     #[arg(long, default_value = "false")]
     disconnect_claude: bool,
+
+    /// Creates the Web Push key (VAPID) in `connectors.env` in the config directory, mode 0600, and prints the
+    /// public key. Restart the server afterwards. Does nothing when a key is already there.
+    #[arg(long)]
+    setup_push: bool,
 
     /// With --connect-claude: apply instead of only showing the change.
     #[arg(long, default_value = "false")]
@@ -446,6 +452,16 @@ async fn main() -> anyhow::Result<()> {
         events::run_hook(adapter);
         return Ok(());
     }
+    if args.setup_push {
+        match push::setup(&args.config_dir) {
+            Ok(msg) => println!("{msg}"),
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(1);
+            }
+        }
+        return Ok(());
+    }
     if args.connect_claude || args.disconnect_claude {
         let settings = args
             .claude_settings
@@ -547,6 +563,8 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     });
+    let push = push::Push::load(&args.config_dir);
+    push::spawn_watcher(push.clone(), hub.clone());
     // A `working` signal that goes quiet decays to `unknown` without any event to trigger it.
     tokio::spawn({
         let hub = hub.clone();
@@ -620,6 +638,7 @@ async fn main() -> anyhow::Result<()> {
                 SessionManager::new(backend, mode.clone()).with_tmux_version(tmux_version.clone())
             }
             .with_prefix(tmux_prefix.clone())
+            .with_push(push.clone())
             .with_events(hub.clone())
             .with_uninstall(
                 args.server_name.clone(),

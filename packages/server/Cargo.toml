@@ -26,7 +26,8 @@ sha2 = { workspace = true }
 hmac = { workspace = true }
 qrcode = { version = "0.14", default-features = false }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
-p256 = { version = "0.13", features = ["ecdsa", "std"] }
+p256 = { version = "0.13", features = ["ecdsa", "ecdh", "std"] }
+aes-gcm = "0.10"
 libc = "0.2"
 
 [dev-dependencies]

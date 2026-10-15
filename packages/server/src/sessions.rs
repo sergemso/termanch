@@ -27,6 +27,7 @@ pub struct SessionManager {
     /// Called after an uninstall has wiped the configuration and told the client; stops the process.
     on_uninstalled: Arc<dyn Fn() + Send + Sync>,
     events: Option<EventHub>,
+    push: Option<Arc<crate::push::Push>>,
     windows: Option<WindowHub>,
     /// tmux version text and whether control mode runs (plan H.3); reported in `auth_ok`.
     tmux_version: String,
@@ -42,6 +43,7 @@ impl SessionManager {
             server_name: String::new(),
             on_uninstalled: Arc::new(|| {}),
             events: None,
+            push: None,
             windows: None,
             tmux_version: String::new(),
             control_mode: false,
@@ -57,6 +59,12 @@ impl SessionManager {
     /// Serves the agent event stream (plan v6) to every connection.
     pub fn with_events(mut self, hub: EventHub) -> Self {
         self.events = Some(hub);
+        self
+    }
+
+    /// Lets devices subscribe to Web Push and tell which session they show (plan A.6).
+    pub fn with_push(mut self, push: Arc<crate::push::Push>) -> Self {
+        self.push = Some(push);
         self
     }
 
@@ -106,6 +114,22 @@ impl SessionManager {
     /// Serves one authenticated connection until it ends or goes silent.
     pub async fn serve(
         &self,
+        link: Link,
+        identity: crate::auth::Identity,
+        auth: &crate::auth::AuthState,
+    ) -> Result<()> {
+        static NEXT_CONN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        let conn = NEXT_CONN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let res = self.serve_conn(conn, link, identity, auth).await;
+        if let Some(p) = &self.push {
+            p.set_foreground(conn, None);
+        }
+        res
+    }
+
+    async fn serve_conn(
+        &self,
+        conn: u64,
         mut link: Link,
         identity: crate::auth::Identity,
         auth: &crate::auth::AuthState,
@@ -139,7 +163,7 @@ impl SessionManager {
                         // Who got a shell on the host and as whom; never what they typed.
                         info!(target: "audit", event = "host_session", github_id = identity.id, login = %identity.login, run_as = %self.mode.label(), session = %session_id);
                     }
-                    if let Err(e) = self.handle(client_msg, auth, &identity, &mut attachment, &mut cols, &mut rows, &link.tx).await {
+                    if let Err(e) = self.handle(conn, client_msg, auth, &identity, &mut attachment, &mut cols, &mut rows, &link.tx).await {
                         if !send(&link.tx, &ServerMessage::Error { message: e.to_string() }).await { break; }
                     }
                 }
@@ -223,6 +247,7 @@ impl SessionManager {
     #[allow(clippy::too_many_arguments)] // one connection's state, passed explicitly
     async fn handle(
         &self,
+        conn: u64,
         msg: ClientMessage,
         auth: &crate::auth::AuthState,
         identity: &crate::auth::Identity,
@@ -266,6 +291,70 @@ impl SessionManager {
                 send_r(tx, &ServerMessage::DeviceRevoked { device }).await?;
             }
             ClientMessage::Ping => send_r(tx, &ServerMessage::Pong).await?,
+            ClientMessage::PushInfo => {
+                let (configured, public_key, devices) = match &self.push {
+                    Some(p) => (
+                        p.configured(),
+                        p.public_key().unwrap_or_default(),
+                        p.subscription_count() as u32,
+                    ),
+                    None => (false, String::new(), 0),
+                };
+                send_r(
+                    tx,
+                    &ServerMessage::PushInfo {
+                        configured,
+                        public_key,
+                        devices,
+                        subscribed: false,
+                    },
+                )
+                .await?;
+            }
+            ClientMessage::PushSubscribe {
+                endpoint,
+                p256dh,
+                auth,
+            } => {
+                let Some(p) = &self.push else {
+                    return Err(anyhow::anyhow!("Push is not set up on this server"));
+                };
+                p.subscribe(crate::push::Subscription {
+                    endpoint: endpoint.clone(),
+                    p256dh,
+                    auth,
+                })?;
+                send_r(
+                    tx,
+                    &ServerMessage::PushInfo {
+                        configured: true,
+                        public_key: p.public_key().unwrap_or_default(),
+                        devices: p.subscription_count() as u32,
+                        subscribed: p.has(&endpoint),
+                    },
+                )
+                .await?;
+            }
+            ClientMessage::PushUnsubscribe { endpoint } => {
+                if let Some(p) = &self.push {
+                    p.unsubscribe(&endpoint);
+                    send_r(
+                        tx,
+                        &ServerMessage::PushInfo {
+                            configured: p.configured(),
+                            public_key: p.public_key().unwrap_or_default(),
+                            devices: p.subscription_count() as u32,
+                            subscribed: false,
+                        },
+                    )
+                    .await?;
+                }
+            }
+            ClientMessage::Foreground { session } => {
+                if let Some(p) = &self.push {
+                    p.set_foreground(conn, session);
+                }
+            }
             ClientMessage::Ack { attention_id } | ClientMessage::Dismiss { attention_id } => {
                 if let Some(hub) = &self.events {
                     hub.ack(&attention_id);

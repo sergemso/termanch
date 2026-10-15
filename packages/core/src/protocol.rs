@@ -107,6 +107,23 @@ pub enum ClientMessage {
         cols: u16,
         rows: u16,
     },
+    /// Asks whether this server can send Web Push, and its public key.
+    PushInfo,
+    /// This device's push subscription (the browser's `PushSubscription` fields).
+    PushSubscribe {
+        endpoint: String,
+        p256dh: String,
+        auth: String,
+    },
+    PushUnsubscribe {
+        endpoint: String,
+    },
+    /// Which session this device shows in the foreground right now (none when hidden or on the list): the server
+    /// sends no push for a session someone is looking at.
+    Foreground {
+        #[serde(default)]
+        session: Option<String>,
+    },
     /// A device shows this session in the foreground: clears its `finished_unseen` and `failed` items, never
     /// a `needs_input` (decision 0095).
     Ack {
@@ -194,6 +211,16 @@ pub enum ServerMessage {
     /// New agent events, in `seq` order per session. A gap in `seq` means the client should `agent_sync`.
     AgentEvents {
         events: Vec<crate::events::AgentEvent>,
+    },
+    /// Answers `push_info`. `configured` is false until the owner has run `termanch-server --setup-push`.
+    PushInfo {
+        configured: bool,
+        /// The application server key to subscribe with (base64url); empty when not configured.
+        public_key: String,
+        /// Devices subscribed to this server.
+        devices: u32,
+        /// Whether the asking device's subscription is among them.
+        subscribed: bool,
     },
     /// The derived Activity (with task) of every session; answers `agent_sync`, then follows each change.
     Activity {

@@ -164,6 +164,7 @@ impl ServerClient {
             | ServerMessage::AgentEvents { .. }
             | ServerMessage::Activity { .. }
             | ServerMessage::Attention { .. }
+            | ServerMessage::PushInfo { .. }
             | ServerMessage::Snapshot { .. }
             | ServerMessage::WindowList { .. } => {}
             ServerMessage::Error { message } => {
