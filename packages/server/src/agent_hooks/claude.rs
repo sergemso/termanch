@@ -31,7 +31,8 @@ impl AgentHooks for ClaudeHooks {
     }
 
     fn preview(&self, config: &HookConfig) -> String {
-        let entry = json!({"hooks": [{"type": "command", "command": config.hook_command(), "timeout": 2}]});
+        let entry =
+            json!({"hooks": [{"type": "command", "command": config.hook_command(), "timeout": 2}]});
         let mut hooks = serde_json::Map::new();
         for e in EVENTS {
             hooks.insert(e.into(), json!([entry]));
@@ -58,7 +59,11 @@ impl AgentHooks for ClaudeHooks {
         let tmp = settings.with_extension("json.termenbox-tmp");
         std::fs::write(&tmp, &merged)?;
         std::fs::rename(&tmp, settings)?;
-        Ok(format!("Connected: hooks added to {}. Undo with --disconnect {}.", settings.display(), self.kind().as_str()))
+        Ok(format!(
+            "Connected: hooks added to {}. Undo with --disconnect {}.",
+            settings.display(),
+            self.kind().as_str()
+        ))
     }
 
     fn disconnect(&self, config: &HookConfig) -> Result<String> {
@@ -67,7 +72,10 @@ impl AgentHooks for ClaudeHooks {
             .map_err(|e| anyhow!("cannot read {}: {e}", settings.display()))?;
         let cleaned = remove(&current)?;
         std::fs::write(settings, cleaned)?;
-        Ok(format!("Disconnected: removed only Termenbox's hooks from {}; your other changes stay.", settings.display()))
+        Ok(format!(
+            "Disconnected: removed only Termenbox's hooks from {}; your other changes stay.",
+            settings.display()
+        ))
     }
 
     fn is_connected(&self, config: &HookConfig) -> bool {
@@ -80,15 +88,25 @@ impl AgentHooks for ClaudeHooks {
                     .and_then(Value::as_object)
                     .map(|hooks| {
                         EVENTS.iter().any(|e| {
-                            hooks.get(*e).and_then(Value::as_array).map(|arr| {
-                                arr.iter().any(|entry| {
-                                    entry["hooks"].as_array().map(|h| {
-                                        h.iter().any(|c| {
-                                            c["command"].as_str().map(|s| s.contains(MARKER)).unwrap_or(false)
-                                        })
-                                    }).unwrap_or(false)
+                            hooks
+                                .get(*e)
+                                .and_then(Value::as_array)
+                                .map(|arr| {
+                                    arr.iter().any(|entry| {
+                                        entry["hooks"]
+                                            .as_array()
+                                            .map(|h| {
+                                                h.iter().any(|c| {
+                                                    c["command"]
+                                                        .as_str()
+                                                        .map(|s| s.contains(MARKER))
+                                                        .unwrap_or(false)
+                                                })
+                                            })
+                                            .unwrap_or(false)
+                                    })
                                 })
-                            }).unwrap_or(false)
+                                .unwrap_or(false)
                         })
                     })
                     .unwrap_or(false)
@@ -233,10 +251,10 @@ mod tests {
             crate::backend::Runner::default(),
         );
         let settings = config.settings_path.clone();
-        
+
         // Create parent directory first
         std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
-        
+
         let existing = r#"{"model": "opus", "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "my-linter"}]}]}}"#;
         fs::write(&settings, existing).unwrap();
 

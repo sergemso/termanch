@@ -55,7 +55,11 @@ impl AgentHooks for OpencodeHooks {
         let tmp = settings.with_extension("json.termenbox-tmp");
         std::fs::write(&tmp, &merged)?;
         std::fs::rename(&tmp, settings)?;
-        Ok(format!("Connected: hooks added to {}. Undo with --disconnect {}.", settings.display(), self.kind().as_str()))
+        Ok(format!(
+            "Connected: hooks added to {}. Undo with --disconnect {}.",
+            settings.display(),
+            self.kind().as_str()
+        ))
     }
 
     fn disconnect(&self, config: &HookConfig) -> Result<String> {
@@ -64,7 +68,10 @@ impl AgentHooks for OpencodeHooks {
             .map_err(|e| anyhow!("cannot read {}: {e}", settings.display()))?;
         let cleaned = remove(&current)?;
         std::fs::write(settings, cleaned)?;
-        Ok(format!("Disconnected: removed only Termenbox's hooks from {}; your other changes stay.", settings.display()))
+        Ok(format!(
+            "Disconnected: removed only Termenbox's hooks from {}; your other changes stay.",
+            settings.display()
+        ))
     }
 
     fn is_connected(&self, config: &HookConfig) -> bool {
@@ -77,11 +84,18 @@ impl AgentHooks for OpencodeHooks {
                     .and_then(Value::as_object)
                     .map(|hooks| {
                         EVENTS.iter().any(|e| {
-                            hooks.get(*e).and_then(Value::as_array).map(|arr| {
-                                arr.iter().any(|entry| {
-                                    entry["path"].as_str().map(|s| s.contains(MARKER)).unwrap_or(false)
+                            hooks
+                                .get(*e)
+                                .and_then(Value::as_array)
+                                .map(|arr| {
+                                    arr.iter().any(|entry| {
+                                        entry["path"]
+                                            .as_str()
+                                            .map(|s| s.contains(MARKER))
+                                            .unwrap_or(false)
+                                    })
                                 })
-                            }).unwrap_or(false)
+                                .unwrap_or(false)
                         })
                     })
                     .unwrap_or(false)
@@ -91,7 +105,10 @@ impl AgentHooks for OpencodeHooks {
 }
 
 fn is_ours(entry: &Value) -> bool {
-    entry["path"].as_str().map(|s| s.contains(MARKER)).unwrap_or(false)
+    entry["path"]
+        .as_str()
+        .map(|s| s.contains(MARKER))
+        .unwrap_or(false)
 }
 
 fn merge(existing: &str, hook_command: &str) -> Result<String> {
@@ -100,7 +117,7 @@ fn merge(existing: &str, hook_command: &str) -> Result<String> {
     } else {
         serde_json::from_str(existing)?
     };
-    
+
     let obj = root
         .as_object_mut()
         .ok_or_else(|| anyhow!("the settings file is not a JSON object"))?;
@@ -108,9 +125,9 @@ fn merge(existing: &str, hook_command: &str) -> Result<String> {
     let hooks = hooks
         .as_object_mut()
         .ok_or_else(|| anyhow!("`hooks` in the settings file is not an object"))?;
-    
+
     let entry = json!({"name": "termenbox", "path": hook_command, "enabled": true});
-    
+
     for e in EVENTS {
         let list = hooks.entry(e).or_insert_with(|| json!([]));
         let list = list
@@ -120,7 +137,7 @@ fn merge(existing: &str, hook_command: &str) -> Result<String> {
             list.push(entry.clone());
         }
     }
-    
+
     Ok(serde_json::to_string_pretty(&root)? + "\n")
 }
 
@@ -220,10 +237,10 @@ mod tests {
             crate::backend::Runner::default(),
         );
         let settings = config.settings_path.clone();
-        
+
         // Create parent directory first
         std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
-        
+
         let existing = r#"{"hooks": {"PreToolUse": [{"name": "validate", "path": "my-linter", "enabled": true}]}}"#;
         fs::write(&settings, existing).unwrap();
 

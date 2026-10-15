@@ -38,7 +38,8 @@ impl AgentHooks for KiloHooks {
                 "name": "termenbox-hooks",
                 "enabled": true
             }]
-        })).unwrap()
+        }))
+        .unwrap()
     }
 
     fn connect(&self, config: &HookConfig, apply: bool) -> Result<String> {
@@ -56,7 +57,11 @@ impl AgentHooks for KiloHooks {
         let tmp = settings.with_extension("json.termenbox-tmp");
         std::fs::write(&tmp, &merged)?;
         std::fs::rename(&tmp, settings)?;
-        Ok(format!("Connected: shell.env and plugin added to {}. Undo with --disconnect {}.", settings.display(), self.kind().as_str()))
+        Ok(format!(
+            "Connected: shell.env and plugin added to {}. Undo with --disconnect {}.",
+            settings.display(),
+            self.kind().as_str()
+        ))
     }
 
     fn disconnect(&self, config: &HookConfig) -> Result<String> {
@@ -79,7 +84,8 @@ impl AgentHooks for KiloHooks {
                     .and_then(|e| e.get("shellEnv"))
                     .and_then(|se| se.as_object())
                     .map(|env| {
-                        env.contains_key("TERMENBOX_SESSION") && env.contains_key("TERMENBOX_EVENT_TOKEN")
+                        env.contains_key("TERMENBOX_SESSION")
+                            && env.contains_key("TERMENBOX_EVENT_TOKEN")
                     })
                     .unwrap_or(false)
             })
@@ -107,41 +113,55 @@ fn parse_jsonc(s: &str) -> Option<Value> {
 
 fn merge(existing: &str, config: &HookConfig) -> Result<String> {
     let mut root: Value = parse_jsonc(existing).unwrap_or_else(|| json!({}));
-    
+
     let obj = root
         .as_object_mut()
         .ok_or_else(|| anyhow!("the settings file is not a JSON object"))?;
-    
+
     // Add shell.env
     let experimental = obj.entry("experimental").or_insert_with(|| json!({}));
-    let experimental = experimental.as_object_mut().ok_or_else(|| anyhow!("experimental is not an object"))?;
+    let experimental = experimental
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("experimental is not an object"))?;
     let shell_env = experimental.entry("shellEnv").or_insert_with(|| json!({}));
-    let shell_env = shell_env.as_object_mut().ok_or_else(|| anyhow!("shellEnv is not an object"))?;
-    
+    let shell_env = shell_env
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("shellEnv is not an object"))?;
+
     shell_env.insert("TERMENBOX_SESSION".into(), json!(config.session_name));
     shell_env.insert("TERMENBOX_EVENT_TOKEN".into(), json!(config.token));
-    shell_env.insert("TERMENBOX_EVENT_SOCKET".into(), json!("/tmp/termenbox-events.sock"));
-    
+    shell_env.insert(
+        "TERMENBOX_EVENT_SOCKET".into(),
+        json!("/tmp/termenbox-events.sock"),
+    );
+
     // Add plugin (idempotent)
     let plugins = obj.entry("plugin").or_insert_with(|| json!([]));
-    let plugins = plugins.as_array_mut().ok_or_else(|| anyhow!("plugin is not an array"))?;
-    
+    let plugins = plugins
+        .as_array_mut()
+        .ok_or_else(|| anyhow!("plugin is not an array"))?;
+
     let our_plugin = json!({"name": "termenbox-hooks", "enabled": true});
-    let has_ours = plugins.iter().any(|p| p.get("name").and_then(|n| n.as_str()) == Some("termenbox-hooks"));
+    let has_ours = plugins
+        .iter()
+        .any(|p| p.get("name").and_then(|n| n.as_str()) == Some("termenbox-hooks"));
     if !has_ours {
         plugins.push(our_plugin);
     }
-    
+
     // Write back as JSONC (we lose comments, but that's acceptable for automation)
     Ok(serde_json::to_string_pretty(&root)? + "\n")
 }
 
 fn remove(existing: &str) -> Result<String> {
     let mut root = parse_jsonc(existing).unwrap_or_else(|| json!({}));
-    
+
     // Remove TERMENBOX_* from shellEnv
     if let Some(experimental) = root.get_mut("experimental").and_then(|e| e.as_object_mut()) {
-        if let Some(shell_env) = experimental.get_mut("shellEnv").and_then(|se| se.as_object_mut()) {
+        if let Some(shell_env) = experimental
+            .get_mut("shellEnv")
+            .and_then(|se| se.as_object_mut())
+        {
             shell_env.remove("TERMENBOX_SESSION");
             shell_env.remove("TERMENBOX_EVENT_TOKEN");
             shell_env.remove("TERMENBOX_EVENT_SOCKET");
@@ -153,7 +173,7 @@ fn remove(existing: &str) -> Result<String> {
             root.as_object_mut().unwrap().remove("experimental");
         }
     }
-    
+
     // Remove our plugin
     if let Some(plugins) = root.get_mut("plugin").and_then(|p| p.as_array_mut()) {
         plugins.retain(|p| p.get("name").and_then(|n| n.as_str()) != Some("termenbox-hooks"));
@@ -161,7 +181,7 @@ fn remove(existing: &str) -> Result<String> {
             root.as_object_mut().unwrap().remove("plugin");
         }
     }
-    
+
     Ok(serde_json::to_string_pretty(&root)? + "\n")
 }
 
@@ -243,10 +263,10 @@ mod tests {
             crate::backend::Runner::default(),
         );
         let settings = config.settings_path.clone();
-        
+
         // Create parent directory first
         std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
-        
+
         let existing = r#"{
   "model": "gpt-4",
   "experimental": {
