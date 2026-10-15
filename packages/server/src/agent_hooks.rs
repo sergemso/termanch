@@ -63,12 +63,24 @@ impl HookConfig {
     ) -> Self {
         let settings_path = kind.default_settings_path(home);
         let _ = runner; // unused but kept for API compatibility
-        Self { kind, binary, session_name, token, settings_path }
+        Self {
+            kind,
+            binary,
+            session_name,
+            token,
+            settings_path,
+        }
     }
 
     /// The hook command the agent will run.
     fn hook_command(&self) -> String {
-        format!("{} --hook {} {} {}", self.binary, self.kind.as_str(), self.session_name, self.token)
+        format!(
+            "{} --hook {} {} {}",
+            self.binary,
+            self.kind.as_str(),
+            self.session_name,
+            self.token
+        )
     }
 }
 
