@@ -33,7 +33,7 @@ jobs:
       - name: Build client
         run: pnpm --filter termenbox-client run build
         env:
-          VITE_GITHUB_CLIENT_ID: ${{ vars.TERMENBOX_GITHUB_CLIENT_ID }}
+          VITE_GITHUB_CLIENT_ID: ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
 
       - name: Install Wrangler
         run: npm install -g wrangler
@@ -63,6 +63,22 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # The OAuth code exchange (a Pages Function) reads these at runtime. GitHub stays the single source;
+      # unset ones are left alone on the project.
+      - name: Sync Pages Function secrets
+        working-directory: packages/client
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GITHUB_CLIENT_ID: ${{ secrets.TERMENBOX_GITHUB_CLIENT_ID }}
+          GITHUB_CLIENT_SECRET: ${{ secrets.TERMENBOX_GITHUB_CLIENT_SECRET }}
+          CERT_SIGNING_KEY: ${{ secrets.TERMENBOX_CERT_SIGNING_KEY }}
+        run: |
+          umask 077
+          node -e 'const o={};for(const k of ["GITHUB_CLIENT_ID","GITHUB_CLIENT_SECRET","CERT_SIGNING_KEY"])if(process.env[k])o[k]=process.env[k];require("fs").writeFileSync(process.env.RUNNER_TEMP+"/pages-secrets.json",JSON.stringify(o))'
+          wrangler pages secret bulk "$RUNNER_TEMP/pages-secrets.json" --project-name=${{ vars.TERMENBOX_PAGES_PROJECT_NAME || 'termenbox' }}
+          rm -f "$RUNNER_TEMP/pages-secrets.json"
 
       - name: Deploy to Cloudflare Pages
         working-directory: packages/client

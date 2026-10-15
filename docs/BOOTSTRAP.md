@@ -117,7 +117,7 @@ terraform apply
 - ✅ Custom domain: `app.{zone}` (default) or `app.{project}.{zone}` (if `pages_project_name` set)
 - ✅ DNS records: `app.{zone}` / `api.{zone}` (default) or `app.{project}.{zone}` / `api.{project}.{zone}`
 - ✅ GitHub Actions secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
-- ✅ GitHub Actions variable: `TERMENBOX_GITHUB_CLIENT_ID` (from Terraform input)
+- ✅ GitHub Actions secret: `TERMENBOX_GITHUB_CLIENT_ID` (from Terraform input)
 
 **You provide manually (from step 1.4):**
 - `oauth_client_id` (GitHub OAuth App Client ID)
@@ -140,6 +140,8 @@ The deploy workflow applies `packages/client/migrations/` for you.
 
 The client's Pages Function exchanges the GitHub login code, so it needs the OAuth app credentials.
 The servers need no secrets.
+
+The deploy workflow syncs these from the GitHub secrets `TERMENBOX_GITHUB_CLIENT_ID`, `TERMENBOX_GITHUB_CLIENT_SECRET` and `TERMENBOX_CERT_SIGNING_KEY`. To set them by hand instead:
 
 ```bash
 wrangler pages secret put GITHUB_CLIENT_ID --project-name <pages project>
@@ -177,7 +179,7 @@ Run it on the VPS. See the README for what it does, firewall notes and updating/
 - Docker image built for amd64 and arm64 and pushed to `ghcr.io/<owner>/termenbox:latest` (pull requests build it without pushing).
 - Client, Pages Functions (OAuth exchange, directory) and `install.sh` deployed to Cloudflare Pages; D1 migrations applied.
 
-Required repository settings: secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; variables `TERMENBOX_GITHUB_CLIENT_ID`, `TERMENBOX_PAGES_PROJECT_NAME`, `TERMENBOX_D1_DATABASE_ID`. Terraform sets most of them.
+Required repository settings: secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `TERMENBOX_GITHUB_CLIENT_ID`, `TERMENBOX_GITHUB_CLIENT_SECRET`, `TERMENBOX_CERT_SIGNING_KEY` (the last three are synced to the Pages Function on each deploy); variables `TERMENBOX_PAGES_PROJECT_NAME`, `TERMENBOX_D1_DATABASE_ID`. Terraform sets most of them.
 
 **Manual Terraform:**
 ```bash
