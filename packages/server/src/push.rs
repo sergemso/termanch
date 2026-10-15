@@ -173,7 +173,7 @@ fn host_of(endpoint: &str) -> Option<&str> {
     let rest = endpoint.strip_prefix("https://")?;
     let auth = rest.split(['/', '?', '#']).next()?;
     let host = auth.rsplit('@').next()?;
-    Some(host.split(':').next()?)
+    host.split(':').next()
 }
 
 /// Whether a browser vendor's push service could be at this endpoint.
