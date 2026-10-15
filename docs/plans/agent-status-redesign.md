@@ -21,7 +21,7 @@ Legend: `[ ]` pending, `[x]` done, `[!]` blocked.
 
 ## Steps
 
-### A.1 Measure the pane title and the status wait — [ ]
+### A.1 Measure the pane title and the status wait — [!] (pane-title read path measured; the tools could not run here; the status wait is measured in A.4)
 Class: research · Needs: none · Check: `test -s docs/facts/0036-pane-title-as-a-task-source-is-unverified.md` shows `last-verified:` with a date.
 Context: Facts 0036 and 0037 say two things are unmeasured. Use a throwaway tmux server (`tmux -L scratch`), never the owner's sessions.
 Do: 1. Run Claude Code (and Codex if installed) in a scratch tmux, record `tmux list-panes -a -F '#{pane_title}'` while idle, working on a prompt, and at a permission prompt; save samples under `packages/server/testdata/titles/`. 2. In a debug build with a loopback client, flood `Output` while sending an agent event and record the delay of the event. 3. Update facts 0036 and 0037 with the numbers and set `last-verified`.
