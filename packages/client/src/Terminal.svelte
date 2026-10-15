@@ -334,15 +334,29 @@
    * Fits the terminal to its box. While xterm swaps renderers (a lost WebGL context) the fit throws, and no later
    * resize comes to repeat it: the canvas stayed at its old size and sat shifted to the left (issue #99). So a
    * failed fit is tried again on the next frames.
+   * Calls are batched to a single rAF to avoid duplicate layouts during tab switches.
    */
   let refitFrame = 0;
+  let refitPending = false;
   function refit(attempt = 0) {
+    if (attempt === 0) {
+      if (refitPending) return;
+      refitPending = true;
+      refitFrame = requestAnimationFrame(() => {
+        refitPending = false;
+        doRefit(0);
+      });
+      return;
+    }
+    doRefit(attempt);
+  }
+  function doRefit(attempt: number) {
     cancelAnimationFrame(refitFrame);
     if (disposed || !term) return;
     try {
       fitAddon?.fit();
     } catch {
-      if (attempt < 20) refitFrame = requestAnimationFrame(() => refit(attempt + 1));
+      if (attempt < 20) refitFrame = requestAnimationFrame(() => doRefit(attempt + 1));
       return;
     }
     sendResize(term.cols, term.rows);
@@ -372,11 +386,6 @@
     fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(terminalContainer);
-    const themeObserver = new MutationObserver(() => {
-      if (term) term.options.theme = terminalTheme(document.documentElement.dataset.theme === 'light');
-    });
-    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    cleanups.push(() => themeObserver.disconnect());
     // WebGL is the fast renderer; where it is missing or its context is lost, xterm's DOM renderer takes over
     // instead of leaving a blank screen.
     crumb(`renderer ${$settings.renderer}`);
@@ -398,6 +407,7 @@
       /* DOM renderer */
     }
     fitAddon.fit();
+    refit();
 
     cleanups.push(installAudioUnlock());
     cleanups.push(() => (clearInterval(tick), clearTimeout(refusedTimer)));
@@ -450,7 +460,19 @@
     cleanups.push(() => scroll.stopFling());
     cleanups.push(() => cancelAnimationFrame(refitFrame));
 
-    const resizeObserver = new ResizeObserver(() => refit());
+    let lastWidth = 0;
+    let lastHeight = 0;
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width !== lastWidth || height !== lastHeight) {
+          lastWidth = width;
+          lastHeight = height;
+          refit();
+          break;
+        }
+      }
+    });
     resizeObserver.observe(terminalContainer);
     cleanups.push(() => resizeObserver.disconnect());
 
