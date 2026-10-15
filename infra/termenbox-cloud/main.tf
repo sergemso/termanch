@@ -31,7 +31,7 @@ provider "cloudflare" {
 
 locals {
   pages_project_name = coalesce(var.pages_project_name, "termenbox")
-  prefixed           = coalesce(var.pages_project_name, "") != ""
+  prefixed           = var.pages_project_name != null && var.pages_project_name != ""
   dns_prefix         = local.prefixed ? "${var.pages_project_name}." : ""
   dns_name_prefix    = local.prefixed ? ".${var.pages_project_name}" : ""
   pages_subdomain    = "${local.pages_project_name}.pages.dev"
