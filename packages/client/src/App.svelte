@@ -8,6 +8,9 @@
   import type { SheetHeight } from './lib/sheet';
   import NavigationBar from './NavigationBar.svelte';
   import MenuSheet from './MenuSheet.svelte';
+  import InboxSheet from './InboxSheet.svelte';
+  import { inbox, mergeAttention, markAllRead, unreadCount } from './lib/inbox';
+  import { currentEndpoint, disablePush, enablePush, pushSupported } from './lib/push';
   import SessionActions from './SessionActions.svelte';
   import WindowMenu from './WindowMenu.svelte';
   import NeedsYouBanner from './NeedsYouBanner.svelte';
@@ -92,6 +95,7 @@
     },
     onSaved: server => saveServers(servers.map(s => serverKey(s) === serverKey(server) ? server : s)),
     onReady: (id, msg, reconnect) => {
+      hub.send(id, { type: 'push_info' });
       if (!reconnect) showToast(`Connected to ${msg.server_name}`); // a reconnect is shown by the status line, not a toast each time
       if (!reconnect || serversPage || id !== activeServerId || !activeKey) return;
       const key = activeKey;
@@ -107,6 +111,8 @@
       if (msg.type === 'snapshot') snapshots.apply(sessionKey(_id, msg.session), msg);
       else if (msg.type === 'session_attached') preview = null;
       else if (msg.type === 'sessions') openPending(_id, msg.sessions);
+      else if (msg.type === 'attention') inbox.update(l => mergeAttention(l, _id, msg.items, s => sessionKey(_id, s), s => hub.findSession(sessionKey(_id, s))?.name ?? s));
+      else if (msg.type === 'push_info') pushInfos = { ...pushInfos, [_id]: msg };
       if (msg.type === 'error') showToast(msg.message, 'error');
       else if (msg.type === 'agent_event') showToast(`Agent ${msg.agent} ${msg.event} in ${msg.session_id}`);
     },
@@ -140,6 +146,41 @@
   let keyboardOpen = false;
   let sheetHeld = false;
   let menuOpen = false;
+  let inboxOpen = false;
+  let pushInfos: Record<string, Extract<import('./lib/protocol').ServerMessage, { type: 'push_info' }>> = {};
+  let pushOn = false;
+  void currentEndpoint().then(e => (pushOn = !!e && typeof Notification !== 'undefined' && Notification.permission === 'granted'));
+  // The server the menu speaks about: the open one, else the first that answered.
+  $: pushServerId = activeServerId && pushInfos[activeServerId] ? activeServerId : Object.keys(pushInfos)[0] ?? null;
+  $: pushView = pushSupported() && pushServerId ? {
+    serverName: $hubServers.find(s => s.id === pushServerId)?.server.server_name || 'this server',
+    configured: pushInfos[pushServerId].configured, on: pushOn,
+    denied: typeof Notification !== 'undefined' && Notification.permission === 'denied',
+  } : null;
+  async function togglePush(enable: boolean) {
+    const id = pushServerId;
+    if (!id) return;
+    const send = (m: import('./lib/protocol').ClientMessage) => hub.send(id, m);
+    try {
+      if (enable) {
+        const r = await enablePush(send, pushInfos[id].public_key);
+        pushOn = r === 'ok';
+        if (r === 'denied') showToast('Notifications are blocked in the browser settings', 'error');
+        else if (r === 'unsupported') showToast('This browser cannot send notifications', 'error');
+      } else { await disablePush(send); pushOn = false; }
+    } catch (e) { showToast(e instanceof Error ? e.message : 'Notifications failed', 'error'); }
+  }
+  // Tell the servers which session is in front, so a push is not sent for what someone is looking at.
+  let reportedFg: { serverId: string; session: string } | null = null;
+  function reportForeground() {
+    const s = activeKey && !serversPage && pageVisible ? hub.findSession(activeKey) : undefined;
+    const next = s ? { serverId: s.serverId, session: s.id } : null;
+    if (next?.serverId === reportedFg?.serverId && next?.session === reportedFg?.session) return;
+    if (reportedFg && reportedFg.serverId !== next?.serverId) hub.send(reportedFg.serverId, { type: 'foreground', session: null });
+    if (next) hub.send(next.serverId, { type: 'foreground', session: next.session });
+    reportedFg = next;
+  }
+  $: activeKey, serversPage, pageVisible, reportForeground();
   let actionKey: string | null = null;
   let cardExpanded = false;
   $: actionSession = $allSessions.find(s => s.key === actionKey);
@@ -576,7 +617,8 @@
     </main>
   {/if}
 
-  {#if menuOpen && user}<MenuSheet {user} {avatar} {serverVersion} onservers={leaveServer} onreport={openReport} onlogout={logout} onclose={() => menuOpen = false} />{/if}
+  {#if menuOpen && user}<MenuSheet {user} {avatar} {serverVersion} onservers={leaveServer} onreport={openReport} onlogout={logout} onclose={() => menuOpen = false} unread={unreadCount($inbox)} oninbox={() => inboxOpen = true} push={pushView} onpush={togglePush} />{/if}
+  {#if inboxOpen}<InboxSheet items={$inbox} {now} onopen={attach} onread={() => inbox.update(markAllRead)} onclear={() => inbox.set([])} onclose={() => { inboxOpen = false; inbox.update(markAllRead); }} />{/if}
   {#if actionSession}<SessionActions session={actionSession} canClose={backendOf(actionSession) === 'tmux'} confirmFirst={actionConfirm} ondetach={() => detach(actionSession.key)} onclosesession={() => closeSession(actionSession.key)} onclose={() => actionKey = null} />{/if}
   {#if menuSession && menuKey}
     <WindowMenu session={menuSession} data={$allWindows[menuSession.key]} supported={backendOf(menuSession) === 'tmux'}

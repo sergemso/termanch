@@ -19,6 +19,11 @@ export type ClientMessage =
   | { type: 'detach' }
   | { type: 'input'; data: string }
   | { type: 'resize'; cols: number; rows: number }
+  | { type: 'push_info' }
+  | { type: 'push_subscribe'; endpoint: string; p256dh: string; auth: string }
+  | { type: 'push_unsubscribe'; endpoint: string }
+  /** The session this device shows in the foreground now, or null (hidden, or on the list): no push for it. */
+  | { type: 'foreground'; session: string | null }
   | { type: 'ack'; attention_id: string }
   | { type: 'dismiss'; attention_id: string };
 
@@ -38,6 +43,7 @@ export type ServerMessage =
   | { type: 'agent_events'; events: AgentEvent[] }
   | { type: 'activity'; sessions: SessionActivity[] }
   | { type: 'attention'; items: Attention[] }
+  | { type: 'push_info'; configured: boolean; public_key: string; devices: number; subscribed: boolean }
   | { type: 'agent_event'; event: AgentEventType; agent: string; session_id: string }
   | { type: 'error'; message: string }
   | { type: 'pong' };

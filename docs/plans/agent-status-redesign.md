@@ -51,7 +51,7 @@ Context: `agents.ts` holds a flat state and recomputes "needs you" in `tabs.ts` 
 Do: 1. `agents.ts`: store Activity, `task` and Attention items; running time from `started_at` plus the clock offset. 2. Cards show the task title and running time; `needsYou`, `waitingList`, the title count, the app badge and `NeedsYouBanner.svelte` read Attention. 3. Send `ack` when a session is shown in the foreground and the page is visible; dismiss action on an item. 4. Drop `stale` handling in favour of `unknown`.
 Done-when: unit tests cover ack on foreground only when visible, running time with a clock skew, `needs_input` not cleared by viewing; a card shows the title and time in a browser e2e (`packages/client/e2e/cards.ts`).
 
-### A.6 Web Push and inbox (absorbs R12) — [ ]
+### A.6 Web Push and inbox (absorbs R12) — [x] (the key is created by `termanch-server --setup-push`, never shown in the app; one subscription per service worker, so a phone follows one server)
 Class: implement · Needs: A.3, A.5 · Check: `cargo test -p termanch-server push && cd packages/client && npx --yes pnpm@9 test`
 Context: Decision 0061/0095, 0080 (VAPID key from a root-owned file), guardrail `notifications-carry-no-agent-text`. Web Push on iOS needs the installed PWA (16.4+). No push code exists yet.
 Do: 1. Load the VAPID key per 0080 (the app shows the one line to add, and the public key). 2. Store a subscription per device, remove it on a 404 or 410. 3. On an Attention rising edge, wait 5 s; send unless a connected device reports the session in the foreground; one push per edge, replacing the older by tag. 4. Payload: session display name, kind and time only. 5. Inbox in the client with unread badge, bounded to 200, fed from Attention; works after an app restart.

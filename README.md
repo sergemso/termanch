@@ -103,6 +103,16 @@ TERMANCH_BACKEND_ATTACH=zellij attach {id}
 
 The attach command runs in a PTY. It must repaint the session when it starts and only detach when it is killed; that is how a dropped connection resumes. The zellij lines are an illustration and untested. Otherwise implement the `SessionBackend` trait (`packages/server/src/backend.rs`).
 
+## Notifications
+
+When a Claude Code session asks for you, finishes or fails, the server raises an item the app shows in the banner, the tab title, the app badge and the Inbox (Menu → Inbox). To also get a notification on a phone that is not looking at the app, set up Web Push once:
+
+```
+termanch-server --setup-push     # writes the key to connectors.env (mode 0600) next to the server's other state
+```
+
+Restart the server, then Menu → Turn on notifications (on iPhone the app must be added to the Home Screen first, iOS 16.4+). A notification is sent about 5 seconds after the item appears, unless a device is showing that session. It names the session and what happened and never carries anything the agent wrote. A phone follows one server at a time.
+
 ## Agent events
 
 The server turns what agents do into a small typed stream (idle, working, needs input, done) that clients can follow. With no setup it comes from a process scan and screen heuristics (low confidence). For exact tool and "needs input" events from Claude Code, opt in:
