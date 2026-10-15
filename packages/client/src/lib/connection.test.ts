@@ -56,18 +56,51 @@ describe('heartbeat', () => {
     return { c, t, sent, drops, states, doc };
   }
 
-  it('suspends pings and pending timeouts while hidden, then probes and resumes on foreground', async () => {
+  it('keeps pinging while hidden, slowly, so an idle path does not cut the link', async () => {
     const { c, t, sent, drops, doc } = await connected();
     await vi.advanceTimersByTimeAsync(5000);
-    const count = sent.length;
-    doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'));
-    await vi.advanceTimersByTimeAsync(60000);
-    expect(sent).toHaveLength(count); expect(drops).toEqual([]);
-    doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange'));
-    expect(sent).toHaveLength(count + 1);
     t.onmessage!(JSON.stringify({ type: 'pong' }));
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(sent).toHaveLength(count + 2);
+    doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'));
+    const count = sent.length;
+    for (let i = 0; i < 6; i++) {
+      await vi.advanceTimersByTimeAsync(20000);
+      t.onmessage!(JSON.stringify({ type: 'pong' }));
+    }
+    expect(sent.length - count).toBe(6); // one ping every 20 s, i.e. well inside a minute
+    expect(drops).toEqual([]);
+    c.close();
+  });
+
+  it('on foregrounding, finds a link that died while hidden within seconds, not the full window', async () => {
+    const { c, drops, states, doc } = await connected();
+    doc.visibilityState = 'hidden'; doc.dispatchEvent(new Event('visibilitychange'));
+    doc.visibilityState = 'visible'; doc.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(2600);
+    expect(states[states.length - 1]).toBe('checking'); // visible to the user before the drop
+    await vi.advanceTimersByTimeAsync(600);
+    expect(drops).toHaveLength(1);
+    expect(drops[0]).toContain('no reply for 3 s');
+    c.close();
+  });
+
+  it('goes back to connected when a slow reply finally arrives', async () => {
+    const { t, states, drops } = await connected();
+    await vi.advanceTimersByTimeAsync(5000 + 3000); // ping sent, then 3 s of silence
+    expect(states[states.length - 1]).toBe('checking');
+    t.onmessage!(JSON.stringify({ type: 'pong' }));
+    expect(states[states.length - 1]).toBe('connected');
+    expect(drops).toEqual([]);
+  });
+
+  it('reports the retry attempt and the wait while reconnecting, and retryNow skips the wait', async () => {
+    const { c, t, states } = await connected();
+    t.onclose!();
+    expect(states[states.length - 1]).toBe('reconnecting');
+    expect(c.retry?.attempt).toBe(1);
+    expect(c.retry?.inMs).toBeGreaterThan(0);
+    c.retryNow();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(c.retry).toBeNull(); // attempt 0 again: the first retry runs at once
     c.close();
   });
 
@@ -79,6 +112,7 @@ describe('heartbeat', () => {
     t.onmessage!(JSON.stringify({ type: 'pong' }));
     await vi.advanceTimersByTimeAsync(5000);
     expect(drops).toEqual([]);
+    t.onmessage!(JSON.stringify({ type: 'pong' })); // the next ping is answered too
     expect(states[states.length - 1]).toBe('connected');
   });
 
