@@ -80,7 +80,7 @@ pub enum ClientMessage {
     ListSessions,
     NewSession {
         name: String,
-        /// Which session manager to create it in (`tmux`, `herdr`); the first one when absent.
+        /// Which session manager to create it in (`tmux`, `command`); the first one when absent.
         #[serde(default)]
         backend: Option<String>,
         /// Absolute working directory to start in; the manager's default when absent.
@@ -228,7 +228,7 @@ pub struct SessionInfo {
     pub id: String,
     pub name: String,
     pub agent: Option<String>,
-    /// The session manager it lives in (`tmux`, `herdr`).
+    /// The session manager it lives in (`tmux`, `command`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend: Option<String>,
 }

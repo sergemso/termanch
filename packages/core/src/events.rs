@@ -27,7 +27,6 @@ pub enum ToolPhase {
 #[serde(rename_all = "snake_case")]
 pub enum Source {
     Hook,
-    Herdr,
     Codex,
     Scan,
     Screen,
@@ -99,7 +98,7 @@ pub struct SessionAgentState {
     /// No event for a while although the state is `working`: the state may be out of date.
     pub stale: bool,
     pub ts: u64,
-    /// The agent in the session (`claude`, `codex`, `herdr`), from the process scan; absent for a plain shell and
+    /// The agent in the session (`claude`, `codex`), from the process scan; absent for a plain shell and
     /// from older servers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,

@@ -292,7 +292,7 @@ impl EventHub {
         Ok(())
     }
 
-    /// An event from the server's own adapters (scan, herdr). A repeated state is not an event.
+    /// An event from the server's own adapters (scan, screen). A repeated state is not an event.
     pub fn report(&self, session: &str, source: Source, confidence: Confidence, kind: EventKind) {
         self.push(session, source, confidence, kind, now_ms());
     }
@@ -657,7 +657,7 @@ mod tests {
 
     #[test]
     fn event_session_ids_may_carry_a_manager_prefix() {
-        assert!(valid_event_session("work") && valid_event_session("herdr:work"));
+        assert!(valid_event_session("work") && valid_event_session("tmux:work"));
         assert!(
             !valid_event_session("a:b:c")
                 && !valid_event_session(":x")
@@ -676,9 +676,9 @@ mod tests {
             1,
         );
         h.push(
-            "herdr:b",
-            Source::Herdr,
-            Confidence::High,
+            "cmd:b",
+            Source::Screen,
+            Confidence::Low,
             state(AgentState::Idle),
             1,
         );
@@ -688,7 +688,7 @@ mod tests {
                 .iter()
                 .map(|s| s.session.as_str())
                 .collect::<Vec<_>>(),
-            ["herdr:b"]
+            ["cmd:b"]
         );
     }
 

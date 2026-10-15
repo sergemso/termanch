@@ -34,7 +34,6 @@ const PROGRAM: Record<string, IconSpec> = {
   python3: { color: '#3776AB', glyph: 'Py', label: 'python' },
   docker: { color: '#2496ED', glyph: '🐳', label: 'docker', emoji: true },
   tmux: { color: '#1BB91F', glyph: '▦', label: 'tmux' },
-  herdr: { color: '#B07A4B', glyph: '▦', label: 'herdr' },
   less: { color: '#8B949E', glyph: '≡', label: 'less' },
   cargo: { color: '#CE412B', glyph: '▣', label: 'cargo' },
   npm: { color: '#CB3837', glyph: 'n', label: 'npm' },

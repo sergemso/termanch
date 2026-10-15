@@ -435,11 +435,8 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("tm-ctl-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let tmpdir = dir.to_string_lossy().into_owned();
-        let runner = Runner::default().with_env(&[
-            ("TMUX_TMPDIR", Some(tmpdir.as_str())),
-            ("TMUX", None),
-            ("HERDR_ENV", None),
-        ]);
+        let runner =
+            Runner::default().with_env(&[("TMUX_TMPDIR", Some(tmpdir.as_str())), ("TMUX", None)]);
         let version = runner.run("tmux", &["-V".to_string()]).await.unwrap();
         if !control_supported(&String::from_utf8_lossy(&version.stdout)) {
             return;

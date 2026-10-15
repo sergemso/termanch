@@ -1,4 +1,4 @@
-// Everything the terminal sends to the server goes through here. xterm answers a palette query (tmux and herdr ask
+// Everything the terminal sends to the server goes through here. xterm answers a palette query (tmux asks
 // for all 256 colours right after an attach) with one reply per colour; sent one by one that is a burst of hundreds
 // of messages. Replies that arrive in the same moment travel as one message instead, which the server reads as the
 // same bytes in the same order.

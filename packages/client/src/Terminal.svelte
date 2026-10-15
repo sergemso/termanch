@@ -264,7 +264,7 @@
 
   /**
    * A tap is sent as the app would see a mouse click: a move, a press, a short pause, a release. The browser's own
-   * compatibility events press and release in the same millisecond, which mouse-first apps like herdr ignore.
+   * compatibility events press and release in the same millisecond, which mouse-first apps ignore.
    */
   function tapAt(x: number, y: number) {
     suppressClick = true;

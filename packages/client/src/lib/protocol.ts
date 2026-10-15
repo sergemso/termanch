@@ -43,8 +43,8 @@ export type ServerMessage =
 export interface SessionInfo {
   id: string;
   name: string;
-  agent: 'herdr' | 'tmux' | 'codex' | null;
-  /** The session manager it lives in; set when the server runs more than one (`tmux`, `herdr`). */
+  agent: 'tmux' | 'codex' | null;
+  /** The session manager it lives in; set when the server runs more than one (`tmux`). */
   backend?: string;
 }
 
@@ -68,7 +68,7 @@ export interface SessionAgentState {
   seq: number;
   stale: boolean;
   ts: number;
-  /** The agent in the session (`claude`, `codex`, `herdr`); absent for a plain shell and from older servers. */
+  /** The agent in the session (`claude`, `codex`); absent for a plain shell and from older servers. */
   agent?: string;
   /** When the agent last answered (ms since the epoch); absent until it has. */
   last_response_at?: number;

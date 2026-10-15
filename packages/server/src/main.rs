@@ -41,7 +41,7 @@ mod updater;
 mod websocket;
 
 use auth::AuthState;
-use backend::{CommandBackend, HerdrBackend, RunMode, SessionBackend, TmuxBackend};
+use backend::{CommandBackend, RunMode, SessionBackend, TmuxBackend};
 use sessions::SessionManager;
 use websocket::handle_websocket;
 
@@ -70,11 +70,11 @@ struct Args {
     )]
     client_url: String,
 
-    /// Session manager: `tmux` or `herdr` (built in), a list such as `tmux,herdr`, `auto` (tmux plus herdr when installed) or `command` (any CLI, see TERMANCH_BACKEND_*).
+    /// Session manager: `tmux` (built in), `auto` (tmux) or `command` (any CLI, see TERMANCH_BACKEND_*).
     #[arg(long, env = "TERMANCH_BACKEND", default_value = "auto")]
     backend: String,
 
-    /// For `command`: a label shown in logs, e.g. herdr.
+    /// For `command`: a label shown in logs, e.g. zellij.
     #[arg(long, env = "TERMANCH_BACKEND_NAME", default_value = "command")]
     backend_name: String,
 
@@ -347,21 +347,10 @@ fn clean_server_name(raw: &str) -> String {
     }
 }
 
-/// `TERMANCH_BACKEND`: one manager (`tmux`, `herdr`, `command`), a comma list (`tmux,herdr`), or `auto`
-/// (tmux, plus herdr when it is installed).
-async fn resolve_backends(spec: &str, mode: &RunMode) -> anyhow::Result<Vec<String>> {
+/// `TERMANCH_BACKEND`: one manager (`tmux`, `command`), a comma list of them, or `auto` (tmux).
+async fn resolve_backends(spec: &str, _mode: &RunMode) -> anyhow::Result<Vec<String>> {
     let mut kinds: Vec<String> = if spec == "auto" {
-        let mut k = vec!["tmux".to_string()];
-        let herdr = mode
-            .runner()
-            .run("herdr", &["--version".to_string()])
-            .await
-            .map(|o| o.status.success())
-            .unwrap_or(false);
-        if herdr {
-            k.push("herdr".into());
-        }
-        k
+        vec!["tmux".to_string()]
     } else {
         spec.split(',')
             .map(|s| s.trim().to_string())
@@ -371,8 +360,8 @@ async fn resolve_backends(spec: &str, mode: &RunMode) -> anyhow::Result<Vec<Stri
     kinds.dedup();
     anyhow::ensure!(!kinds.is_empty(), "TERMANCH_BACKEND is empty");
     anyhow::ensure!(
-        kinds.len() == 1 || kinds.iter().all(|k| k == "tmux" || k == "herdr"),
-        "several managers can be combined only from tmux and herdr"
+        !kinds.iter().any(|k| k == "herdr"),
+        "TERMANCH_BACKEND=herdr is no longer supported: herdr was removed (decision 0097); use tmux"
     );
     Ok(kinds)
 }
@@ -386,10 +375,9 @@ fn build_backend(
 ) -> anyhow::Result<Arc<dyn SessionBackend>> {
     match kind {
         "tmux" => Ok(Arc::new(
-            TmuxBackend::new(mode.runner()).with_events(env).with_event_prefix(prefix),
-        )),
-        "herdr" => Ok(Arc::new(
-            HerdrBackend::new(mode.runner()).with_events(env).with_event_prefix(prefix),
+            TmuxBackend::new(mode.runner())
+                .with_events(env)
+                .with_event_prefix(prefix),
         )),
         "command" => {
             let need = |v: &Option<String>, name: &str| {
@@ -405,7 +393,7 @@ fn build_backend(
             )?))
         }
         other => Err(anyhow::anyhow!(
-            "unknown TERMANCH_BACKEND `{other}` (tmux, herdr, command, a list like tmux,herdr, or auto)"
+            "unknown TERMANCH_BACKEND `{other}` (tmux, command or auto)"
         )),
     }
 }
@@ -592,7 +580,6 @@ async fn main() -> anyhow::Result<()> {
                     info!("tmux {tmux_version}: live window updates need tmux 3.2 or newer; using the periodic scan");
                 }
             }
-            "herdr" => agentwatch::spawn_herdr_poll(hub.clone(), mode.runner(), prefix_of(k)),
             _ => {}
         }
     }

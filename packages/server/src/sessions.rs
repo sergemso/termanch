@@ -454,7 +454,7 @@ fn audit_peek(github_id: u64, session: &str) {
 pub const SNAPSHOT_MAX: usize = 16 * 1024;
 
 /// A session's visible screen for the client to draw at once (decision 0084). Never fails: a manager that cannot
-/// capture (herdr) gets an empty snapshot, which the client reads as "attach normally".
+/// capture (a `command` manager) gets an empty snapshot, which the client reads as "attach normally".
 #[cfg(test)]
 pub async fn peek(
     backend: &dyn SessionBackend,

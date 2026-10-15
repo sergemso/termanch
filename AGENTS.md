@@ -14,7 +14,7 @@ after work sessions; validated via `lint` on demand; queried via
 ## Project Overview
 
 **Termanch** — a web-based terminal for managing remote AI coding agents
-(Codex, Claude Code, Herdr) from any mobile browser, with Mosh-level
+(Codex, Claude Code) from any mobile browser, with Mosh-level
 session persistence. No native apps. No subscriptions. Self-hosted.
 
 ## Key Directories

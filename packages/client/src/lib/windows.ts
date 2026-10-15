@@ -41,7 +41,7 @@ export interface TabText { label: string; hint: string }
 /**
  * What each tab reads. A tab is the path of its representative window; when two tabs would read the same, the
  * session name is added as a second line so three agents in one repository stay apart. Without a path (an old
- * server, herdr, no control mode) the label is the session name.
+ * server, no control mode) the label is the session name.
  */
 export function tabTexts(sessions: { key: string; name: string }[], windows: WindowMap): Record<string, TabText> {
   const base = (s: { key: string; name: string }) => shortPath(representativeWindow(windows[s.key])?.path ?? '');

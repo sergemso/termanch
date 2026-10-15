@@ -3,7 +3,7 @@
   import { rememberFocus } from './lib/focus';
   import type { HubSession } from './lib/hub';
   export let session: HubSession;
-  /** Closing a session is not possible on every manager (herdr). */
+  /** Closing a session is not possible on every manager. */
   export let canClose = true;
   export let ondetach: () => void;
   export let onclosesession: () => void;

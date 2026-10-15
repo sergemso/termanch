@@ -1,6 +1,6 @@
 //! The server-side watchers behind the event layer (plan v6, P.4/P.5): the process scan and screen
-//! heuristics for tmux sessions, and herdr's own agent status. They report through the same hub as the
-//! hooks, with low confidence (scan, screen) or high (herdr).
+//! heuristics for tmux sessions. They report through the same hub as the
+//! hooks, with low confidence.
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
@@ -171,49 +171,6 @@ pub fn spawn_tmux_scan(hub: EventHub, runner: Runner, prefix: String) {
         loop {
             scan_tmux_once(&hub, &runner, &prefix, &mut tracker).await;
             tokio::time::sleep(SCAN_EVERY).await;
-        }
-    });
-}
-
-/// herdr reports agent status itself: one `agent list` per running herdr session.
-pub async fn poll_herdr_once(hub: &EventHub, runner: &Runner, prefix: &str) {
-    let list = ["session", "list", "--json"].map(String::from);
-    let Ok(out) = runner.run("herdr", &list).await else {
-        return;
-    };
-    let Ok(sessions) = crate::backend::parse_herdr_list(&String::from_utf8_lossy(&out.stdout))
-    else {
-        return;
-    };
-    let ids: Vec<String> = sessions
-        .iter()
-        .map(|s| format!("{prefix}{}", s.id))
-        .collect();
-    hub.forget_except(prefix, &ids);
-    for s in sessions {
-        let agents = ["--session", &s.id, "agent", "list"].map(String::from);
-        let Ok(out) = runner.run("herdr", &agents).await else {
-            continue;
-        };
-        if let Some(state) = adapters::herdr_state(&String::from_utf8_lossy(&out.stdout)) {
-            // Events know the session by the id clients see (`herdr:name` when several managers run).
-            let key = format!("{prefix}{}", s.id);
-            hub.report(
-                &key,
-                Source::Herdr,
-                Confidence::High,
-                EventKind::State { state },
-            );
-        }
-        tokio::time::sleep(PANE_SPACING).await;
-    }
-}
-
-pub fn spawn_herdr_poll(hub: EventHub, runner: Runner, prefix: String) {
-    tokio::spawn(async move {
-        loop {
-            poll_herdr_once(&hub, &runner, &prefix).await;
-            tokio::time::sleep(Duration::from_secs(3)).await;
         }
     });
 }
