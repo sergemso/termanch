@@ -276,9 +276,11 @@ impl SessionManager {
                 }
                 info!(target: "audit", event = "uninstall_started", github_id = identity.id, login = %identity.login, mode = %self.mode.label());
                 *attachment = None;
-                
+
                 // Remove hooks from all supported agents
-                let binary = std::env::current_exe().ok().map(|p| p.display().to_string());
+                let binary = std::env::current_exe()
+                    .ok()
+                    .map(|p| p.display().to_string());
                 if let Some(b) = binary {
                     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
                     let runner = crate::backend::Runner::default();
@@ -303,7 +305,7 @@ impl SessionManager {
                         }
                     }
                 }
-                
+
                 crate::uninstall::wipe(auth.dir())?;
                 info!(target: "audit", event = "uninstall_config_wiped");
                 send_r(

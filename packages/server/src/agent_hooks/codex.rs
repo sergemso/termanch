@@ -2,7 +2,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Result};
-use toml_edit::{Array, ArrayOfTables, DocumentMut, Item, Table, Value as TomlValue, value};
+use toml_edit::{value, Array, ArrayOfTables, DocumentMut, Item, Table, Value as TomlValue};
 
 use super::{AgentHooks, AgentKind, HookConfig};
 
@@ -33,9 +33,9 @@ impl AgentHooks for CodexHooks {
     fn preview(&self, config: &HookConfig) -> String {
         let mut doc = DocumentMut::new();
         let hook_cmd = config.hook_command();
-        
+
         let mut hooks_table = Table::new();
-        
+
         for (event_name, matcher) in EVENTS {
             let mut event_array = ArrayOfTables::new();
             let mut entry = Table::new();
@@ -44,55 +44,71 @@ impl AgentHooks for CodexHooks {
             }
             let mut hooks_arr = Array::new();
             let mut hook = toml_edit::InlineTable::new();
-            hook.insert("type", TomlValue::String(toml_edit::Formatted::new("command".to_string())));
-            hook.insert("command", TomlValue::String(toml_edit::Formatted::new(hook_cmd.clone())));
+            hook.insert(
+                "type",
+                TomlValue::String(toml_edit::Formatted::new("command".to_string())),
+            );
+            hook.insert(
+                "command",
+                TomlValue::String(toml_edit::Formatted::new(hook_cmd.clone())),
+            );
             hook.insert("timeout", TomlValue::Integer(toml_edit::Formatted::new(30)));
             hooks_arr.push(TomlValue::InlineTable(hook));
             entry.insert("hooks", Item::Value(TomlValue::Array(hooks_arr)));
             event_array.push(entry);
             hooks_table.insert(event_name, Item::ArrayOfTables(event_array));
         }
-        
+
         doc["hooks"] = Item::Table(hooks_table);
-        
+
         // Also set features.hooks = true
         let mut features = toml_edit::InlineTable::new();
         features.insert("hooks", TomlValue::Boolean(toml_edit::Formatted::new(true)));
         doc["features"] = Item::Value(TomlValue::InlineTable(features));
-        
+
         doc.to_string()
     }
 
     fn connect(&self, config: &HookConfig, apply: bool) -> Result<String> {
         let settings = &config.settings_path;
         let before = std::fs::read_to_string(settings).unwrap_or_default();
-        
-        let mut doc = before.parse::<DocumentMut>().unwrap_or_else(|_| DocumentMut::new());
-        
+
+        let mut doc = before
+            .parse::<DocumentMut>()
+            .unwrap_or_else(|_| DocumentMut::new());
+
         // Ensure hooks table exists
         let hooks_table = doc.entry("hooks").or_insert(Item::Table(Table::new()));
-        let hooks_table = hooks_table.as_table_mut().ok_or_else(|| anyhow!("hooks is not a table"))?;
-        
+        let hooks_table = hooks_table
+            .as_table_mut()
+            .ok_or_else(|| anyhow!("hooks is not a table"))?;
+
         let hook_cmd = config.hook_command();
-        
+
         for (event_name, matcher) in EVENTS {
-            let event_array = hooks_table.entry(event_name).or_insert(Item::ArrayOfTables(ArrayOfTables::new()));
-            let event_array = event_array.as_array_of_tables_mut().ok_or_else(|| anyhow!("{event_name} is not an array of tables"))?;
-            
+            let event_array = hooks_table
+                .entry(event_name)
+                .or_insert(Item::ArrayOfTables(ArrayOfTables::new()));
+            let event_array = event_array
+                .as_array_of_tables_mut()
+                .ok_or_else(|| anyhow!("{event_name} is not an array of tables"))?;
+
             // Check if our hook already exists
             let exists = event_array.iter().any(|t| {
                 t.get("hooks")
                     .and_then(|h| h.as_array())
-                    .map(|arr| arr.iter().any(|hook| {
-                        hook.as_inline_table()
-                            .and_then(|it| it.get("command"))
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.contains(MARKER))
-                            .unwrap_or(false)
-                    }))
+                    .map(|arr| {
+                        arr.iter().any(|hook| {
+                            hook.as_inline_table()
+                                .and_then(|it| it.get("command"))
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.contains(MARKER))
+                                .unwrap_or(false)
+                        })
+                    })
                     .unwrap_or(false)
             });
-            
+
             if !exists {
                 let mut entry = Table::new();
                 if let Some(m) = matcher {
@@ -100,22 +116,30 @@ impl AgentHooks for CodexHooks {
                 }
                 let mut hooks_arr = Array::new();
                 let mut hook = toml_edit::InlineTable::new();
-                hook.insert("type", TomlValue::String(toml_edit::Formatted::new("command".to_string())));
-                hook.insert("command", TomlValue::String(toml_edit::Formatted::new(hook_cmd.clone())));
+                hook.insert(
+                    "type",
+                    TomlValue::String(toml_edit::Formatted::new("command".to_string())),
+                );
+                hook.insert(
+                    "command",
+                    TomlValue::String(toml_edit::Formatted::new(hook_cmd.clone())),
+                );
                 hook.insert("timeout", TomlValue::Integer(toml_edit::Formatted::new(30)));
                 hooks_arr.push(TomlValue::InlineTable(hook));
                 entry.insert("hooks", Item::Value(TomlValue::Array(hooks_arr)));
                 event_array.push(entry);
             }
         }
-        
+
         // Also set features.hooks = true if not set
         let features = doc.entry("features").or_insert(Item::Table(Table::new()));
-        let features = features.as_table_mut().ok_or_else(|| anyhow!("features is not a table"))?;
+        let features = features
+            .as_table_mut()
+            .ok_or_else(|| anyhow!("features is not a table"))?;
         features.insert("hooks", value(true));
-        
+
         let merged = doc.to_string();
-        
+
         if !apply {
             return Ok(format!(
                 "Would add hooks to {} (nothing else changes):\n{}",
@@ -123,40 +147,55 @@ impl AgentHooks for CodexHooks {
                 self.preview(config)
             ));
         }
-        
+
         std::fs::create_dir_all(settings.parent().unwrap_or(Path::new(".")))?;
         std::fs::write(settings, merged)?;
-        Ok(format!("Connected: hooks added to {}. Undo with --disconnect {}.", settings.display(), self.kind().as_str()))
+        Ok(format!(
+            "Connected: hooks added to {}. Undo with --disconnect {}.",
+            settings.display(),
+            self.kind().as_str()
+        ))
     }
 
     fn disconnect(&self, config: &HookConfig) -> Result<String> {
         let settings = &config.settings_path;
         let content = std::fs::read_to_string(settings)
             .map_err(|e| anyhow!("cannot read {}: {e}", settings.display()))?;
-        
-        let mut doc = content.parse::<DocumentMut>()
+
+        let mut doc = content
+            .parse::<DocumentMut>()
             .map_err(|e| anyhow!("invalid TOML in {}: {e}", settings.display()))?;
-        
+
         // First check if hooks table exists and is empty
-        let hooks_empty = doc.get("hooks").and_then(|t| t.as_table()).map(|t| t.is_empty()).unwrap_or(true);
-        
+        let hooks_empty = doc
+            .get("hooks")
+            .and_then(|t| t.as_table())
+            .map(|t| t.is_empty())
+            .unwrap_or(true);
+
         if let Some(hooks_table) = doc.get_mut("hooks").and_then(|t| t.as_table_mut()) {
             // Collect event names first to avoid borrow issues
             let event_names: Vec<String> = hooks_table.iter().map(|(k, _)| k.to_string()).collect();
             for event_name in event_names {
-                if let Some(event_array) = hooks_table.get_mut(&event_name).and_then(|t| t.as_array_of_tables_mut()) {
+                if let Some(event_array) = hooks_table
+                    .get_mut(&event_name)
+                    .and_then(|t| t.as_array_of_tables_mut())
+                {
                     // Filter out our hooks
                     let mut to_remove = Vec::new();
                     for (idx, entry) in event_array.iter().enumerate() {
-                        let is_ours = entry.get("hooks")
+                        let is_ours = entry
+                            .get("hooks")
                             .and_then(|h| h.as_array())
-                            .map(|arr| arr.iter().any(|hook| {
-                                hook.as_inline_table()
-                                    .and_then(|it| it.get("command"))
-                                    .and_then(|v| v.as_str())
-                                    .map(|s| s.contains(MARKER))
-                                    .unwrap_or(false)
-                            }))
+                            .map(|arr| {
+                                arr.iter().any(|hook| {
+                                    hook.as_inline_table()
+                                        .and_then(|it| it.get("command"))
+                                        .and_then(|v| v.as_str())
+                                        .map(|s| s.contains(MARKER))
+                                        .unwrap_or(false)
+                                })
+                            })
                             .unwrap_or(false);
                         if is_ours {
                             to_remove.push(idx);
@@ -177,7 +216,7 @@ impl AgentHooks for CodexHooks {
                 doc.remove("hooks");
             }
         }
-        
+
         // Also clean up features.hooks if no other hooks remain
         if hooks_empty {
             if let Some(features) = doc.get_mut("features").and_then(|t| t.as_table_mut()) {
@@ -187,9 +226,12 @@ impl AgentHooks for CodexHooks {
                 }
             }
         }
-        
+
         std::fs::write(settings, doc.to_string())?;
-        Ok(format!("Disconnected: removed only Termenbox's hooks from {}; your other changes stay.", settings.display()))
+        Ok(format!(
+            "Disconnected: removed only Termenbox's hooks from {}; your other changes stay.",
+            settings.display()
+        ))
     }
 
     fn is_connected(&self, config: &HookConfig) -> bool {
@@ -202,19 +244,25 @@ impl AgentHooks for CodexHooks {
                     .and_then(|t| t.as_table())
                     .map(|hooks| {
                         hooks.iter().any(|(_, event_val)| {
-                            event_val.as_array_of_tables()
-                                .map(|arr| arr.iter().any(|entry| {
-                                    entry.get("hooks")
-                                        .and_then(|h| h.as_array())
-                                        .map(|hooks_arr| hooks_arr.iter().any(|hook| {
-                                            hook.as_inline_table()
-                                                .and_then(|it| it.get("command"))
-                                                .and_then(|v| v.as_str())
-                                                .map(|s| s.contains(MARKER))
-                                                .unwrap_or(false)
-                                        }))
-                                        .unwrap_or(false)
-                                }))
+                            event_val
+                                .as_array_of_tables()
+                                .map(|arr| {
+                                    arr.iter().any(|entry| {
+                                        entry
+                                            .get("hooks")
+                                            .and_then(|h| h.as_array())
+                                            .map(|hooks_arr| {
+                                                hooks_arr.iter().any(|hook| {
+                                                    hook.as_inline_table()
+                                                        .and_then(|it| it.get("command"))
+                                                        .and_then(|v| v.as_str())
+                                                        .map(|s| s.contains(MARKER))
+                                                        .unwrap_or(false)
+                                                })
+                                            })
+                                            .unwrap_or(false)
+                                    })
+                                })
                                 .unwrap_or(false)
                         })
                     })
@@ -303,10 +351,10 @@ mod tests {
             crate::backend::Runner::default(),
         );
         let settings = config.settings_path.clone();
-        
+
         // Create parent directory first
         std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
-        
+
         let existing = r#"
 model = "gpt-4"
 [features]
