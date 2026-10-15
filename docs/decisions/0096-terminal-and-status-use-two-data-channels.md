@@ -1,13 +1,14 @@
 ---
 id: 0096-terminal-and-status-use-two-data-channels
 title: Terminal data and agent status travel on two data channels of one connection
-status: draft
+status: active
 date: 2026-10-15
 track: product
+accepted-by: Sergey Strebulaev <s@vivantel.dev>
 tags: [transport, protocol, agents, roadmap]
 ---
 
-## Decision (draft: needs the owner's acceptance)
+## Decision
 
 - One WebRTC peer connection and one authentication per server (0057), with two data channels:
   - `term`: binary frames, no base64. Attach, detach, input, resize, output, snapshot requests.

@@ -63,7 +63,7 @@
 0058-run-modes,"A server runs sessions in an isolated container or on the host, chosen at install","deployment, security, sessions, roadmap",active
 0059-environment-profile-and-bundled-tools,"The environment profile lives on the server and bundled tools update themselves","deployment, sessions, agents, roadmap",active
 0060-directory-scale-r2-cdn,"The directory serves at least 10^5 servers on free tiers, with public records on R2 behind the CDN","directory, scale, networking, roadmap",active
-0061-agent-state-and-push,"Agent state comes from process scans and tool adapters; notifications are installed-PWA Web Push","agents, notifications, pwa, roadmap",active
+0061-agent-state-and-push,"Agent state comes from process scans and tool adapters; notifications are installed-PWA Web Push","agents, notifications, pwa, roadmap",superseded
 0062-device-key-credentials,"Browsers authenticate to servers with a device key and a signed certificate, never the GitHub token","security, auth, roadmap",active
 0063-signed-releases-and-opt-in-updates,"Releases are signed, the installer pins digests, and host-mode updates are opt-in","security, supply-chain, deployment, roadmap",active
 0064-directory-abuse-controls,"The directory resists abuse and clients keep working when it is exhausted","directory, security, scale, roadmap",active
@@ -97,6 +97,6 @@
 0092-billing-starts-with-github-sponsors,"Billing starts with GitHub Sponsors; a merchant of record arrives with Team","billing, tiers, auth",active
 0093-paid-tiers-are-built-after-the-free-gate,"Paid tiers are designed now and built only after the free gate","tiers, roadmap",active
 0094-session-guests-get-a-scoped-expiring-grant-not-ownership,"A session guest gets a scoped, expiring grant tied to a GitHub id, never ownership","security, auth, sharing, roadmap",active
-0095-agent-status-is-activity-plus-attention,"Agent status is Activity plus Attention, with the current task, and notifications fire on Attention","agents, notifications, pwa, protocol, roadmap",draft
-0096-terminal-and-status-use-two-data-channels,"Terminal data and agent status travel on two data channels of one connection","transport, protocol, agents, roadmap",draft
-0097-herdr-is-removed,"herdr is removed as a session manager and as a status source","agents, sessions, architecture, roadmap",draft
+0095-agent-status-is-activity-plus-attention,"Agent status is Activity plus Attention, with the current task, and notifications fire on Attention","agents, notifications, pwa, protocol, roadmap",active
+0096-terminal-and-status-use-two-data-channels,"Terminal data and agent status travel on two data channels of one connection","transport, protocol, agents, roadmap",active
+0097-herdr-is-removed,"herdr is removed as a session manager and as a status source","agents, sessions, architecture, roadmap",active

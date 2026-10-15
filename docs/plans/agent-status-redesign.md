@@ -21,7 +21,7 @@ Legend: `[ ]` pending, `[x]` done, `[!]` blocked.
 
 ## Steps
 
-### A.1 Measure the pane title and the status wait — [!] (pane-title read path measured; the tools could not run here; the status wait is measured in A.4)
+### A.1 Measure the pane title and the status wait — [x] (measured with Claude Code 2.1.300 and Codex 0.162.1: the pane title is not a task source; the status wait is in A.4)
 Class: research · Needs: none · Check: `test -s docs/facts/0036-pane-title-as-a-task-source-is-unverified.md` shows `last-verified:` with a date.
 Context: Facts 0036 and 0037 say two things are unmeasured. Use a throwaway tmux server (`tmux -L scratch`), never the owner's sessions.
 Do: 1. Run Claude Code (and Codex if installed) in a scratch tmux, record `tmux list-panes -a -F '#{pane_title}'` while idle, working on a prompt, and at a permission prompt; save samples under `packages/server/testdata/titles/`. 2. In a debug build with a loopback client, flood `Output` while sending an agent event and record the delay of the event. 3. Update facts 0036 and 0037 with the numbers and set `last-verified`.
@@ -63,7 +63,7 @@ Context: Decision 0097. Footprint: `packages/server/src/{adapters,agentwatch,bac
 Do: 1. Delete the herdr poller, `HerdrBackend`, `TERMANCH_BACKEND=herdr` and the `auto` probe; keep `CommandBackend` generic. 2. Remove the `Source::Herdr` variant (keep deserialising an unknown source as `Unknown`) and the client icon and menu entries. 3. Update README and agent lists. 4. Remove the herdr line from R24.
 Done-when: the grep is empty apart from `docs/plans/archive/` and decision/fact history; all tests pass; `TERMANCH_BACKEND=herdr` fails with a clear message.
 
-### A.8 Accept the decisions and close out — [ ]
+### A.8 Accept the decisions and close out — [x] (0080, which the push key relies on, is still draft)
 Class: process · Needs: A.3-A.7 · Check: `lint` reports no dangling references.
 Do: 1. With the owner, set 0095-0097 to `active` with `accepted-by`; mark 0061 `superseded` with `superseded-by: 0095-agent-status-is-activity-plus-attention`; remove the draft notes from 0054 and 0085. 2. Update `docs/decisions/INDEX.md`. 3. Set R54 and R12 to `done (PR #n)` and run `python3 docs/plans/roadmap/rank.py`.
 Done-when: no decision named here is `draft`, 0061 shows superseded in its file and the index, and `grep -l '^Status: done' docs/plans/roadmap/R54.md docs/plans/roadmap/R12.md` lists both (R13, R16 and R40 depend on R12, so it must be marked done, not deleted).
