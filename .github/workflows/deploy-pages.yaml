@@ -51,7 +51,7 @@ jobs:
 
           [[d1_databases]]
           binding = "DB"
-          database_name = "termenbox-directory"
+          database_name = "termanch-directory"
           database_id = "${{ vars.TERMENBOX_D1_DATABASE_ID }}"
           migrations_dir = "migrations"
           EOF
@@ -59,7 +59,7 @@ jobs:
       - name: Apply directory migrations
         if: ${{ vars.TERMENBOX_D1_DATABASE_ID != '' }}
         working-directory: packages/client
-        run: wrangler d1 migrations apply termenbox-directory --remote
+        run: wrangler d1 migrations apply termanch-directory --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

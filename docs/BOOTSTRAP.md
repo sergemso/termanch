@@ -131,7 +131,7 @@ The client's Pages project also hosts the signed server directory (DECISION-0056
 Your API token needs the D1 Edit permission.
 
 ```bash
-wrangler d1 create termenbox-directory          # note the database_id
+wrangler d1 create termanch-directory          # note the database_id
 # GitHub repo variable read by the deploy workflow:
 gh variable set TERMENBOX_D1_DATABASE_ID --body <database_id>
 ```
