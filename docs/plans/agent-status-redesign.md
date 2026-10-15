@@ -27,7 +27,7 @@ Context: Facts 0036 and 0037 say two things are unmeasured. Use a throwaway tmux
 Do: 1. Run Claude Code (and Codex if installed) in a scratch tmux, record `tmux list-panes -a -F '#{pane_title}'` while idle, working on a prompt, and at a permission prompt; save samples under `packages/server/testdata/titles/`. 2. In a debug build with a loopback client, flood `Output` while sending an agent event and record the delay of the event. 3. Update facts 0036 and 0037 with the numbers and set `last-verified`.
 Done-when: fact 0036 states what each tool writes to the pane title (or that it writes nothing) and fact 0037 has a measured delay; both files have a real `last-verified` date.
 
-### A.2 Core types: Activity, Attention, task, ack — [ ]
+### A.2 Core types: Activity, Attention, task, ack — [x] (committed b5cb2c8 on feat/status-core-types, PR pending)
 Class: implement · Needs: none · Check: `cargo test -p termanch-core`
 Context: `packages/core/src/events.rs` has `AgentState`, `SessionAgentState`, `EventKind`; every enum has a `serde(other)` `Unknown`.
 Do: 1. Add `Activity { Working, Blocked, Idle, Unknown }`, `AttentionKind { NeedsInput, FinishedUnseen, Failed }`, `Task { title, started_at, source }` and an `Attention { id, session, kind, raised_at, task, prompt }`. 2. Add `ServerMessage::Activity`/`Attention` and `ClientMessage::Ack { attention_id }`/`Dismiss`; keep `AgentSnapshot`/`AgentEvents` for old clients. 3. Mirror in `packages/client/src/lib/protocol.ts`.
