@@ -27,7 +27,7 @@ variable "r2_secret_access_key" {
 }
 
 variable "pages_project_name" {
-  description = "Optional Pages project name. If set, DNS records become app.{name}.{zone} and api.{name}.{zone}. If null, uses app.{zone} and api.{zone} directly."
+  description = "Optional Pages project name. If set, DNS records become app.{name}.{zone} and api.{name}.{zone}. If null or empty, uses app.{zone} and api.{zone} directly."
   type        = string
   default     = null
 }
