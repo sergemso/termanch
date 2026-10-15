@@ -82,12 +82,6 @@ You need **two tokens** for different purposes:
 
 > **Note**: Use the actual domain from Terraform output `client_url` after running `terraform apply`. You can update the OAuth App later if needed.
 
-### 1.5 Cloudflare Pages Deploy Token
-1. Go to **Cloudflare Dashboard → Workers & Pages → Create token** (or use existing)
-2. **Permissions**: Account → Cloudflare Pages → Edit
-3. **Account Resources**: Include your account
-3. Save as `CLOUDFLARE_PAGES_DEPLOY_TOKEN`
-
 ---
 
 ## 2. Run Terraform (Automates Everything Else)
@@ -125,7 +119,7 @@ terraform apply
 - ✅ GitHub Actions secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
 - ✅ GitHub Actions variable: `TERMENBOX_GITHUB_CLIENT_ID` (from Terraform input)
 
-**You provide manually (from step 1.5):**
+**You provide manually (from step 1.4):**
 - `oauth_client_id` (GitHub OAuth App Client ID)
 - `oauth_client_secret` (GitHub OAuth App Client Secret)
 
