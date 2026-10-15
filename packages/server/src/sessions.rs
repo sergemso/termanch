@@ -1,8 +1,10 @@
+use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::Result;
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
-use tracing::{debug, info};
+use dirs;
+use tracing::{debug, info, warn};
 
 use termenbox_core::protocol::{ClientMessage, ServerMessage};
 
@@ -275,6 +277,34 @@ impl SessionManager {
                 }
                 info!(target: "audit", event = "uninstall_started", github_id = identity.id, login = %identity.login, mode = %self.mode.label());
                 *attachment = None;
+                
+                // Remove hooks from all supported agents
+                let binary = std::env::current_exe().ok().map(|p| p.display().to_string());
+                if let Some(b) = binary {
+                    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+                    let runner = crate::backend::Runner::default();
+                    for kind in [
+                        crate::agent_hooks::AgentKind::Claude,
+                        crate::agent_hooks::AgentKind::Codex,
+                        crate::agent_hooks::AgentKind::Copilot,
+                        crate::agent_hooks::AgentKind::Kilo,
+                        crate::agent_hooks::AgentKind::Opencode,
+                    ] {
+                        let hooks = crate::agent_hooks::get_hooks(kind);
+                        let config = crate::agent_hooks::HookConfig::new(
+                            kind,
+                            b.clone(),
+                            "uninstall".into(),
+                            "token".into(),
+                            &home,
+                            runner.clone(),
+                        );
+                        if let Err(e) = hooks.disconnect(&config) {
+                            warn!("Failed to disconnect hooks for {}: {}", kind.as_str(), e);
+                        }
+                    }
+                }
+                
                 crate::uninstall::wipe(auth.dir())?;
                 info!(target: "audit", event = "uninstall_config_wiped");
                 send_r(

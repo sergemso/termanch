@@ -15,6 +15,7 @@ use tower_http::trace::TraceLayer;
 use tracing::info;
 
 mod adapters;
+mod agent_hooks;
 mod agentwatch;
 mod auth;
 mod backend;
@@ -209,6 +210,14 @@ struct Args {
 
     #[arg(long, default_value = "false")]
     disconnect_claude: bool,
+
+    /// One-shot: add Termenbox's hooks to ALL supported agents (claude, codex, copilot, kilo, opencode).
+    /// Shows what it would do; add --yes to apply. `--disconnect-all` removes exactly those.
+    #[arg(long, default_value = "false")]
+    connect_all: bool,
+
+    #[arg(long, default_value = "false")]
+    disconnect_all: bool,
 
     /// Creates the Web Push key (VAPID) in `connectors.env` in the config directory, mode 0600, and prints the
     /// public key. Restart the server afterwards. Does nothing when a key is already there.
@@ -478,6 +487,40 @@ async fn main() -> anyhow::Result<()> {
             Err(e) => {
                 eprintln!("{e}");
                 std::process::exit(1);
+            }
+        }
+        return Ok(());
+    }
+    if args.connect_all || args.disconnect_all {
+        let binary = std::env::current_exe()?.display().to_string();
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+        let kinds = [
+            agent_hooks::AgentKind::Claude,
+            agent_hooks::AgentKind::Codex,
+            agent_hooks::AgentKind::Copilot,
+            agent_hooks::AgentKind::Kilo,
+            agent_hooks::AgentKind::Opencode,
+        ];
+        let runner = backend::Runner::default();
+        for kind in kinds {
+            let hooks = agent_hooks::get_hooks(kind);
+            // For connect_all, we create a dummy session config (session name and token don't matter for config merge)
+            let config = agent_hooks::HookConfig::new(
+                kind,
+                binary.clone(),
+                "all".into(),
+                "token".into(),
+                &home,
+                runner.clone(),
+            );
+            let outcome = if args.connect_all {
+                hooks.connect(&config, args.yes)
+            } else {
+                hooks.disconnect(&config)
+            };
+            match outcome {
+                Ok(o) => println!("{}: {}", kind.as_str(), o),
+                Err(e) => eprintln!("{}: {e}", kind.as_str()),
             }
         }
         return Ok(());
