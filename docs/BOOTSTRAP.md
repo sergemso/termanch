@@ -1,8 +1,8 @@
-# Termanch Bootstrap Guide
+# Termenbox Bootstrap Guide
 
-This guide walks through setting up the cloud infrastructure (Cloudflare + GitHub OAuth) required to run Termanch.
+This guide walks through setting up the cloud infrastructure (Cloudflare + GitHub OAuth) required to run Termenbox.
 
-**You only need this guide to host your own client** (your domain, your GitHub OAuth app, your signed directory). To use the hosted client at app.termanch.vivantel.dev, skip it: see the README quick start (DECISION-0052).
+**You only need this guide to host your own client** (your domain, your GitHub OAuth app, your signed directory). To use the hosted client at app.termenbox.dev, skip it: see the README quick start (DECISION-0052).
 
 What you set up once:
 1. A domain on Cloudflare
@@ -56,12 +56,12 @@ You need **two tokens** for different purposes:
 
 **A. Fine-grained PAT (for GitHub Actions secrets/variables via Terraform):**
 1. Go to **GitHub Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**
-2. **Repository access**: `sergemso/termanch` (or your fork)
+2. **Repository access**: `termenbox/termenbox` (or your fork)
 3. **Permissions**:
    - Repository → Actions → Read/Write (for secrets/variables)
    - Repository → Administration → Read/Write (for repo settings)
    - Repository → Variables → Read/Write
-3. Save as `TERMANCH_GITHUB_ACTIONS_TOKEN` — used as `github_actions_token` in Terraform (set as secret `TERMANCH_GITHUB_ACTIONS_TOKEN` in GitHub repo)
+3. Save as `TERMENBOX_GITHUB_ACTIONS_TOKEN` — used as `github_actions_token` in Terraform (set as secret `TERMENBOX_GITHUB_ACTIONS_TOKEN` in GitHub repo)
 
 **B. Classic PAT (for GitHub CLI / manual API calls only):**
 1. Go to **GitHub Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token (classic)**
@@ -73,7 +73,7 @@ You need **two tokens** for different purposes:
 ### 1.4 Create GitHub OAuth App (Manual — One-time)
 1. Go to **GitHub Settings → Developer settings → OAuth Apps → New OAuth App**
 2. Fill in:
-   - **Application name**: `Termanch` (or your preferred name)
+   - **Application name**: `Termenbox` (or your preferred name)
    - **Homepage URL**: `https://app.${your_zone_name}` (or `https://app.${project}.${your_zone_name}` if using `pages_project_name`)
    - **Authorization callback URL**: `https://app.${your_zone_name}/callback` (or `https://app.${project}.${your_zone_name}/callback`)
 3. Click **Register application**
@@ -82,18 +82,12 @@ You need **two tokens** for different purposes:
 
 > **Note**: Use the actual domain from Terraform output `client_url` after running `terraform apply`. You can update the OAuth App later if needed.
 
-### 1.5 Cloudflare Pages Deploy Token
-1. Go to **Cloudflare Dashboard → Workers & Pages → Create token** (or use existing)
-2. **Permissions**: Account → Cloudflare Pages → Edit
-3. **Account Resources**: Include your account
-3. Save as `CLOUDFLARE_PAGES_DEPLOY_TOKEN`
-
 ---
 
 ## 2. Run Terraform (Automates Everything Else)
 
 ```bash
-cd infra/termanch-cloud
+cd infra/termenbox-cloud
 
 # Create terraform.tfvars
 cat > terraform.tfvars <<EOF
@@ -104,7 +98,7 @@ cloudflare_pages_deploy_token = "your-pages-deploy-token"
 github_actions_token         = "your-fine-grained-pat"
 github_oauth_client_id       = "your-github-oauth-client-id"
 github_oauth_client_secret   = "your-github-oauth-client-secret"
-github_repository            = "termanch"
+github_repository            = "termenbox"
 # Optional: Pages project name (enables app.{project}.{zone} / api.{project}.{zone})
 # pages_project_name = "myapp"
 # R2 backend credentials (for Terraform state)
@@ -119,13 +113,13 @@ terraform apply
 ```
 
 **Terraform creates automatically:**
-- ✅ Cloudflare Pages project (`termanch` by default, or `pages_project_name` if set)
+- ✅ Cloudflare Pages project (`termenbox` by default, or `pages_project_name` if set)
 - ✅ Custom domain: `app.{zone}` (default) or `app.{project}.{zone}` (if `pages_project_name` set)
 - ✅ DNS records: `app.{zone}` / `api.{zone}` (default) or `app.{project}.{zone}` / `api.{project}.{zone}`
 - ✅ GitHub Actions secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`
-- ✅ GitHub Actions variable: `TERMANCH_GITHUB_CLIENT_ID` (from Terraform input)
+- ✅ GitHub Actions secret: `TERMENBOX_GITHUB_CLIENT_ID` (from Terraform input)
 
-**You provide manually (from step 1.5):**
+**You provide manually (from step 1.4):**
 - `oauth_client_id` (GitHub OAuth App Client ID)
 - `oauth_client_secret` (GitHub OAuth App Client Secret)
 
@@ -139,13 +133,15 @@ Your API token needs the D1 Edit permission.
 ```bash
 wrangler d1 create termanch-directory          # note the database_id
 # GitHub repo variable read by the deploy workflow:
-gh variable set TERMANCH_D1_DATABASE_ID --body <database_id>
+gh variable set TERMENBOX_D1_DATABASE_ID --body <database_id>
 ```
 
 The deploy workflow applies `packages/client/migrations/` for you.
 
 The client's Pages Function exchanges the GitHub login code, so it needs the OAuth app credentials.
 The servers need no secrets.
+
+The deploy workflow syncs these from the GitHub secrets `TERMENBOX_GITHUB_CLIENT_ID`, `TERMENBOX_GITHUB_CLIENT_SECRET` and `TERMENBOX_CERT_SIGNING_KEY`. To set them by hand instead:
 
 ```bash
 wrangler pages secret put GITHUB_CLIENT_ID --project-name <pages project>
@@ -164,7 +160,7 @@ Open your client (the Terraform output `client_url`, for example `https://app.yo
 curl -fsSL https://app.yourdomain.com/install.sh | sh -s -- <secret> https://app.yourdomain.com
 ```
 
-Run it on the VPS. See the README for what it does, firewall notes and updating/removing. The image comes from `ghcr.io/sergemso/termanch:latest`; to use your own build set `TERMANCH_IMAGE` before the command.
+Run it on the VPS. See the README for what it does, firewall notes and updating/removing. The image comes from `ghcr.io/termenbox/termenbox:latest`; to use your own build set `TERMENBOX_IMAGE` before the command.
 
 ---
 
@@ -172,7 +168,7 @@ Run it on the VPS. See the README for what it does, firewall notes and updating/
 
 1. Log in, choose Add Server, run the command on a VPS.
 2. The server appears in the list within a minute. Tap it: a terminal opens, `ls` works.
-3. Run `docker restart termanch` on the VPS: the app reconnects by itself within about 10 seconds.
+3. Run `docker restart termenbox` on the VPS: the app reconnects by itself within about 10 seconds.
 
 ---
 
@@ -180,10 +176,10 @@ Run it on the VPS. See the README for what it does, firewall notes and updating/
 
 **On push to `master`:**
 - CI: `cargo fmt`, `clippy`, build, tests (with tmux), installer syntax check, client build and tests.
-- Docker image built for amd64 and arm64 and pushed to `ghcr.io/<owner>/termanch:latest` (pull requests build it without pushing).
+- Docker image built for amd64 and arm64 and pushed to `ghcr.io/<owner>/termenbox:latest` (pull requests build it without pushing).
 - Client, Pages Functions (OAuth exchange, directory) and `install.sh` deployed to Cloudflare Pages; D1 migrations applied.
 
-Required repository settings: secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; variables `TERMANCH_GITHUB_CLIENT_ID`, `TERMANCH_PAGES_PROJECT_NAME`, `TERMANCH_D1_DATABASE_ID`. Terraform sets most of them.
+Required repository settings: secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `TERMENBOX_GITHUB_CLIENT_ID`, `TERMENBOX_GITHUB_CLIENT_SECRET`, `TERMENBOX_CERT_SIGNING_KEY` (the last three are synced to the Pages Function on each deploy); variables `TERMENBOX_PAGES_PROJECT_NAME`, `TERMENBOX_D1_DATABASE_ID`. Terraform sets most of them.
 
 **Manual Terraform:**
 ```bash
@@ -198,10 +194,10 @@ gh workflow run deploy-infra.yaml -f action=apply -f environment=cloud
 | Issue | Solution |
 |-------|----------|
 | "Server unreachable on UDP port N" | Open that UDP port in the provider firewall / security group; some networks block UDP (tunnel fallback is on the roadmap, issue #26) |
-| Server never appears after the command | `docker logs termanch` on the VPS; the claim secret works for 15 minutes, run Add Server again for a new command |
+| Server never appears after the command | `docker logs termenbox` on the VPS; the claim secret works for 15 minutes, run Add Server again for a new command |
 | "This server belongs to another GitHub user" | Log in with the account that added it, or run a new Add Server command on the VPS: root on the host may re-claim |
 | Login fails | Check `VITE_GITHUB_CLIENT_ID` (repo variable) and the Pages secrets `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` |
-| Directory returns 500 | The D1 database binding is missing: check `TERMANCH_D1_DATABASE_ID` and the deploy log |
+| Directory returns 500 | The D1 database binding is missing: check `TERMENBOX_D1_DATABASE_ID` and the deploy log |
 | Terraform apply fails | Check API token permissions; verify the domain is on Cloudflare |
 
 ---

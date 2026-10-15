@@ -40,12 +40,12 @@ Minimal monorepo structure for Cargo + pnpm workspaces, CI, Docker, Cloudflare P
              node-version: '20'
              cache: 'pnpm'
          - run: pnpm install --frozen-lockfile
-         - run: pnpm --filter termanch-client build
+         - run: pnpm --filter termenbox-client build
          - uses: cloudflare/pages-action@v1
            with:
              apiToken: ${{ secrets.CF_PAGES_API_TOKEN }}
              accountId: ${{ secrets.CF_PAGES_ACCOUNT_ID }}
-             projectName: termanch
+             projectName: termenbox
              directory: packages/client/dist
              branch: master
    ```

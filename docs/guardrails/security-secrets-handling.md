@@ -15,7 +15,7 @@ tags: [security, secrets, audit]
 
 ## Specific Requirements
 
-### Server (`termanch-server`, `termanch-agent`)
+### Server (`termenbox-server`, `termenbox-agent`)
 - Session keys: Derived in memory via HKDF; never persisted
 - SSH agent challenge: Generated per-connection; discarded after verify
 - `authorized_keys` reading: Open file, parse, close immediately; no caching of private keys
@@ -28,17 +28,17 @@ tags: [security, secrets, audit]
 - IndexedDB checkpoint: **Encrypt** session state with session key before storage
 - Service worker: No access to secrets (separate origin if needed)
 
-### Hook (`termanch-hook`)
+### Hook (`termenbox-hook`)
 - Reads user's `~/.ssh/authorized_keys` only; never writes
-- Unix socket `~/.termanch/agent.sock`: `chmod 600`, uid check on connect
+- Unix socket `~/.termenbox/agent.sock`: `chmod 600`, uid check on connect
 - No secrets in hook binary or config
 
 ## File Permissions
 | Path | Mode | Owner |
 |---|---|---|
 | `~/.ssh/authorized_keys` | 600 | user |
-| `~/.termanch/agent.sock` | 600 | user |
-| `~/.termanch/sessions/` | 700 | user |
+| `~/.termenbox/agent.sock` | 600 | user |
+| `~/.termenbox/sessions/` | 700 | user |
 | Server TLS cert/key | 600 | user |
 
 ## Rate Limiting

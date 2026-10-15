@@ -1,6 +1,6 @@
-// Browser end-to-end test and resource gates (issue #21). Real Chromium, real termanch-server, real tmux;
+// Browser end-to-end test and resource gates (issue #21). Real Chromium, real termenbox-server, real tmux;
 // only the hosted function that issues certificates is a stand-in (here: a key pair made in this script). Usage: node e2e/run.mjs   (needs a built server, a built harness, and Chrome)
-//   TERMANCH_BIN   server binary          (default ../../target/release/termanch-server)
+//   TERMENBOX_BIN   server binary          (default ../../target/release/termenbox-server)
 //   CHROME_PATH    Chrome/Chromium binary (default: Playwright's "chrome" channel)
 import { chromium } from 'playwright-core';
 import { spawn, execFileSync } from 'node:child_process';
@@ -11,7 +11,7 @@ import { join, extname, resolve } from 'node:path';
 import { randomBytes, generateKeyPairSync, sign, createPrivateKey, createPublicKey } from 'node:crypto';
 
 const here = import.meta.dirname;
-const BIN = process.env.TERMANCH_BIN ?? resolve(here, '../../../target/release/termanch-server');
+const BIN = process.env.TERMENBOX_BIN ?? resolve(here, '../../../target/release/termenbox-server');
 const LIMITS = { rssMb: 300, cpuShare: 0.5 }; // issue #21: RSS with 10 sessions, CPU for 10k lines/s
 const TICKS = 100; // clock ticks per second on Linux
 
@@ -78,7 +78,7 @@ if (!existsSync(join(dist, 'index.html'))) throw new Error('harness not built: r
 
 const webPort = await listen(statics);
 const appPort = await listen(appServer);
-const home = mkdtempSync(join(tmpdir(), 'termanch-e2e-'));
+const home = mkdtempSync(join(tmpdir(), 'termenbox-e2e-'));
 const httpPort = randomPort();
 const udpPort = randomPort();
 const claim = randomBytes(32).toString('base64url');
@@ -87,17 +87,17 @@ const server = spawn(BIN, [], {
   env: {
     ...process.env,
     TMUX_TMPDIR: home, // a private tmux server: never touches the developer's sessions
-    TERMANCH_CONFIG_DIR: join(home, 'config'),
-    TERMANCH_HOST: '127.0.0.1',
-    TERMANCH_PORT: String(httpPort),
-    TERMANCH_UDP_PORT: String(udpPort),
-    TERMANCH_PUBLIC_IP: '127.0.0.1',
-    TERMANCH_DIRECTORY_URL: '',
-    TERMANCH_DEV_INFO: 'on',
-    TERMANCH_CERT_KEYS: `e2e=${signerPublic}`,
+    TERMENBOX_CONFIG_DIR: join(home, 'config'),
+    TERMENBOX_HOST: '127.0.0.1',
+    TERMENBOX_PORT: String(httpPort),
+    TERMENBOX_UDP_PORT: String(udpPort),
+    TERMENBOX_PUBLIC_IP: '127.0.0.1',
+    TERMENBOX_DIRECTORY_URL: '',
+    TERMENBOX_DEV_INFO: 'on',
+    TERMENBOX_CERT_KEYS: `e2e=${signerPublic}`,
     LANG: 'C', // sessions must still get a UTF-8 locale from the server
     LC_ALL: 'C',
-    TERMANCH_CLAIM_SECRET: claim,
+    TERMENBOX_CLAIM_SECRET: claim,
   },
   stdio: ['ignore', 'inherit', 'inherit'],
 });
@@ -276,7 +276,7 @@ try {
     const deviceKey = await page.evaluate(async () => {
       const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign', 'verify']);
       await new Promise((ok, no) => {
-        const r = indexedDB.open('termanch', 1);
+        const r = indexedDB.open('termenbox', 1);
         r.onupgradeneeded = () => r.result.createObjectStore('device');
         r.onsuccess = () => {
           const tx = r.result.transaction('device', 'readwrite');
@@ -291,8 +291,8 @@ try {
     });
     await page.evaluate(
       ([cert, item]) => {
-        localStorage.setItem('termanch_auth', JSON.stringify({ cert, login: 'alice' }));
-        localStorage.setItem('termanch_servers', JSON.stringify([item]));
+        localStorage.setItem('termenbox_auth', JSON.stringify({ cert, login: 'alice' }));
+        localStorage.setItem('termenbox_servers', JSON.stringify([item]));
       },
       [mint(deviceKey, 1, 'alice'), { server_url: '', server_id: serverId, server_name: 'e2e-server', registered_at: Date.now(), record }],
     );
@@ -328,7 +328,7 @@ try {
     if (!reportText.includes('app:') || !reportText.includes('window: 390x')) fail(`report text is missing diagnostics: ${reportText.slice(0, 120)}`);
     await page.getByRole('button', { name: 'Open GitHub issue' }).click();
     const opened = await page.evaluate(() => window.__opened[0] ?? '');
-    if (!opened.startsWith('https://github.com/sergemso/termanch/issues/new?template=problem.yml&diagnostics=')) fail(`unexpected report URL: ${opened.slice(0, 120)}`);
+    if (!opened.startsWith('https://github.com/termenbox/termenbox/issues/new?template=problem.yml&diagnostics=')) fail(`unexpected report URL: ${opened.slice(0, 120)}`);
     if (await page.locator('[role=dialog][aria-label="Report a problem"]').count()) fail('the report dialog stayed open');
     // Removing a server asks first; declining keeps it.
     page.once('dialog', (d) => d.dismiss());
@@ -376,8 +376,8 @@ try {
         // The swipe-typing recorder: silent normally, listing the textarea's events when the debug switch is on.
         if (await page.locator('.log').count()) fail('the input log shows without the debug switch');
         await page.evaluate(() => {
-          localStorage.setItem('termanch_debug', '1');
-          window.dispatchEvent(new Event('termanch-debug'));
+          localStorage.setItem('termenbox_debug', '1');
+          window.dispatchEvent(new Event('termenbox-debug'));
         });
         const debugTop = await page.evaluate(() => document.querySelector('.debug')?.getBoundingClientRect().top ?? null);
         if (debugTop === null || debugTop < 47) fail(`the debug overlay is under the status bar: top ${debugTop}`);
@@ -550,8 +550,8 @@ try {
         await page.getByRole('button', { name: 'Close', exact: true }).click();
         await moreKb.getByRole('button', { name: 'Back to the system keyboard' }).click();
         await page.evaluate(() => {
-          localStorage.setItem('termanch_debug', '0');
-          window.dispatchEvent(new Event('termanch-debug'));
+          localStorage.setItem('termenbox_debug', '0');
+          window.dispatchEvent(new Event('termenbox-debug'));
         });
       }
       await page.getByRole('button', { name: 'Sessions', exact: true }).click();

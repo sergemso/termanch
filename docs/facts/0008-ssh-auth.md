@@ -17,7 +17,7 @@ date: 2026-10-09
 4. SSH agent signs challenge with user's identity key (ed25519/rsa)
 5. Client sends `KeyExchange { signature, key_fingerprint }`
 6. Server verifies signature against `~/.ssh/authorized_keys`
-7. On success: derive session keys via HKDF(shared_secret, "termanch-session")
+7. On success: derive session keys via HKDF(shared_secret, "termenbox-session")
 
 **Properties**:
 - No passwords, no keys stored on server disk beyond `authorized_keys`

@@ -1,2 +1,2 @@
 # Public keys of the hosted client function (kid=base64url Ed25519), see DECISION-0062.
-k1=mGt9Nv_YUuWy4UuPrwU4roLVMdX5b0l8f92FM0oHyk8
+k1=Yqv8y3plY16PQH43ILiSOAjy_a-vOSLiq1j21O6em3U

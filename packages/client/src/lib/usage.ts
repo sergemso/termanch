@@ -9,7 +9,7 @@ export const TIERS = [
 ] as const;
 export type Tier = (typeof TIERS)[number]['name'];
 
-export const USAGE_KEY = 'termanch_usage';
+export const USAGE_KEY = 'termenbox_usage';
 const KEEP_WEEKS = 8;
 const HOUR = 3_600_000;
 /** A tick longer than this means the tab was suspended; the gap is not counted. */

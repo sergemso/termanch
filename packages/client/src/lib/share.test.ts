@@ -8,7 +8,7 @@ describe('sendServerLink', () => {
     const share = vi.fn().mockResolvedValue(undefined);
     const copy = vi.fn();
     expect(await sendServerLink(link, 'box', { share, copy })).toBe('shared');
-    expect(share).toHaveBeenCalledWith({ title: 'Termanch', text: 'Open box in Termanch', url: link });
+    expect(share).toHaveBeenCalledWith({ title: 'Termenbox', text: 'Open box in Termenbox', url: link });
     expect(copy).not.toHaveBeenCalled();
   });
 

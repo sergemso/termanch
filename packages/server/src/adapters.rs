@@ -2,7 +2,7 @@
 //! tool's own data, so they are covered by recorded samples (`testdata/events/`). Text is not cleaned
 //! here; the hub does that for every source.
 use serde_json::Value;
-use termanch_core::events::{AgentState, Confidence, EventKind, Source, ToolPhase};
+use termenbox_core::events::{AgentState, Confidence, EventKind, Source, ToolPhase};
 
 pub type Adapted = (Source, Confidence, Vec<EventKind>);
 
@@ -34,11 +34,21 @@ fn tool_summary(name: &str, input: &Value) -> String {
     }
 }
 
-/// Claude Code hook payloads (fact 0029). The prompt and tool output are never copied.
+/// Claude Code hook payloads (fact 0029). Only the first line of the prompt becomes the task title; tool output is never copied.
 pub fn claude(d: &Value) -> Option<Adapted> {
     let kinds = match text(d, "hook_event_name") {
         "SessionStart" => vec![state(AgentState::Idle)],
-        "UserPromptSubmit" => vec![state(AgentState::Working)],
+        "UserPromptSubmit" => {
+            let mut k = vec![state(AgentState::Working)];
+            // The first line names the task; the rest of the prompt is never copied.
+            let first = text(d, "prompt").lines().next().unwrap_or("").trim();
+            if !first.is_empty() {
+                k.push(EventKind::Task {
+                    title: first.to_string(),
+                });
+            }
+            k
+        }
         "PreToolUse" => {
             let name = text(d, "tool_name").to_string();
             let summary = tool_summary(&name, d.get("tool_input").unwrap_or(&Value::Null));
@@ -99,32 +109,6 @@ pub fn codex(d: &Value) -> Option<Adapted> {
     }
 }
 
-/// herdr `agent list` output for one herdr session: the most urgent status among its agents.
-pub fn herdr_state(json: &str) -> Option<AgentState> {
-    let v: Value = serde_json::from_str(json).ok()?;
-    let agents = v.pointer("/result/agents")?.as_array()?;
-    let mut best: Option<AgentState> = None;
-    let rank = |s: AgentState| match s {
-        AgentState::NeedsInput => 4,
-        AgentState::Working => 3,
-        AgentState::Done => 2,
-        _ => 1,
-    };
-    for a in agents {
-        let s = match a.get("agent_status").and_then(Value::as_str)? {
-            "blocked" => AgentState::NeedsInput,
-            "working" => AgentState::Working,
-            "done" => AgentState::Done,
-            "idle" => AgentState::Idle,
-            _ => continue,
-        };
-        if best.map(|b| rank(s) > rank(b)).unwrap_or(true) {
-            best = Some(s);
-        }
-    }
-    best
-}
-
 // ---------------------------------------------------------------------------------------------------
 // Process scan (decision 0061): which agent runs in a session and whether it is busy
 // ---------------------------------------------------------------------------------------------------
@@ -162,8 +146,7 @@ pub fn agent_name(command: &str) -> Option<&'static str> {
         .find(|n| c == *n || c.starts_with(&format!("{n}-")))
 }
 
-/// Coding agents the scan recognises by the pane's foreground command. herdr is not one: it is a session
-/// manager that hosts agents.
+/// Coding agents the scan recognises by the pane's foreground command.
 pub const AGENTS: [&str; 11] = [
     "claude",
     "codex",
@@ -263,7 +246,7 @@ mod tests {
     use super::agent_name;
 
     #[test]
-    fn well_known_agents_are_found_and_herdr_is_a_manager_not_an_agent() {
+    fn well_known_agents_are_found() {
         for a in [
             "claude",
             "codex",
@@ -281,7 +264,6 @@ mod tests {
             assert_eq!(agent_name(&format!("{}-1.2", a)), Some(a));
         }
         assert_eq!(agent_name("CLAUDE"), Some("claude"));
-        assert_eq!(agent_name("herdr"), None);
         assert_eq!(agent_name("bash"), None);
         assert_eq!(agent_name("ampersand"), None);
     }
@@ -302,7 +284,12 @@ mod tests {
         let k = |f: &str| claude(&sample(f)).unwrap().2;
         assert_eq!(
             k("claude-userpromptsubmit.json"),
-            vec![state(AgentState::Working)]
+            vec![
+                state(AgentState::Working),
+                EventKind::Task {
+                    title: "Run the bash command: echo hello. Then say done.".into()
+                }
+            ]
         );
         assert_eq!(
             k("claude-pretooluse.json"),
@@ -338,13 +325,15 @@ mod tests {
     }
 
     #[test]
-    fn nothing_from_the_prompt_or_tool_output_is_copied() {
-        for f in ["claude-userpromptsubmit.json", "claude-posttooluse.json"] {
-            let d = sample(f);
-            let out = serde_json::to_string(&claude(&d).unwrap().2).unwrap();
-            assert!(!out.contains("Run the bash command"), "{f}");
-            assert!(!out.contains("\"hello\""), "{f}");
-        }
+    fn only_the_first_prompt_line_and_no_tool_output_is_copied() {
+        let out =
+            serde_json::to_string(&claude(&sample("claude-posttooluse.json")).unwrap().2).unwrap();
+        assert!(!out.contains("\"hello\""));
+        let d = json!({"hook_event_name": "UserPromptSubmit", "prompt": "fix the login\nsecond line with detail"});
+        let out = serde_json::to_string(&claude(&d).unwrap().2).unwrap();
+        assert!(out.contains("fix the login") && !out.contains("second line"));
+        let empty = json!({"hook_event_name": "UserPromptSubmit", "prompt": ""});
+        assert_eq!(claude(&empty).unwrap().2, vec![state(AgentState::Working)]);
     }
 
     #[test]
@@ -353,27 +342,6 @@ mod tests {
         assert_eq!(src, Source::Codex);
         assert_eq!(kinds[0], state(AgentState::Done));
         assert!(codex(&json!({"type": "something-else"})).is_none());
-    }
-
-    #[test]
-    fn herdr_status_maps_and_the_most_urgent_agent_wins() {
-        let j = |s: &[&str]| {
-            json!({"result": {"agents": s.iter().map(|x| json!({"agent_status": x})).collect::<Vec<_>>(), "type": "agent_list"}}).to_string()
-        };
-        assert_eq!(
-            herdr_state(&j(&["idle", "working"])),
-            Some(AgentState::Working)
-        );
-        assert_eq!(
-            herdr_state(&j(&["done", "blocked", "working"])),
-            Some(AgentState::NeedsInput)
-        );
-        assert_eq!(herdr_state(&j(&["idle"])), Some(AgentState::Idle));
-        assert_eq!(herdr_state(&j(&["unknown"])), None);
-        assert_eq!(herdr_state(&j(&[])), None);
-        assert_eq!(herdr_state("not json"), None);
-        let real = r#"{"id":"cli:agent:list","result":{"agents":[],"type":"agent_list"}}"#;
-        assert_eq!(herdr_state(real), None);
     }
 
     #[test]

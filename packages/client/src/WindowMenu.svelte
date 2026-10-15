@@ -7,7 +7,7 @@
 
   export let session: HubSession;
   export let data: SessionWindows | undefined;
-  /** False when the server cannot list windows (herdr, an old server): the menu then only offers Detach/Close. */
+  /** False when the server cannot list windows (an old server): the menu then only offers Detach/Close. */
   export let supported = true;
   export let onselect: (index: number) => void;
   export let onnewwindow: () => void;

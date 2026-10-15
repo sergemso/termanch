@@ -1,5 +1,5 @@
 name: Problem report
-description: Something in Termanch did not work (opened from the app's Report a problem button)
+description: Something in Termenbox did not work (opened from the app's Report a problem button)
 labels: [bug]
 body:
   - type: textarea

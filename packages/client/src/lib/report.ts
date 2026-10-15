@@ -4,7 +4,7 @@
 import { writable } from 'svelte/store';
 import { APP_VERSION } from './appVersion';
 
-const REPO = 'sergemso/termanch';
+const REPO = 'termenbox/termenbox';
 /** GitHub rejects very long query strings; stay well under it. */
 export const MAX_URL_TEXT = 6000;
 const MAX_ERRORS = 10;

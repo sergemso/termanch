@@ -8,6 +8,9 @@
   import type { SheetHeight } from './lib/sheet';
   import NavigationBar from './NavigationBar.svelte';
   import MenuSheet from './MenuSheet.svelte';
+  import InboxSheet from './InboxSheet.svelte';
+  import { inbox, mergeAttention, markAllRead, unreadCount } from './lib/inbox';
+  import { currentEndpoint, disablePush, enablePush, pushSupported } from './lib/push';
   import SessionActions from './SessionActions.svelte';
   import WindowMenu from './WindowMenu.svelte';
   import NeedsYouBanner from './NeedsYouBanner.svelte';
@@ -16,6 +19,7 @@
   import { serverAtLeast, NEW_WINDOW_VERSION } from './lib/serverVersion';
   import { loadHidden, openTabs, saveHidden } from './lib/tabs';
   import { announce, waitingList } from './lib/notify';
+  import { attentionToAck } from './lib/agents';
   import { cacheRemaining, expiringSoon } from './lib/cache';
   import { settings, applyTheme } from './lib/settings';
   import type { ServerListItem } from './lib/protocol';
@@ -41,7 +45,7 @@
     if (!titleTap(Date.now())) return;
     const on = localStorage.getItem(DEBUG_KEY) !== '1';
     localStorage.setItem(DEBUG_KEY, on ? '1' : '0');
-    window.dispatchEvent(new Event('termanch-debug'));
+    window.dispatchEvent(new Event('termenbox-debug'));
     showToast(on ? 'Debug overlay on' : 'Debug overlay off');
   }
 
@@ -91,6 +95,7 @@
     },
     onSaved: server => saveServers(servers.map(s => serverKey(s) === serverKey(server) ? server : s)),
     onReady: (id, msg, reconnect) => {
+      hub.send(id, { type: 'push_info' });
       if (!reconnect) showToast(`Connected to ${msg.server_name}`); // a reconnect is shown by the status line, not a toast each time
       if (!reconnect || serversPage || id !== activeServerId || !activeKey) return;
       const key = activeKey;
@@ -106,6 +111,8 @@
       if (msg.type === 'snapshot') snapshots.apply(sessionKey(_id, msg.session), msg);
       else if (msg.type === 'session_attached') preview = null;
       else if (msg.type === 'sessions') openPending(_id, msg.sessions);
+      else if (msg.type === 'attention') inbox.update(l => mergeAttention(l, _id, msg.items, s => sessionKey(_id, s), s => hub.findSession(sessionKey(_id, s))?.name ?? s));
+      else if (msg.type === 'push_info') pushInfos = { ...pushInfos, [_id]: msg };
       if (msg.type === 'error') showToast(msg.message, 'error');
       else if (msg.type === 'agent_event') showToast(`Agent ${msg.agent} ${msg.event} in ${msg.session_id}`);
     },
@@ -127,7 +134,7 @@
   $: connState = selected?.state ?? 'closed';
   $: serverVersion = selected?.version ?? '';
   let narrow = false;
-  let iosHint = isIosBrowser() && !localStorage.getItem('termanch_ios_hint');
+  let iosHint = isIosBrowser() && !localStorage.getItem('termenbox_ios_hint');
   let sheetHeight: SheetHeight = 'half';
   let now = Date.now();
   let hidden = loadHidden();
@@ -139,6 +146,41 @@
   let keyboardOpen = false;
   let sheetHeld = false;
   let menuOpen = false;
+  let inboxOpen = false;
+  let pushInfos: Record<string, Extract<import('./lib/protocol').ServerMessage, { type: 'push_info' }>> = {};
+  let pushOn = false;
+  void currentEndpoint().then(e => (pushOn = !!e && typeof Notification !== 'undefined' && Notification.permission === 'granted'));
+  // The server the menu speaks about: the open one, else the first that answered.
+  $: pushServerId = activeServerId && pushInfos[activeServerId] ? activeServerId : Object.keys(pushInfos)[0] ?? null;
+  $: pushView = pushSupported() && pushServerId ? {
+    serverName: $hubServers.find(s => s.id === pushServerId)?.server.server_name || 'this server',
+    configured: pushInfos[pushServerId].configured, on: pushOn,
+    denied: typeof Notification !== 'undefined' && Notification.permission === 'denied',
+  } : null;
+  async function togglePush(enable: boolean) {
+    const id = pushServerId;
+    if (!id) return;
+    const send = (m: import('./lib/protocol').ClientMessage) => hub.send(id, m);
+    try {
+      if (enable) {
+        const r = await enablePush(send, pushInfos[id].public_key);
+        pushOn = r === 'ok';
+        if (r === 'denied') showToast('Notifications are blocked in the browser settings', 'error');
+        else if (r === 'unsupported') showToast('This browser cannot send notifications', 'error');
+      } else { await disablePush(send); pushOn = false; }
+    } catch (e) { showToast(e instanceof Error ? e.message : 'Notifications failed', 'error'); }
+  }
+  // Tell the servers which session is in front, so a push is not sent for what someone is looking at.
+  let reportedFg: { serverId: string; session: string } | null = null;
+  function reportForeground() {
+    const s = activeKey && !serversPage && pageVisible ? hub.findSession(activeKey) : undefined;
+    const next = s ? { serverId: s.serverId, session: s.id } : null;
+    if (next?.serverId === reportedFg?.serverId && next?.session === reportedFg?.session) return;
+    if (reportedFg && reportedFg.serverId !== next?.serverId) hub.send(reportedFg.serverId, { type: 'foreground', session: null });
+    if (next) hub.send(next.serverId, { type: 'foreground', session: next.session });
+    reportedFg = next;
+  }
+  $: activeKey, serversPage, pageVisible, reportForeground();
   let actionKey: string | null = null;
   let cardExpanded = false;
   $: actionSession = $allSessions.find(s => s.key === actionKey);
@@ -147,6 +189,19 @@
   $: tabSessions = openTabs($allSessions, $allAgents, hidden);
   $: waiting = waitingList($allSessions, $allAgents);
   $: announce(waiting.length);
+  // Looking at a session clears its finished or failed item on the server; a question stays until it is answered.
+  let pageVisible = typeof document === 'undefined' || document.visibilityState !== 'hidden';
+  const acked = new Set<string>();
+  function sendAttention(key: string, m: import('./lib/protocol').ClientMessage) {
+    const s = hub.findSession(key);
+    if (s) hub.send(s.serverId, m);
+  }
+  $: if (activeKey && !serversPage) {
+    for (const id of attentionToAck($allAgents[activeKey], true, pageVisible, acked)) {
+      acked.add(id);
+      sendAttention(activeKey, { type: 'ack', attention_id: id });
+    }
+  }
   $: expiring = new Set($allSessions.filter(s => expiringSoon(cacheRemaining($allAgents[s.key], now, $settings.cacheTtlMs))).map(s => s.key));
   $: activeSession = $allSessions.find(s => s.key === activeKey);
   $: profile = backendOf(activeSession) === 'tmux' ? 'tmux' as const : 'shell' as const;
@@ -166,7 +221,7 @@
   // Called on click, never during render: each call replaces the stored state, which would break the callback check.
   function loginWithGitHub() {
     const state = crypto.randomUUID();
-    sessionStorage.setItem('termanch_oauth_state', state);
+    sessionStorage.setItem('termenbox_oauth_state', state);
     const params = new URLSearchParams({
       client_id: GITHUB_CLIENT_ID,
       redirect_uri: `${location.origin}/callback`,
@@ -178,20 +233,20 @@
 
   function checkAuth() {
     try {
-      const stored = JSON.parse(localStorage.getItem('termanch_auth') || 'null');
+      const stored = JSON.parse(localStorage.getItem('termenbox_auth') || 'null');
       if (stored?.cert && stored?.login && certExpiry(stored.cert) * 1000 > Date.now()) {
         deviceCert = stored.cert;
         user = stored.login;
         return true;
       }
     } catch {}
-    localStorage.removeItem('termanch_auth'); // old token-era entry or an expired certificate: sign in again
+    localStorage.removeItem('termenbox_auth'); // old token-era entry or an expired certificate: sign in again
     return false;
   }
 
   function loadServers() {
     try {
-      servers = JSON.parse(localStorage.getItem('termanch_servers') || '[]');
+      servers = JSON.parse(localStorage.getItem('termenbox_servers') || '[]');
     } catch {
       servers = [];
     }
@@ -199,7 +254,7 @@
 
   function saveServers(next: ServerListItem[]) {
     servers = next;
-    localStorage.setItem('termanch_servers', JSON.stringify(next));
+    localStorage.setItem('termenbox_servers', JSON.stringify(next));
   }
 
   function addServer(server: ServerListItem) {
@@ -212,8 +267,8 @@
   async function handleOAuthCallback() {
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
-    const expected = sessionStorage.getItem('termanch_oauth_state');
-    sessionStorage.removeItem('termanch_oauth_state');
+    const expected = sessionStorage.getItem('termenbox_oauth_state');
+    sessionStorage.removeItem('termenbox_oauth_state');
     window.history.replaceState({}, '', '/');
     if (!code || !expected || params.get('state') !== expected) {
       showToast('Authentication failed', 'error');
@@ -227,7 +282,7 @@
       });
       if (!res.ok) throw new Error('OAuth exchange failed');
       const { cert, login } = await res.json();
-      localStorage.setItem('termanch_auth', JSON.stringify({ cert, login }));
+      localStorage.setItem('termenbox_auth', JSON.stringify({ cert, login }));
       deviceCert = cert;
       user = login;
       showToast(`Welcome, ${login}!`);
@@ -262,7 +317,7 @@
     else if (result === 'failed') showToast('Could not share the link', 'error');
   }
 
-  const LAST_KEY = 'termanch_last_session';
+  const LAST_KEY = 'termenbox_last_session';
   // The start screen picks up where the last visit left off, unless the user has already chosen something.
   let resumable: string | null = localStorage.getItem(LAST_KEY);
   $: if (resumable && !activeKey && !serversPage && $allSessions.some(s => s.key === resumable) && $hubServers.find(s => s.id === hub.findSession(resumable!)?.serverId)?.state === 'connected') {
@@ -368,7 +423,7 @@
   }
 
   function logout() {
-    localStorage.removeItem('termanch_auth');
+    localStorage.removeItem('termenbox_auth');
     hub.close();
     user = null;
     deviceCert = null;
@@ -394,6 +449,8 @@
   }
 
   onMount(() => {
+    const visible = () => (pageVisible = document.visibilityState !== 'hidden');
+    document.addEventListener('visibilitychange', visible);
     const mq = window.matchMedia('(max-width: 720px)');
     const media = () => (narrow = mq.matches);
     media();
@@ -428,6 +485,7 @@
     window.addEventListener('unhandledrejection', report);
     return () => {
       clearInterval(clock);
+      document.removeEventListener("visibilitychange", visible);
       vv?.removeEventListener('resize', kb);
       stopTheme();
       themeMedia.removeEventListener('change', themeChanged);
@@ -451,8 +509,8 @@
       window.history.replaceState({}, '', window.location.pathname);
       if (!user) {
         // Signed out: keep it across the GitHub login, as a load with the fragment does.
-        if (serverId) sessionStorage.setItem('termanch_pending_server', serverId);
-        else if (claim) sessionStorage.setItem('termanch_pending_claim', claim);
+        if (serverId) sessionStorage.setItem('termenbox_pending_server', serverId);
+        else if (claim) sessionStorage.setItem('termenbox_pending_claim', claim);
       } else if (serverId) {
         void addServerById(serverId);
       } else if (claim) {
@@ -468,14 +526,14 @@
     // A claim link (#claim=...), from a QR opened in the camera app, is kept across the GitHub login redirect.
     const claim = parseClaim(window.location.hash);
     if (claim) {
-      sessionStorage.setItem('termanch_pending_claim', claim);
+      sessionStorage.setItem('termenbox_pending_claim', claim);
       window.history.replaceState({}, '', window.location.pathname);
     }
 
     // A re-add link (#server=...) from the installer or a QR, kept across the GitHub login redirect.
     const serverId = parseServerLink(window.location.hash);
     if (serverId) {
-      sessionStorage.setItem('termanch_pending_server', serverId);
+      sessionStorage.setItem('termenbox_pending_server', serverId);
       window.history.replaceState({}, '', window.location.pathname);
     }
 
@@ -486,15 +544,15 @@
 
     loadServers();
     hub.start(servers);
-    const pendingServer = sessionStorage.getItem('termanch_pending_server');
+    const pendingServer = sessionStorage.getItem('termenbox_pending_server');
     if (pendingServer) {
-      sessionStorage.removeItem('termanch_pending_server');
+      sessionStorage.removeItem('termenbox_pending_server');
       void addServerById(pendingServer);
       return;
     }
-    const pending = sessionStorage.getItem('termanch_pending_claim');
+    const pending = sessionStorage.getItem('termenbox_pending_claim');
     if (pending) {
-      sessionStorage.removeItem('termanch_pending_claim');
+      sessionStorage.removeItem('termenbox_pending_claim');
       addPrefill = pending;
       showAddServer = true;
     }
@@ -505,7 +563,7 @@
   {#if !user}
     <div class="auth-screen">
       <div class="card" style="max-width: 400px; margin: auto; margin-top: 10vh;">
-        <h1 style="margin-bottom: 8px;">Termanch</h1>
+        <h1 style="margin-bottom: 8px;">Termenbox</h1>
         <p style="color: var(--fg-muted); margin-bottom: 24px;">Terminal for remote AI coding agents</p>
         <a href="https://github.com/login/oauth/authorize" on:click|preventDefault={loginWithGitHub}>
           <button style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;">
@@ -518,12 +576,12 @@
   {:else}
     <NavigationBar sessions={tabSessions} agents={$allAgents} servers={$hubServers} windows={$allWindows} {expiring} {link} {activeKey} held={!!actionSession || !!menuSession || cardExpanded || sheetHeld} onopen={attach} onpeek={peek} ontabmenu={openWindowMenu} onactions={(key) => { actionConfirm = false; actionKey = key; }}
       onlink={() => link && showToast(link.text, link.ok ? 'success' : 'error')} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { crumb('sessions sheet toggled'); showWorkspace(); sheetHeight = sheetHeight === 'closed' ? 'half' : 'closed'; }} />
-    <NeedsYouBanner {waiting} {now} collapsed={keyboardOpen} onopen={attach} onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} />
+    <NeedsYouBanner {waiting} {now} collapsed={keyboardOpen} onopen={attach} ondismiss={(key, id) => sendAttention(key, { type: 'dismiss', attention_id: id })} onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} />
 
     {#if iosHint && !selectedServer}
       <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); font-size: 0.85rem;">
-        <span style="flex: 1;">Install Termanch: tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. It starts faster and can notify you.</span>
-        <button class="secondary" style="padding: 4px 10px;" on:click={() => { iosHint = false; localStorage.setItem('termanch_ios_hint', '1'); }}>Dismiss</button>
+        <span style="flex: 1;">Install Termenbox: tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>. It starts faster and can notify you.</span>
+        <button class="secondary" style="padding: 4px 10px;" on:click={() => { iosHint = false; localStorage.setItem('termenbox_ios_hint', '1'); }}>Dismiss</button>
       </div>
     {/if}
 
@@ -559,7 +617,8 @@
     </main>
   {/if}
 
-  {#if menuOpen && user}<MenuSheet {user} {avatar} {serverVersion} onservers={leaveServer} onreport={openReport} onlogout={logout} onclose={() => menuOpen = false} />{/if}
+  {#if menuOpen && user}<MenuSheet {user} {avatar} {serverVersion} onservers={leaveServer} onreport={openReport} onlogout={logout} onclose={() => menuOpen = false} unread={unreadCount($inbox)} oninbox={() => inboxOpen = true} push={pushView} onpush={togglePush} />{/if}
+  {#if inboxOpen}<InboxSheet items={$inbox} {now} onopen={attach} onread={() => inbox.update(markAllRead)} onclear={() => inbox.set([])} onclose={() => { inboxOpen = false; inbox.update(markAllRead); }} />{/if}
   {#if actionSession}<SessionActions session={actionSession} canClose={backendOf(actionSession) === 'tmux'} confirmFirst={actionConfirm} ondetach={() => detach(actionSession.key)} onclosesession={() => closeSession(actionSession.key)} onclose={() => actionKey = null} />{/if}
   {#if menuSession && menuKey}
     <WindowMenu session={menuSession} data={$allWindows[menuSession.key]} supported={backendOf(menuSession) === 'tmux'}

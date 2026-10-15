@@ -1,13 +1,13 @@
 # Sample for running the image by hand. The install command (README) is the supported way.
 services:
-  termanch:
-    image: ghcr.io/sergemso/termanch:latest
-    container_name: termanch
+  termenbox:
+    image: ghcr.io/termenbox/termenbox:latest
+    container_name: termenbox
     restart: unless-stopped
     ports:
       - "4443:4443/udp"          # the WebRTC port; any free UDP port works if you change both numbers
     environment:
-      - TERMANCH_UDP_PORT=4443
-      - TERMANCH_CLIENT_URL=${TERMANCH_CLIENT_URL:-https://app.termanch.vivantel.dev}
+      - TERMENBOX_UDP_PORT=4443
+      - TERMENBOX_CLIENT_URL=${TERMENBOX_CLIENT_URL:-https://app.termenbox.dev}
     volumes:
       - ./home:/home/node        # sessions, agents' files, owner and keys (chown 1000:1000)

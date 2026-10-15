@@ -6,7 +6,7 @@ use std::process::{Command, Output};
 
 fn temp() -> PathBuf {
     let d = std::env::temp_dir().join(format!(
-        "termanch-release-cli-{}-{}",
+        "termenbox-release-cli-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -18,8 +18,8 @@ fn temp() -> PathBuf {
 }
 
 fn verify(dir: &Path, keys: &str, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_termanch-server"))
-        .env("TERMANCH_RELEASE_KEYS", keys)
+    Command::new(env!("CARGO_BIN_EXE_termenbox-server"))
+        .env("TERMENBOX_RELEASE_KEYS", keys)
         .args(["--verify-release"])
         .arg(dir.join("manifest.json"))
         .arg("--release-sig")
@@ -42,7 +42,7 @@ fn signed_release(dir: &Path, manifest: &str) -> Option<String> {
     }
     std::fs::write(dir.join("manifest.json"), manifest).unwrap();
     if !Command::new("ssh-keygen")
-        .args(["-Y", "sign", "-n", "termanch-release", "-f"])
+        .args(["-Y", "sign", "-n", "termenbox-release", "-f"])
         .arg(&key)
         .arg(dir.join("manifest.json"))
         .output()
@@ -63,7 +63,7 @@ fn signed_release(dir: &Path, manifest: &str) -> Option<String> {
     ))
 }
 
-const MANIFEST: &str = r#"{"version":"9.9.9","freeze":false,"notes":"","binaries":{"x86_64":{"url":"https://github.com/sergemso/termanch/releases/download/v9.9.9/termanch-server-x86_64-linux","sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}}"#;
+const MANIFEST: &str = r#"{"version":"9.9.9","freeze":false,"notes":"","binaries":{"x86_64":{"url":"https://github.com/termenbox/termenbox/releases/download/v9.9.9/termenbox-server-x86_64-linux","sha256":"0000000000000000000000000000000000000000000000000000000000000000"}}}"#;
 
 #[test]
 fn a_signed_manifest_prints_its_fields_and_a_changed_one_is_refused() {
@@ -78,7 +78,7 @@ fn a_signed_manifest_prints_its_fields_and_a_changed_one_is_refused() {
         "{}",
         String::from_utf8_lossy(&ok.stderr)
     );
-    for line in ["kid=r1", "version=9.9.9", "freeze=false", "newer=true", "url=https://github.com/sergemso/termanch/releases/download/v9.9.9/termanch-server-x86_64-linux"] {
+    for line in ["kid=r1", "version=9.9.9", "freeze=false", "newer=true", "url=https://github.com/termenbox/termenbox/releases/download/v9.9.9/termenbox-server-x86_64-linux"] {
         assert!(out.contains(line), "missing {line} in {out}");
     }
 
@@ -114,8 +114,8 @@ fn the_embedded_keys_do_not_trust_a_foreign_signer() {
         return;
     };
     // No override: the built-in release key is the only one trusted, and this signer is not it.
-    let out = Command::new(env!("CARGO_BIN_EXE_termanch-server"))
-        .env_remove("TERMANCH_RELEASE_KEYS")
+    let out = Command::new(env!("CARGO_BIN_EXE_termenbox-server"))
+        .env_remove("TERMENBOX_RELEASE_KEYS")
         .arg("--verify-release")
         .arg(dir.join("manifest.json"))
         .arg("--release-sig")

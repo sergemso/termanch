@@ -1,16 +1,16 @@
-// Touch behaviour of the terminal against real herdr (mouse reporting) and tmux (alternate screen): a tap reaches
+// Touch behaviour of the terminal against real tmux (alternate screen, with a mouse-reporting stand-in): a tap reaches
 // a mouse-aware app as a click, and a one-finger drag scrolls. Real Chrome with touch emulation, real server.
-// Usage: node e2e/touch.mjs   (needs the built client, the e2e harness and herdr on PATH)
+// Usage: node e2e/touch.mjs   (needs the built client and the e2e harness)
 import { chromium } from 'playwright-core';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtempSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, extname, resolve } from 'node:path';
 import { randomBytes, generateKeyPairSync, sign, createPrivateKey, createPublicKey } from 'node:crypto';
 
 const here = import.meta.dirname;
-const BIN = process.env.TERMANCH_BIN ?? resolve(here, '../../../target/release/termanch-server');
+const BIN = process.env.TERMENBOX_BIN ?? resolve(here, '../../../target/release/termenbox-server');
 const SHOTS = process.env.SHOTS ?? '';
 const fail = (m) => { console.error(`FAIL: ${m}`); process.exitCode = 1; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -38,20 +38,16 @@ async function waitFor(fn, what, ms = 15000) {
 }
 
 const webPort = await listen(statics);
-const home = mkdtempSync(join(tmpdir(), 'termanch-touch-'));
+const home = mkdtempSync(join(tmpdir(), 'termenbox-touch-'));
 const httpPort = 30000 + Math.floor(Math.random() * 30000);
 const udpPort = 30000 + Math.floor(Math.random() * 30000);
 const claim = randomBytes(32).toString('base64url');
 const cleanEnv = { ...process.env, HOME: home, XDG_CONFIG_HOME: join(home, 'xdg'), TMUX_TMPDIR: home };
-for (const k of Object.keys(cleanEnv)) if (k.startsWith('HERDR_') || k === 'TERM_PROGRAM') delete cleanEnv[k];
-import { mkdirSync } from 'node:fs';
-mkdirSync(join(home, 'xdg/herdr'), { recursive: true });
-writeFileSync(join(home, 'xdg/herdr/config.toml'), 'onboarding = false\n'); // no first-run dialog over the screen
-const herdr = (...a) => execFileSync('herdr', a, { env: cleanEnv, encoding: 'utf8' });
+for (const k of Object.keys(cleanEnv)) if (k === 'TERM_PROGRAM') delete cleanEnv[k];
 const server = spawn(BIN, [], {
-  env: { ...cleanEnv, TERMANCH_BACKEND: process.env.BACKEND ?? 'tmux', TERMANCH_CONFIG_DIR: join(home, 'config'), TERMANCH_HOST: '127.0.0.1', TERMANCH_PORT: String(httpPort),
-    TERMANCH_UDP_PORT: String(udpPort), TERMANCH_PUBLIC_IP: '127.0.0.1', TERMANCH_DIRECTORY_URL: '', TERMANCH_DEV_INFO: 'on',
-    TERMANCH_CERT_KEYS: `e2e=${signerPublic}`, TERMANCH_CLAIM_SECRET: claim },
+  env: { ...cleanEnv, TERMENBOX_BACKEND: 'tmux', TERMENBOX_CONFIG_DIR: join(home, 'config'), TERMENBOX_HOST: '127.0.0.1', TERMENBOX_PORT: String(httpPort),
+    TERMENBOX_UDP_PORT: String(udpPort), TERMENBOX_PUBLIC_IP: '127.0.0.1', TERMENBOX_DIRECTORY_URL: '', TERMENBOX_DEV_INFO: 'on',
+    TERMENBOX_CERT_KEYS: `e2e=${signerPublic}`, TERMENBOX_CLAIM_SECRET: claim },
   stdio: ['ignore', 'inherit', 'inherit'],
 });
 let browser;
@@ -76,11 +72,10 @@ try {
   await page.evaluate((o) => window.__e2e.start(o), { record, cert, serverId: serverIdOf(join(home, 'config')), claim });
   await waitFor(() => page.evaluate(() => window.__e2e.state === 'connected'), 'connected');
   await page.evaluate(() => window.__e2e.send({ type: 'new_session', name: 'h1' }));
-  await waitFor(() => page.evaluate(() => window.__e2e.sessions.some((s) => s.id === 'h1')), 'herdr session listed');
+  await waitFor(() => page.evaluate(() => window.__e2e.sessions.some((s) => s.id === 'h1')), 'session listed');
   await page.evaluate(() => { window.__e2e.mountTerminal('h1'); window.__e2e.send({ type: 'attach', session_id: 'h1' }); });
 
   const screenText = () => page.evaluate(() => [...document.querySelectorAll('.xterm-rows > div')].map((r) => r.textContent.replace(/\s+$/, '')).join('\n'));
-  const snap = () => JSON.parse(herdr('--session', 'h1', 'api', 'snapshot')).result.snapshot;
   const cellXY = (col, row) => page.evaluate(({ col, row }) => {
     const r = document.querySelector('.xterm-screen').getBoundingClientRect();
     const rows = document.querySelector('.xterm-rows').children;
@@ -98,23 +93,7 @@ try {
   };
   const lastLine = async () => (await screenText()).split('\n').filter((l) => l.trim()).slice(-1)[0] ?? '';
 
-  if (process.env.BACKEND === 'herdr') {
-    // herdr is mouse-first. At phone width it shows a "switch" button on its top rows (or "+" for a new tab); a tap
-    // on it must change the screen. A click that never arrives leaves the screen as it was.
-    const target = (t) => { const l = t.split('\n'); const row = l.findIndex((x) => /switch|\s\+$/.test(x)); return row < 0 ? null : { row, col: /switch/.test(l[row]) ? l[row].indexOf('switch') + 2 : l[row].lastIndexOf('+') }; };
-    await waitFor(async () => target(await screenText()), 'herdr painted', 25000);
-    const before = await screenText();
-    const t = target(before);
-    const pt = await cellXY(t.col, t.row);
-    console.log('herdr area', JSON.stringify(snap().layouts[0].area), 'tapping', JSON.stringify(before.split('\n')[t.row]));
-    await tap(pt.x, pt.y);
-    await sleep(1200);
-    if ((await screenText()) === before) fail('a tap on herdr\'s button changed nothing on screen');
-    else console.log('ok  a tap clicks herdr\'s button');
-    if (process.env.HOLD) await sleep(Number(process.env.HOLD));
-    throw new Error('done');
-  }
-  // tmux and herdr ask the terminal for its 256-colour palette on attach; the replies used to flood the server and
+  // tmux asks the terminal for its 256-colour palette on attach; the replies used to flood the server and
   // drop the connection every time, which showed as a reconnect every ~10 s. One connection, no reconnects:
   await sleep(4000);
   const readies = await page.evaluate(() => window.__e2e.ready);
@@ -156,7 +135,6 @@ try {
 } finally {
   await browser?.close();
   server.kill();
-  try { herdr('--session', 'h1', 'server', 'stop'); } catch {}
   statics.close();
   // The static server and the Chrome pipes would otherwise keep this process (and the CI job) alive.
   setTimeout(() => process.exit(process.exitCode ?? 0), 100);

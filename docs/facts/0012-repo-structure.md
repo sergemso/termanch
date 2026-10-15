@@ -11,15 +11,15 @@ date: 2026-10-09
 **Monorepo** with two workspace managers:
 
 ```
-termanch/
+termenbox/
 ├── Cargo.toml              # Cargo workspace root
 ├── pnpm-workspace.yaml     # pnpm workspace root
 ├── packages/
-│   ├── server/             # termanch-server (Rust)
-│   ├── agent/              # termanch-agent (Rust)
-│   ├── hook/               # termanch-hook (Rust, CLI installer)
-│   ├── core/               # termanch-core (Rust → WASM)
-│   └── client/             # termanch-client (Svelte + TS)
+│   ├── server/             # termenbox-server (Rust)
+│   ├── agent/              # termenbox-agent (Rust)
+│   ├── hook/               # termenbox-hook (Rust, CLI installer)
+│   ├── core/               # termenbox-core (Rust → WASM)
+│   └── client/             # termenbox-client (Svelte + TS)
 ├── docker/
 │   └── Dockerfile          # Multi-stage build
 ├── docs/                   # Knowledge base (this directory)

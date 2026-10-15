@@ -1,4 +1,4 @@
-# Termanch MVP Plans
+# Termenbox MVP Plans
 
 Minimal end-to-end implementation plans for subagents (Hybrid Architecture).
 
@@ -6,8 +6,8 @@ Minimal end-to-end implementation plans for subagents (Hybrid Architecture).
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  TERMANCH CLOUDFLARE PAGES (our account, free)                 │
-│  https://app.termanch.dev                                       │
+│  TERMENBOX CLOUDFLARE PAGES (our account, free)                 │
+│  https://app.termenbox.dev                                       │
 │  ├── GitHub OAuth "Login" button                                │
 │  ├── Session list / Terminal UI (xterm.js WebGL)               │
 │  └── "Add Server" → QR code with registration token            │
@@ -19,12 +19,12 @@ Minimal end-to-end implementation plans for subagents (Hybrid Architecture).
 │  USER'S VPS (Docker, ~$5/mo)                                    │
 │  ├── cloudflared (sidecar, free tunnel, auto TLS)              │
 │  │    └── https://<random>.trycloudflare.com → localhost:443   │
-│  ├── termanch-server:443                                        │
+│  ├── termenbox-server:443                                        │
 │  │    ├── Validates GitHub JWT (our OAuth app)                │
 │  │    ├── Verifies registration token (HMAC)                  │
 │  │    ├── Spawns PTY, bridges WebSocket ↔ tmux                │
-│  │    └── CORS: allow https://app.termanch.dev                │
-│  └── termanch-agent (Unix socket → server)                     │
+│  │    └── CORS: allow https://app.termenbox.dev                │
+│  └── termenbox-agent (Unix socket → server)                     │
 └─────────────────────────────────────────────────────────────────┘
 ```
 

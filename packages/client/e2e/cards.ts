@@ -2,7 +2,7 @@
 import { mount } from 'svelte';
 import '../src/app.css';
 import SessionList from '../src/SessionList.svelte';
-import { agents, applyEvents } from '../src/lib/agents';
+import { agents, applyActivity, applyEvents } from '../src/lib/agents';
 import type { AgentEvent } from '../src/lib/protocol';
 
 const sessions = [
@@ -26,7 +26,8 @@ const stream: AgentEvent[] = [
   ev('deploy', 1, { kind: 'state', state: 'working' }, 4 * 60000),
   ev('deploy', 2, { kind: 'tool', name: 'Bash', summary: 'cargo build --release', phase: 'started' }, 4 * 60000),
 ];
-agents.set(applyEvents({}, stream).map);
+// `build` also has server status (decision 0095): a task that started 95 s ago on the server's clock.
+agents.set(applyActivity(applyEvents({}, stream).map, [{ session: 'build', activity: 'working', ts: now, task: { title: 'Wire the touch controller in', started_at: now - 95_000, source: 'hook' } }], now));
 const sent: unknown[] = [];
 (window as unknown as { __sent: unknown[]; __agents: typeof agents }).__sent = sent;
 mount(SessionList, { target: document.body, props: { sessions, activeSessionId: 'build', onopen: (id: string) => sent.push({ open: id }), send: (m: unknown) => sent.push(m) } });

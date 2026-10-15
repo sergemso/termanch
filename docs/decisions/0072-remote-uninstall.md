@@ -12,8 +12,8 @@ tags: [deployment, security, client, protocol]
 
 - **Remove server** in the app offers, besides forgetting the server in this browser, an **Uninstall** that the connected server carries out.
 - Stage 1, done by the server: wipe its config and data volume (keys, owner, claim, journal after use), remove its directory record with a message signed by the server key, and revert the journaled host changes it is allowed to (0067).
-- Stage 2: in host mode the server also removes its own container and image through `nsenter`, as the last step after replying; in container mode it cannot reach its container, so the app shows one copy-paste command (container, image, `/opt/termanch`). Container mode never gets Docker access.
-- Host cleanup is opt-in checkboxes, all off by default: delete user `termanch` and its home, uninstall tmux (only if the journal says we installed it), kill running sessions. Nothing holding the owner's work is removed unless ticked.
+- Stage 2: in host mode the server also removes its own container and image through `nsenter`, as the last step after replying; in container mode it cannot reach its container, so the app shows one copy-paste command (container, image, `/opt/termenbox`). Container mode never gets Docker access.
+- Host cleanup is opt-in checkboxes, all off by default: delete user `termenbox` and its home, uninstall tmux (only if the journal says we installed it), kill running sessions. Nothing holding the owner's work is removed unless ticked.
 - Authorization: the owner's connection, the server name typed in the app, and a device certificate issued within the last hour (otherwise sign in again). Root host-mode servers also need the passkey step-up once S.2 exists. Each step is audit-logged without content.
 - The certificate payload gains `iat` (additive, still `v: 1`) so a server can check freshness.
 

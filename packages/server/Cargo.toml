@@ -1,10 +1,10 @@
 [package]
-name = "termanch-server"
+name = "termenbox-server"
 version = "0.1.16"
 edition = "2021"
 
 [dependencies]
-termanch-core = { path = "../core" }
+termenbox-core = { path = "../core" }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }
@@ -26,7 +26,8 @@ sha2 = { workspace = true }
 hmac = { workspace = true }
 qrcode = { version = "0.14", default-features = false }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
-p256 = { version = "0.13", features = ["ecdsa", "std"] }
+p256 = { version = "0.13", features = ["ecdsa", "ecdh", "std"] }
+aes-gcm = "0.10"
 libc = "0.2"
 
 [dev-dependencies]

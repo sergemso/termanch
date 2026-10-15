@@ -11,7 +11,7 @@ accepted-by: architect
 # Decision: MIT License for All Components
 
 ## Context
-Termanch is open-source, self-hosted, no paid services. License must:
+Termenbox is open-source, self-hosted, no paid services. License must:
 - Allow commercial use (companies self-hosting)
 - Allow modification and redistribution
 - Be compatible with all dependencies (Rust: mostly MIT/Apache-2.0; JS: MIT)

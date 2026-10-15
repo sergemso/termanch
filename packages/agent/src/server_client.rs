@@ -11,7 +11,7 @@ use url::Url;
 
 use crate::pty::PtyManager;
 use crate::tmux::TmuxManager;
-use termanch_core::protocol::{ClientMessage, ServerMessage};
+use termenbox_core::protocol::{ClientMessage, ServerMessage};
 
 pub struct ServerClient {
     server_url: String,
@@ -61,6 +61,7 @@ impl ServerClient {
             cert: String::new(),
             signature: String::new(),
             server_token: self.server_token.clone(),
+            channels: false,
         };
         ws_tx
             .send(Message::Text(serde_json::to_string(&auth_msg)?))
@@ -161,6 +162,9 @@ impl ServerClient {
             }
             ServerMessage::AgentSnapshot { .. }
             | ServerMessage::AgentEvents { .. }
+            | ServerMessage::Activity { .. }
+            | ServerMessage::Attention { .. }
+            | ServerMessage::PushInfo { .. }
             | ServerMessage::Snapshot { .. }
             | ServerMessage::WindowList { .. } => {}
             ServerMessage::Error { message } => {

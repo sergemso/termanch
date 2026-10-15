@@ -6,7 +6,7 @@
 //  2. Web Audio obeys the ringer switch unless the page declares itself as playback
 //     (`navigator.audioSession.type = "playback"`, iOS 16.4+).
 //  3. A context created before the gesture stays suspended, so it is created inside the gesture.
-const KEY = 'termanch_bell';
+const KEY = 'termenbox_bell';
 const UNLOCK_EVENTS = ['pointerup', 'touchend', 'click', 'keydown'] as const;
 
 let ctx: AudioContext | null = null;

@@ -1,10 +1,10 @@
 [package]
-name = "termanch-agent"
+name = "termenbox-agent"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-termanch-core = { path = "../core" }
+termenbox-core = { path = "../core" }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "fmt"] }

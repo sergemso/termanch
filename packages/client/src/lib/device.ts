@@ -16,7 +16,7 @@ export function b64url(bytes: ArrayBuffer | Uint8Array): string {
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-const DB = 'termanch';
+const DB = 'termenbox';
 const STORE = 'device';
 
 function open(): Promise<IDBDatabase> {
@@ -74,7 +74,7 @@ export async function publicKeyB64(pair: CryptoKeyPair): Promise<string> {
 
 /** The exact message the server verifies; binds the signature to one server and one connection. */
 export function challengeMessage(serverId: string, nonce: string): Uint8Array<ArrayBuffer> {
-  return new TextEncoder().encode(`termanch-auth-v1\n${serverId}\n${nonce}`);
+  return new TextEncoder().encode(`termenbox-auth-v1\n${serverId}\n${nonce}`);
 }
 
 /** Raw r||s signature, base64url. */

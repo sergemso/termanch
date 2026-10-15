@@ -1,9 +1,9 @@
 // Service worker: makes the app start offline and fast. It caches the static app shell only. It never caches
 // /api/*, the installer, OAuth callbacks, cross-origin requests or anything with a query string, and it holds no
 // tokens: the GitHub token and device keys live in localStorage/IndexedDB, not here.
-const VERSION = 'v1';
-const SHELL = `termanch-shell-${VERSION}`;
-const ASSETS = `termanch-assets-${VERSION}`;
+const VERSION = 'v2';
+const SHELL = `termenbox-shell-${VERSION}`;
+const ASSETS = `termenbox-assets-${VERSION}`;
 const STATIC = /^\/(favicon\.svg|manifest\.webmanifest|icons\/[\w.-]+)$/;
 
 self.addEventListener('install', (event) => {
@@ -21,6 +21,34 @@ self.addEventListener('activate', (event) => {
 
 const withTimeout = (promise, ms) =>
   Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
+
+// Web Push (decision 0095). The payload is {session, kind, at, tag} and nothing an agent wrote; the words are
+// ours. A newer notification for the same session replaces the older by `tag`.
+const WORDS = { needs_input: 'needs you', finished: 'finished', failed: 'failed', attention: 'wants you' };
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch { /* Show the generic text. */ }
+  const name = typeof data.session === 'string' ? data.session.slice(0, 64) : 'A session';
+  const word = WORDS[data.kind] ?? WORDS.attention;
+  event.waitUntil(
+    self.registration.showNotification(`${name} ${word}`, {
+      tag: typeof data.tag === 'string' ? data.tag.slice(0, 64) : name,
+      renotify: true,
+      icon: '/icons/icon-192.png',
+      data: { session: typeof data.session === 'string' ? data.session : '' },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) if ('focus' in c) return c.focus();
+      return self.clients.openWindow('/');
+    }),
+  );
+});
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;

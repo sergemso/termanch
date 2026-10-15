@@ -1,6 +1,6 @@
 ---
 id: user-settings-are-wrapped-not-replaced
-title: Termanch adds to a user's agent settings and never replaces what is there
+title: Termenbox adds to a user's agent settings and never replaces what is there
 status: active
 governed-by: 0083
 grounded-in: [0083]

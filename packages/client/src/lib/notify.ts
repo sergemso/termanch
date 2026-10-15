@@ -9,16 +9,19 @@ export interface Waiting { key: string; name: string; since: number; agent: Sess
 export function waitingList(sessions: { key: string; name: string }[], agents: AgentMap): Waiting[] {
   return sessions
     .filter(s => needsYou(agents[s.key]))
-    .map(s => ({ key: s.key, name: s.name, since: agents[s.key].waitingSince ?? agents[s.key].ts, agent: agents[s.key] }))
+    .map(s => ({ key: s.key, name: s.name, since: agents[s.key].attention?.raised_at ?? agents[s.key].waitingSince ?? agents[s.key].ts, agent: agents[s.key] }))
     .sort((a, b) => a.since - b.since);
 }
 
-export const titleFor = (count: number) => count > 0 ? `(${count}) Termanch` : 'Termanch';
+export const titleFor = (count: number) => count > 0 ? `(${count}) Termenbox` : 'Termenbox';
 export const bannerText = (count: number) => count === 1 ? '1 needs you' : `${count} need you`;
+/** What the first item of the banner is about, when it is not a question. */
+export const bannerKind = (a: SessionAgent) => a.attention?.kind === 'finished_unseen' ? 'finished' : a.attention?.kind === 'failed' ? 'failed' : '';
 
 /** The choices the banner may offer: only for a prompt the agent's own hook confirmed, and never a stale one. */
 export function bannerChoices(a: SessionAgent, now: number): string[] {
-  if (a.state !== 'needs_input' || !a.prompt || a.prompt.confidence !== 'high' || isStale(a, now)) return [];
+  if (a.attention ? a.attention.kind !== 'needs_input' : a.state !== 'needs_input') return [];
+  if (!a.prompt || a.prompt.confidence !== 'high' || isStale(a, now)) return [];
   return a.prompt.choices.length > 0 && a.prompt.choices.length <= 3 ? a.prompt.choices : [];
 }
 

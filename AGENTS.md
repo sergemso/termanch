@@ -1,4 +1,4 @@
-# Termanch — AGENTS.md
+# Termenbox — AGENTS.md
 
 <!-- knowledge-base:start -->
 ## Knowledge Base
@@ -13,8 +13,8 @@ after work sessions; validated via `lint` on demand; queried via
 
 ## Project Overview
 
-**Termanch** — a web-based terminal for managing remote AI coding agents
-(Codex, Claude Code, Herdr) from any mobile browser, with Mosh-level
+**Termenbox** — a web-based terminal for managing remote AI coding agents
+(Codex, Claude Code) from any mobile browser, with Mosh-level
 session persistence. No native apps. No subscriptions. Self-hosted.
 
 ## Key Directories
@@ -27,10 +27,10 @@ docs/
   skills/          # Procedural knowledge (tags, roles)
   plans/           # Implementation plans
 packages/
-  server/          # termanch-server (Rust: WebRTC + WebSocket, tmux, auth)
-  agent/           # termanch-agent (parked; see issue #19)
-  core/            # termanch-core (Rust, shared protocol types)
-  client/          # termanch-client (Svelte 5, xterm.js WebGL)
+  server/          # termenbox-server (Rust: WebRTC + WebSocket, tmux, auth)
+  agent/           # termenbox-agent (parked; see issue #19)
+  core/            # termenbox-core (Rust, shared protocol types)
+  client/          # termenbox-client (Svelte 5, xterm.js WebGL)
 ```
 
 ## Quick Commands
@@ -48,7 +48,7 @@ pnpm -r test
 cd packages/core && wasm-pack build --target web --release
 
 # Docker
-docker build -t termanch -f docker/Dockerfile .
+docker build -t termenbox -f docker/Dockerfile .
 
 # Lint knowledge base
 # (requires go-getter plugin)
@@ -64,7 +64,7 @@ lint
 - **Sessions**: server owns tmux/PTY via a SessionBackend trait (DECISION-0054); reconnect = re-attach
 - **Client**: Svelte 5 + xterm.js WebGL; hosted or self-hosted (DECISION-0052)
 - **Deployment**: Docker image (ghcr.io), one command from the client; 512MB RAM, 1 vCPU (FACT-0001)
-- **Plan**: docs/plans/termanch-roadmap.md, tracked in GitHub issues
+- **Plan**: docs/plans/termenbox-roadmap.md, tracked in GitHub issues
 
 ## Guardrail Highlights
 

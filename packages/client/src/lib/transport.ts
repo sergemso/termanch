@@ -7,6 +7,11 @@ export interface Transport {
   onclose: (() => void) | null;
   send(text: string): void;
   close(): void;
+  /** Terminal bytes on their own lane (decision 0096). Absent when the carrier has no such lane. */
+  readonly lanes?: boolean;
+  onterm?: ((bytes: Uint8Array) => void) | null;
+  /** False when the lane is not open (yet): the caller falls back to the JSON `input` message. */
+  sendTerm?(bytes: Uint8Array): boolean;
 }
 
 /** Where a server can be reached. A directory record is preferred; a plain WebSocket URL is the fallback. */

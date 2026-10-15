@@ -12,7 +12,7 @@ expires: 2027-10-09
 # Decision: WebTransport Primary, WebSocket Fallback
 
 ## Context
-Termanch requires Mosh-level session persistence on mobile networks with Wi-Fi↔LTE handoff, backgrounding, and tab eviction. The transport layer must support:
+Termenbox requires Mosh-level session persistence on mobile networks with Wi-Fi↔LTE handoff, backgrounding, and tab eviction. The transport layer must support:
 - UDP-like semantics for low-latency keystroke delivery
 - Connection migration/resumption without session restart
 - Multiplexing without head-of-line blocking

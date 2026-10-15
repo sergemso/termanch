@@ -1,6 +1,6 @@
 export type ClientMessage =
   | { type: 'hello' }
-  | { type: 'auth'; cert: string; signature: string; server_token: string }
+  | { type: 'auth'; cert: string; signature: string; server_token: string; channels?: boolean }
   | { type: 'revoke_device'; device: string }
   | { type: 'uninstall'; confirm_name: string; delete_user?: boolean; remove_tmux?: boolean; kill_sessions?: boolean }
   | { type: 'agent_sync'; after: Record<string, number> }
@@ -18,20 +18,32 @@ export type ClientMessage =
   | { type: 'attach'; session_id: string }
   | { type: 'detach' }
   | { type: 'input'; data: string }
-  | { type: 'resize'; cols: number; rows: number };
+  | { type: 'resize'; cols: number; rows: number }
+  | { type: 'push_info' }
+  | { type: 'push_subscribe'; endpoint: string; p256dh: string; auth: string }
+  | { type: 'push_unsubscribe'; endpoint: string }
+  /** The session this device shows in the foreground now, or null (hidden, or on the list): no push for it. */
+  | { type: 'foreground'; session: string | null }
+  | { type: 'ack'; attention_id: string }
+  | { type: 'dismiss'; attention_id: string };
 
 export type ServerMessage =
   | { type: 'challenge'; nonce: string; server_id: string }
   | { type: 'device_revoked'; device: string }
   | { type: 'uninstall_done'; mode: string }
-  | { type: 'auth_ok'; user: string; server_name: string; mode?: string; version?: string; backends?: string[]; control_mode?: boolean; tmux_version?: string; prefix?: string }
+  | { type: 'auth_ok'; channels?: string[]; user: string; server_name: string; mode?: string; version?: string; backends?: string[]; control_mode?: boolean; tmux_version?: string; prefix?: string }
   | { type: 'sessions'; sessions: SessionInfo[] }
   | { type: 'session_attached'; session_id: string }
   | { type: 'output'; data: string }
+  /** Never on the wire as JSON: terminal bytes from the `term` lane, as `Connection` hands them to listeners. */
+  | { type: 'term'; bytes: Uint8Array }
   | { type: 'snapshot'; session: string; text: string; hash: string; unchanged?: boolean }
   | { type: 'window_list'; session: string; windows: WindowInfo[]; representative?: number | null }
   | { type: 'agent_snapshot'; states: SessionAgentState[] }
   | { type: 'agent_events'; events: AgentEvent[] }
+  | { type: 'activity'; sessions: SessionActivity[] }
+  | { type: 'attention'; items: Attention[] }
+  | { type: 'push_info'; configured: boolean; public_key: string; devices: number; subscribed: boolean }
   | { type: 'agent_event'; event: AgentEventType; agent: string; session_id: string }
   | { type: 'error'; message: string }
   | { type: 'pong' };
@@ -39,8 +51,8 @@ export type ServerMessage =
 export interface SessionInfo {
   id: string;
   name: string;
-  agent: 'herdr' | 'tmux' | 'codex' | null;
-  /** The session manager it lives in; set when the server runs more than one (`tmux`, `herdr`). */
+  agent: 'tmux' | 'codex' | null;
+  /** The session manager it lives in; set when the server runs more than one (`tmux`). */
   backend?: string;
 }
 
@@ -64,12 +76,45 @@ export interface SessionAgentState {
   seq: number;
   stale: boolean;
   ts: number;
-  /** The agent in the session (`claude`, `codex`, `herdr`); absent for a plain shell and from older servers. */
+  /** The agent in the session (`claude`, `codex`); absent for a plain shell and from older servers. */
   agent?: string;
   /** When the agent last answered (ms since the epoch); absent until it has. */
   last_response_at?: number;
   /** Start of the continuous human wait; absent on older servers. */
   waiting_since?: number;
+}
+
+/** Decision 0095: what an agent does now. Unknown values are treated as `unknown`. */
+export type Activity = 'working' | 'blocked' | 'idle' | 'unknown';
+
+export type AttentionKind = 'needs_input' | 'finished_unseen' | 'failed' | 'unknown';
+
+/** The current piece of work of a session; `started_at` is ms since the epoch on the server's clock. */
+export interface Task {
+  title: string;
+  started_at: number;
+  source: string;
+}
+
+export interface SessionActivity {
+  session: string;
+  activity: Activity;
+  ts: number;
+  task?: Task;
+  agent?: string;
+  /** What scan or screen suspect without a hook: low confidence, never pushed. */
+  hint?: AttentionKind;
+}
+
+/** A durable, server-owned item that asks for the owner. */
+export interface Attention {
+  id: string;
+  session: string;
+  kind: AttentionKind;
+  raised_at: number;
+  task?: Task;
+  /** The question of a `needs_input`. */
+  prompt?: string;
 }
 
 /** Plan v6: `seq` and `ts` come from the server; unknown `kind`s and extra fields are ignored. */
@@ -82,7 +127,7 @@ export type AgentEvent = { session: string; seq: number; ts: number; source: str
   | { kind: string }
 );
 
-/** Legacy message of the parked termanch-agent. */
+/** Legacy message of the parked termenbox-agent. */
 export type AgentEventType = 'spawned' | 'completed' | 'error';
 
 export interface ServerListItem {

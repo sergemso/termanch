@@ -42,7 +42,7 @@
   /** The last screen seen for this session (a peek): drawn dimmed until the live repaint replaces it. */
   export let preview: string | null = null;
 
-  const FONT_KEY = 'termanch_font';
+  const FONT_KEY = 'termenbox_font';
   let mods: Mods = { ctrl: false, alt: false };
   let fontSize = clampFont(Number(localStorage.getItem(FONT_KEY)) || FONT_DEFAULT);
   let prefixArmed = false;
@@ -160,7 +160,7 @@
 
   // Dictation (plan R53): the browser's own recognizer; final text is typed as if typed, never followed by Enter.
   const makeRecognizer = recognizerFactory();
-  const VOICE_LANG_KEY = 'termanch-voice-lang';
+  const VOICE_LANG_KEY = 'termenbox-voice-lang';
   let voiceLang: VoiceLang = 'auto';
   try {
     voiceLang = parseVoiceLang(localStorage.getItem(VOICE_LANG_KEY));
@@ -264,7 +264,7 @@
 
   /**
    * A tap is sent as the app would see a mouse click: a move, a press, a short pause, a release. The browser's own
-   * compatibility events press and release in the same millisecond, which mouse-first apps like herdr ignore.
+   * compatibility events press and release in the same millisecond, which mouse-first apps ignore.
    */
   function tapAt(x: number, y: number) {
     suppressClick = true;
@@ -387,8 +387,20 @@
       const field = term.textarea;
       cleanups.push(() => field.removeEventListener('blur', onBlur));
     }
-    window.addEventListener('termanch-debug', syncDebug);
-    cleanups.push(() => window.removeEventListener('termanch-debug', syncDebug));
+    window.addEventListener('termenbox-debug', syncDebug);
+    cleanups.push(() => window.removeEventListener('termenbox-debug', syncDebug));
+
+    // Ctrl+V and Ctrl+Shift+V would reach the program as ^V; let the browser paste instead (xterm handles the paste event).
+    term.attachCustomKeyEventHandler((ev) => !(ev.type === 'keydown' && ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.key.toLowerCase() === 'v'));
+    // Shift+right-click pastes, also while a program has the mouse (where the plain click belongs to it).
+    const onContextMenu = (ev: MouseEvent) => {
+      if (!ev.shiftKey) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      void paste();
+    };
+    terminalContainer.addEventListener('contextmenu', onContextMenu, true);
+    cleanups.push(() => terminalContainer.removeEventListener('contextmenu', onContextMenu, true));
 
     cleanups.push(silenceColorQueries(term.parser).dispose);
     term.onData((data) => typed(data));
@@ -418,6 +430,8 @@
       connection.subscribe((msg) => {
         if (msg.type === 'output') {
           term?.write(b64ToBytes(msg.data));
+        } else if (msg.type === 'term') {
+          term?.write(msg.bytes);
         } else if (msg.type === 'session_attached') {
           // tmux repaints the screen on attach; start clean so a re-attach never doubles the content.
           previewing = false;

@@ -1,40 +1,40 @@
 #!/bin/sh
-# Termanch installer. Served by the client at /install.sh.
+# Termenbox installer. Served by the client at /install.sh.
 #
-#   curl -fsSL https://app.termanch.vivantel.dev/install.sh | sh -s -- <claim secret> <client origin> [mode]
-#   curl -fsSL https://app.termanch.vivantel.dev/install.sh | sh -s -- - <client origin> [mode]      (shows a QR instead)
+#   curl -fsSL https://app.termenbox.dev/install.sh | sh -s -- <claim secret> <client origin> [mode]
+#   curl -fsSL https://app.termenbox.dev/install.sh | sh -s -- - <client origin> [mode]      (shows a QR instead)
 #
 # The optional last word picks where sessions run (DECISION-0058, 0075):
 #   (none)      an isolated Docker container (installs Docker if missing)
-#   host-user   directly on this machine as a dedicated unprivileged user `termanch`, as a systemd service
+#   host-user   directly on this machine as a dedicated unprivileged user `termenbox`, as a systemd service
 #   host-me     directly on this machine as the user who runs this command: sessions open on their behalf, in their
 #               home, with their repositories, keys and agent logins. No user is created.
 #   host        directly on this machine as root, as a systemd service
 # The host modes give the owner's browser a shell on the machine itself and need no Docker.
 #
 # It picks a free UDP port, starts the server and hands it the claim secret. It asks nothing and needs nothing
-# afterwards: the server appears in Termanch by itself. Safe to run again: a new secret re-claims the server
+# afterwards: the server appears in Termenbox by itself. Safe to run again: a new secret re-claims the server
 # (root on this host already allows that).
 #
-# Host modes: every change is recorded in /var/lib/termanch-root before it is made and can be undone with
-# `termanch-server --revert`. The release is checked before anything is installed: its manifest must carry a valid
+# Host modes: every change is recorded in /var/lib/termenbox-root before it is made and can be undone with
+# `termenbox-server --revert`. The release is checked before anything is installed: its manifest must carry a valid
 # signature by the release key below (checked with ssh-keygen), and the binary must match the signed SHA-256.
 set -eu
 
 SECRET="${1:--}"
-ORIGIN="${2:-${TERMANCH_CLIENT_URL:-https://app.termanch.vivantel.dev}}"
+ORIGIN="${2:-${TERMENBOX_CLIENT_URL:-https://app.termenbox.dev}}"
 MODE="${3:-container}"
-IMAGE="${TERMANCH_IMAGE:-ghcr.io/sergemso/termanch:latest}"
-NAME="${TERMANCH_CONTAINER:-termanch}"
-ROOT="${TERMANCH_DATA:-/opt/termanch}"
+IMAGE="${TERMENBOX_IMAGE:-ghcr.io/termenbox/termenbox:latest}"
+NAME="${TERMENBOX_CONTAINER:-termenbox}"
+ROOT="${TERMENBOX_DATA:-/opt/termenbox}"
 
 # The public keys that sign releases: `kid ssh-ed25519 key` lines, the same as packages/server/release-keys.txt.
-# TERMANCH_RELEASE_KEYS and TERMANCH_RELEASE_URL exist for the installer's own tests; on a real install they are unset.
-RELEASE_KEYS="${TERMANCH_RELEASE_KEYS:-r1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDNH6+yZgMpZl+tW8C/D+9Ga0bN39vXzIIJMKmHB6auf}"
-RELEASE_URL="${TERMANCH_RELEASE_URL:-https://github.com/sergemso/termanch/releases/latest/download}"
+# TERMENBOX_RELEASE_KEYS and TERMENBOX_RELEASE_URL exist for the installer's own tests; on a real install they are unset.
+RELEASE_KEYS="${TERMENBOX_RELEASE_KEYS:-r1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDNH6+yZgMpZl+tW8C/D+9Ga0bN39vXzIIJMKmHB6auf}"
+RELEASE_URL="${TERMENBOX_RELEASE_URL:-https://github.com/termenbox/termenbox/releases/latest/download}"
 
 say() { printf '%s\n' "$*"; }
-die() { printf 'termanch: %s\n' "$*" >&2; exit 1; }
+die() { printf 'termenbox: %s\n' "$*" >&2; exit 1; }
 
 case "$ORIGIN" in
   https://*|http://localhost*|http://127.0.0.1*) ;;
@@ -59,10 +59,10 @@ if [ "$MODE" = "host-me" ] && [ "$(id -u)" -eq 0 ] && { [ -z "${SUDO_USER:-}" ] 
 fi
 if [ "$(id -u)" -ne 0 ]; then
   command -v sudo >/dev/null 2>&1 || die "run this as root (or install sudo)"
-  exec sudo env TERMANCH_IMAGE="$IMAGE" TERMANCH_CONTAINER="$NAME" TERMANCH_DATA="$ROOT" \
-    TERMANCH_SKIP_FIREWALL="${TERMANCH_SKIP_FIREWALL:-}" TERMANCH_DRY_RUN="${TERMANCH_DRY_RUN:-}" \
-    TERMANCH_FORCE="${TERMANCH_FORCE:-}" TERMANCH_RELEASE_URL="${TERMANCH_RELEASE_URL:-}" TERMANCH_RELEASE_KEYS="${TERMANCH_RELEASE_KEYS:-}" \
-    sh -c "$(curl -fsSL "$ORIGIN/install.sh")" termanch-install "$SECRET" "$ORIGIN" "$MODE"
+  exec sudo env TERMENBOX_IMAGE="$IMAGE" TERMENBOX_CONTAINER="$NAME" TERMENBOX_DATA="$ROOT" \
+    TERMENBOX_SKIP_FIREWALL="${TERMENBOX_SKIP_FIREWALL:-}" TERMENBOX_DRY_RUN="${TERMENBOX_DRY_RUN:-}" \
+    TERMENBOX_FORCE="${TERMENBOX_FORCE:-}" TERMENBOX_RELEASE_URL="${TERMENBOX_RELEASE_URL:-}" TERMENBOX_RELEASE_KEYS="${TERMENBOX_RELEASE_KEYS:-}" \
+    sh -c "$(curl -fsSL "$ORIGIN/install.sh")" termenbox-install "$SECRET" "$ORIGIN" "$MODE"
 fi
 
 # One UDP port for the WebRTC connection. The client learns it from the server's signed record, so any
@@ -90,7 +90,7 @@ pick_port() {
 }
 
 open_firewall() {
-  [ -z "${TERMANCH_SKIP_FIREWALL:-}" ] || return 0
+  [ -z "${TERMENBOX_SKIP_FIREWALL:-}" ] || return 0
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
     ufw allow "$1/udp" >/dev/null 2>&1 || true
   fi
@@ -121,46 +121,46 @@ install_container() {
   docker rm -f "$NAME" >/dev/null 2>&1 || true
   docker run -d --name "$NAME" --restart unless-stopped \
     -p "$PORT:$PORT/udp" \
-    -e "TERMANCH_UDP_PORT=$PORT" -e "TERMANCH_CLIENT_URL=$ORIGIN" \
-    -e "TERMANCH_SERVER_NAME=$(hostname -s 2>/dev/null || hostname)" \
+    -e "TERMENBOX_UDP_PORT=$PORT" -e "TERMENBOX_CLIENT_URL=$ORIGIN" \
+    -e "TERMENBOX_SERVER_NAME=$(hostname -s 2>/dev/null || hostname)" \
     -v "$ROOT/home:/home/node" \
     "$IMAGE" >/dev/null || die "could not start the server"
 
   # Wait for the server process, then hand over the claim.
   i=0
-  until docker exec "$NAME" termanch-server --help >/dev/null 2>&1; do
+  until docker exec "$NAME" termenbox-server --help >/dev/null 2>&1; do
     i=$((i + 1))
     [ "$i" -lt 30 ] || die "the server did not start; see: docker logs $NAME"
     sleep 1
   done
 
   if [ "$SECRET" = "-" ]; then
-    OUT="$(docker exec "$NAME" termanch-server --register --qr)"
+    OUT="$(docker exec "$NAME" termenbox-server --register --qr)"
     case "$OUT" in
       *"is registered to"*) say "$OUT" ;;
       *)
-        say "Scan this with Termanch (Add Server > Scan a QR), or open the link:"
+        say "Scan this with Termenbox (Add Server > Scan a QR), or open the link:"
         say "$OUT"
         ;;
     esac
   else
-    docker exec "$NAME" termanch-server --claim "$SECRET" >/dev/null
-    say "Termanch server started. It will appear in the app within a minute."
+    docker exec "$NAME" termenbox-server --claim "$SECRET" >/dev/null
+    say "Termenbox server started. It will appear in the app within a minute."
   fi
 }
 
 # ---------------------------------------------------------------------------------------------------------
 # This host (native, no Docker)
 # ---------------------------------------------------------------------------------------------------------
-BIN=/usr/local/bin/termanch-server
-UNIT_NAME=termanch.service
+BIN=/usr/local/bin/termenbox-server
+UNIT_NAME=termenbox.service
 UNIT=/etc/systemd/system/$UNIT_NAME
-STATE=/var/lib/termanch
-JOURNAL=/var/lib/termanch-root
+STATE=/var/lib/termenbox
+JOURNAL=/var/lib/termenbox-root
 
 # Hands the claim over (or prints the registration QR) as the user the service runs as.
 native_claim() {
-  _env="TERMANCH_CONFIG_DIR=$STATE TERMANCH_CLIENT_URL=$ORIGIN TERMANCH_UDP_PORT=$1"
+  _env="TERMENBOX_CONFIG_DIR=$STATE TERMENBOX_CLIENT_URL=$ORIGIN TERMENBOX_UDP_PORT=$1"
   # shellcheck disable=SC2086 # _env is a list of NAME=value words
   if [ "$RUN_USER" = root ]; then _run="env $_env"; else _run="runuser -u $RUN_USER -- env $_env"; fi
   if [ "$SECRET" = "-" ]; then
@@ -169,18 +169,18 @@ native_claim() {
     case "$OUT" in
       *"is registered to"*) say "$OUT" ;;
       *)
-        say "Scan this with Termanch (Add Server > Scan a QR), or open the link:"
+        say "Scan this with Termenbox (Add Server > Scan a QR), or open the link:"
         say "$OUT"
         ;;
     esac
   else
     # shellcheck disable=SC2086
     $_run "$BIN" --claim "$SECRET" >/dev/null
-    say "Termanch server started. It will appear in the app within a minute."
+    say "Termenbox server started. It will appear in the app within a minute."
   fi
 }
 
-# journal KIND key=value...  records a change before it is made. $JBIN is a verified termanch-server (the
+# journal KIND key=value...  records a change before it is made. $JBIN is a verified termenbox-server (the
 # downloaded one during an install, the installed one afterwards); it does the writing.
 journal() {
   _kind="$1"; shift
@@ -206,14 +206,14 @@ install_helper_units() {
     printf '%s\n' "$2" > "/etc/systemd/system/$1"
     _added=1
   }
-  add_unit termanch-update.service "[Unit]
-Description=Termanch updater
+  add_unit termenbox-update.service "[Unit]
+Description=Termenbox updater
 
 [Service]
 Type=oneshot
 ExecStart=$BIN --root-helper update --journal-dir $JOURNAL"
-  add_unit termanch-update.timer "[Unit]
-Description=Check for a new Termanch release every day
+  add_unit termenbox-update.timer "[Unit]
+Description=Check for a new Termenbox release every day
 
 [Timer]
 OnCalendar=daily
@@ -222,14 +222,14 @@ Persistent=true
 
 [Install]
 WantedBy=timers.target"
-  add_unit termanch-request.service "[Unit]
-Description=Termanch root helper (requests from the server)
+  add_unit termenbox-request.service "[Unit]
+Description=Termenbox root helper (requests from the server)
 
 [Service]
 Type=oneshot
 ExecStart=$BIN --root-helper requests --journal-dir $JOURNAL --requests-dir $STATE/requests"
-  add_unit termanch-request.path "[Unit]
-Description=Watch for requests from the Termanch server
+  add_unit termenbox-request.path "[Unit]
+Description=Watch for requests from the Termenbox server
 
 [Path]
 PathExistsGlob=$STATE/requests/*.json
@@ -238,7 +238,7 @@ PathExistsGlob=$STATE/requests/*.json
 WantedBy=multi-user.target"
   if [ -n "$_added" ]; then
     systemctl daemon-reload
-    systemctl enable --now termanch-update.timer termanch-request.path >/dev/null 2>&1 || die "could not start the updater; see: systemctl status termanch-update.timer"
+    systemctl enable --now termenbox-update.timer termenbox-request.path >/dev/null 2>&1 || die "could not start the updater; see: systemctl status termenbox-update.timer"
   fi
 }
 
@@ -254,7 +254,7 @@ install_native() {
     *) die "unsupported processor $(uname -m); the host install supports x86_64 and aarch64" ;;
   esac
   RUN_USER=root
-  [ "$MODE" = "host-user" ] && RUN_USER=termanch
+  [ "$MODE" = "host-user" ] && RUN_USER=termenbox
   if [ "$MODE" = "host-me" ]; then
     RUN_USER="${SUDO_USER:-}"
     case "$RUN_USER" in
@@ -269,16 +269,16 @@ install_native() {
   TMP="$(mktemp -d)"
   trap 'rm -rf "$TMP"' EXIT
 
-  # Already installed here: refresh the claim only. TERMANCH_FORCE=1 reinstalls.
-  if [ -x "$BIN" ] && [ -f "$UNIT" ] && [ -z "${TERMANCH_FORCE:-}" ]; then
-    say "Termanch is already installed on this machine."
+  # Already installed here: refresh the claim only. TERMENBOX_FORCE=1 reinstalls.
+  if [ -x "$BIN" ] && [ -f "$UNIT" ] && [ -z "${TERMENBOX_FORCE:-}" ]; then
+    say "Termenbox is already installed on this machine."
     systemctl is-active --quiet "$UNIT_NAME" || systemctl start "$UNIT_NAME"
     RUN_USER="$(sed -n 's/^User=//p' "$UNIT")"
     RUN_USER="${RUN_USER:-root}"
     [ "$RUN_USER" = root ] || id "$RUN_USER" >/dev/null 2>&1 \
-      || die "the installed service runs as $RUN_USER, which no longer exists. Remove Termanch (uninstall.sh --yes) and install again."
+      || die "the installed service runs as $RUN_USER, which no longer exists. Remove Termenbox (uninstall.sh --yes) and install again."
     [ "$MODE" != host-me ] || [ "$RUN_USER" = "${SUDO_USER:-}" ] \
-      || say "Note: sessions already run as $RUN_USER and stay that way. To change that, remove Termanch first (curl -fsSL <client>/uninstall.sh | sudo sh -s -- --yes) and install again."
+      || say "Note: sessions already run as $RUN_USER and stay that way. To change that, remove Termenbox first (curl -fsSL <client>/uninstall.sh | sudo sh -s -- --yes) and install again."
     JBIN="$BIN"
     install_helper_units # installs from before the updater existed get it here
     PORT="$(cat "$JOURNAL/udp_port")"
@@ -290,8 +290,8 @@ install_native() {
   say "Checking the latest release..."
   curl -fsSL --retry 3 -o "$TMP/manifest.json" "$RELEASE_URL/manifest.json" || die "could not download the release manifest"
   curl -fsSL --retry 3 -o "$TMP/manifest.json.sig" "$RELEASE_URL/manifest.json.sig" || die "could not download the release signature"
-  printf '%s\n' "$RELEASE_KEYS" | awk 'NF >= 3 { print "termanch-release " $2 " " $3 }' > "$TMP/allowed_signers"
-  ssh-keygen -Y verify -f "$TMP/allowed_signers" -I termanch-release -n termanch-release \
+  printf '%s\n' "$RELEASE_KEYS" | awk 'NF >= 3 { print "termenbox-release " $2 " " $3 }' > "$TMP/allowed_signers"
+  ssh-keygen -Y verify -f "$TMP/allowed_signers" -I termenbox-release -n termenbox-release \
     -s "$TMP/manifest.json.sig" < "$TMP/manifest.json" >/dev/null 2>&1 \
     || die "the release signature is not valid, so nothing was installed"
   grep -q '"freeze": *true' "$TMP/manifest.json" && die "new installs are paused by the maintainers (a signed freeze); try again later"
@@ -304,27 +304,27 @@ install_native() {
     *[!0-9a-f]*|"") die "the release has no $ARCH binary" ;;
   esac
   [ "${#SHA}" -eq 64 ] || die "the release has no valid $ARCH hash"
-  curl -fsSL --retry 3 -o "$TMP/termanch-server" "$RELEASE_URL/termanch-server-$ARCH-linux" || die "could not download the server"
-  echo "$SHA  $TMP/termanch-server" | sha256sum -c - >/dev/null 2>&1 || die "the downloaded server does not match the signed hash, so nothing was installed"
-  chmod 755 "$TMP/termanch-server"
-  "$TMP/termanch-server" --help >/dev/null 2>&1 || die "the downloaded server does not run on this machine"
-  JBIN="$TMP/termanch-server"
+  curl -fsSL --retry 3 -o "$TMP/termenbox-server" "$RELEASE_URL/termenbox-server-$ARCH-linux" || die "could not download the server"
+  echo "$SHA  $TMP/termenbox-server" | sha256sum -c - >/dev/null 2>&1 || die "the downloaded server does not match the signed hash, so nothing was installed"
+  chmod 755 "$TMP/termenbox-server"
+  "$TMP/termenbox-server" --help >/dev/null 2>&1 || die "the downloaded server does not run on this machine"
+  JBIN="$TMP/termenbox-server"
 
   # 2. What will change. Everything below is recorded in the journal first.
   PORT="$(pick_port udp_in_use 4443 "$JOURNAL/udp_port")"
   HTTP_PORT="$(pick_port tcp_in_use 8080 "$JOURNAL/http_port")"
   [ -n "$PORT" ] && [ -n "$HTTP_PORT" ] || die "could not find free ports"
   say ""
-  say "Termanch $VERSION will be installed on this machine (sessions run as $RUN_USER):"
+  say "Termenbox $VERSION will be installed on this machine (sessions run as $RUN_USER):"
   say "  - the server  $BIN"
   [ "$RUN_USER" = root ] || { id "$RUN_USER" >/dev/null 2>&1 || say "  - a new user  $RUN_USER"; }
   command -v tmux >/dev/null 2>&1 || say "  - the package tmux (sessions are tmux sessions)"
   say "  - state       $STATE"
   say "  - a service   $UNIT_NAME (starts at boot), and a daily update check (root-owned, signed releases only)"
   say "  - UDP port    $PORT (opened in the firewall if one is active)"
-  say "Every change is recorded in $JOURNAL; undo them with: termanch-server --revert --dry-run, then --revert"
+  say "Every change is recorded in $JOURNAL; undo them with: termenbox-server --revert --dry-run, then --revert"
   say ""
-  [ -z "${TERMANCH_DRY_RUN:-}" ] || { say "(dry run: nothing was changed)"; return; }
+  [ -z "${TERMENBOX_DRY_RUN:-}" ] || { say "(dry run: nothing was changed)"; return; }
 
   mkdir -p "$JOURNAL"
   chmod 700 "$JOURNAL"
@@ -334,13 +334,13 @@ install_native() {
   # 3. The changes, each recorded first.
   if [ -e "$BIN" ]; then
     mkdir -p "$JOURNAL/backups"
-    BACKUP="$JOURNAL/backups/termanch-server.$(date +%s)"
+    BACKUP="$JOURNAL/backups/termenbox-server.$(date +%s)"
     cp -p "$BIN" "$BACKUP"
     journal file_replaced "path=$BIN" "backup=$BACKUP" "sha256=$SHA"
   else
     journal file_created "path=$BIN" "sha256=$SHA"
   fi
-  install -m 0755 "$TMP/termanch-server" "$BIN"
+  install -m 0755 "$TMP/termenbox-server" "$BIN"
 
   if [ "$RUN_USER" != root ] && ! id "$RUN_USER" >/dev/null 2>&1; then
     journal user_created "name=$RUN_USER" "home=/home/$RUN_USER"
@@ -372,7 +372,7 @@ install_native() {
   chown "$RUN_USER" "$STATE"
   chmod 700 "$STATE"
 
-  if [ -z "${TERMANCH_SKIP_FIREWALL:-}" ]; then
+  if [ -z "${TERMENBOX_SKIP_FIREWALL:-}" ]; then
     if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
       journal firewall_rule_added tool=ufw "rule=$PORT/udp"
     elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
@@ -384,7 +384,7 @@ install_native() {
   journal unit_installed "name=$UNIT_NAME" "path=$UNIT"
   {
     echo "[Unit]"
-    echo "Description=Termanch terminal server"
+    echo "Description=Termenbox terminal server"
     echo "After=network-online.target"
     echo "Wants=network-online.target"
     echo ""
@@ -392,13 +392,13 @@ install_native() {
     [ "$RUN_USER" = root ] || echo "User=$RUN_USER"
     echo "WorkingDirectory=~"
     [ "$RUN_USER" != root ] || echo "Environment=HOME=/root"
-    echo "Environment=TERMANCH_RUN=native"
-    echo "Environment=TERMANCH_RUN_USER=$RUN_USER"
-    echo "Environment=TERMANCH_CONFIG_DIR=$STATE"
-    echo "Environment=TERMANCH_HOST=127.0.0.1"
-    echo "Environment=TERMANCH_PORT=$HTTP_PORT"
-    echo "Environment=TERMANCH_UDP_PORT=$PORT"
-    echo "Environment=TERMANCH_CLIENT_URL=$ORIGIN"
+    echo "Environment=TERMENBOX_RUN=native"
+    echo "Environment=TERMENBOX_RUN_USER=$RUN_USER"
+    echo "Environment=TERMENBOX_CONFIG_DIR=$STATE"
+    echo "Environment=TERMENBOX_HOST=127.0.0.1"
+    echo "Environment=TERMENBOX_PORT=$HTTP_PORT"
+    echo "Environment=TERMENBOX_UDP_PORT=$PORT"
+    echo "Environment=TERMENBOX_CLIENT_URL=$ORIGIN"
     echo "ExecStart=$BIN"
     echo "Restart=on-failure"
     echo "RestartSec=2"

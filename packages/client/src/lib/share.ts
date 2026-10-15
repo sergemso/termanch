@@ -20,7 +20,7 @@ const realDeps = (): SendDeps => ({
 export async function sendServerLink(link: string, name: string, deps: SendDeps = realDeps()): Promise<SendResult> {
   if (deps.share) {
     try {
-      await deps.share({ title: 'Termanch', text: `Open ${name || 'my server'} in Termanch`, url: link });
+      await deps.share({ title: 'Termenbox', text: `Open ${name || 'my server'} in Termenbox`, url: link });
       return 'shared';
     } catch (e) {
       // The user closing the sheet is not an error; any other failure falls through to copying.

@@ -11,16 +11,16 @@ User-level daemon that detects tmux sessions, emits events via Unix socket to se
    [dependencies]
    tokio = { version = "1", features = ["full"] }
    nix = "0.28"
-   termanch-core = { path = "../core" }
+   termenbox-core = { path = "../core" }
    tracing = "0.1"
    serde = { version = "1.0", features = ["derive"] }
    serde_json = "1.0"
    ```
 
 2. **`packages/agent/src/main.rs`** — Daemon entry:
-   - Single instance per user (lock file at `~/.termanch/agent.lock`)
-   - Create `~/.termanch/` dir (chmod 700)
-   - Bind Unix socket at `~/.termanch/agent.sock` (chmod 600)
+   - Single instance per user (lock file at `~/.termenbox/agent.lock`)
+   - Create `~/.termenbox/` dir (chmod 700)
+   - Bind Unix socket at `~/.termenbox/agent.sock` (chmod 600)
    - Spawn detection loop + socket listener
 
 3. **`packages/agent/src/detection.rs`** — Session detection:
@@ -43,22 +43,22 @@ User-level daemon that detects tmux sessions, emits events via Unix socket to se
    - Match to tmux session via environment variables (`TMUX_PANE`, etc.)
    - Emit `AgentSpawned` event when detected
 
-6. **systemd user unit**: `~/.config/systemd/user/termanch-agent.service`
+6. **systemd user unit**: `~/.config/systemd/user/termenbox-agent.service`
    ```ini
    [Unit]
-   Description=Termanch Agent
+   Description=Termenbox Agent
    [Service]
    Type=notify
    Restart=on-failure
-   ExecStart=%h/.cargo/bin/termanch-agent
+   ExecStart=%h/.cargo/bin/termenbox-agent
    [Install]
    WantedBy=default.target
    ```
 
 ## Check
 ```bash
-cargo build --release -p termanch-agent
-./target/release/termanch-agent --help
+cargo build --release -p termenbox-agent
+./target/release/termenbox-agent --help
 # Daemon starts, socket accepts, emits tmux sessions + agent events
 ```
 

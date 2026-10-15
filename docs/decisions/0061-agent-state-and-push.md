@@ -1,7 +1,8 @@
 ---
 id: 0061-agent-state-and-push
 title: Agent state comes from process scans and tool adapters; notifications are installed-PWA Web Push
-status: active
+status: superseded
+superseded-by: 0095-agent-status-is-activity-plus-attention
 date: 2026-10-12
 track: product
 accepted-by: Sergey Strebulaev <s@vivantel.dev>

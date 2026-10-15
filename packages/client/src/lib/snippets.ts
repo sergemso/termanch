@@ -1,5 +1,5 @@
 // Saved quick replies ("continue", "run the tests"), kept in this browser (plan v8, K.5).
-const KEY = 'termanch_snippets';
+const KEY = 'termenbox_snippets';
 export const MAX_SNIPPETS = 20;
 export const MAX_LEN = 200;
 export const DEFAULTS = ['continue', 'run the tests', 'yes'];

@@ -7,7 +7,7 @@ Single-command install (`curl | bash`) that sets up Docker, writes compose file,
 
 ## User Flow (4 keypresses)
 ```bash
-curl -fsSL https://get.termanch.dev | bash
+curl -fsSL https://get.termenbox.dev | bash
 ```
 1. **Welcome** → [Enter]
 2. **Tunnel type** → [Enter] (default: Quick Tunnel) or [↓][Enter] (Named)
@@ -17,14 +17,14 @@ curl -fsSL https://get.termanch.dev | bash
 ## Architecture
 
 ### Components
-- **Bootstrap script**: `scripts/bootstrap.sh` (hosted at get.termanch.dev)
+- **Bootstrap script**: `scripts/bootstrap.sh` (hosted at get.termenbox.dev)
 - **TUI library**: `gum` (single binary, downloaded at runtime)
-- **Docker Compose**: `docker-compose.yml` + `.env` (written to `/opt/termanch/`)
-- **Services**: `termanch-server` + `termanch-agent` + `cloudflared` (sidecar)
+- **Docker Compose**: `docker-compose.yml` + `.env` (written to `/opt/termenbox/`)
+- **Services**: `termenbox-server` + `termenbox-agent` + `cloudflared` (sidecar)
 
 ### Directory Structure on VPS
 ```
-/opt/termanch/
+/opt/termenbox/
 ├── docker-compose.yml
 ├── .env                    # Generated secrets
 ├── data/                   # Persistent volumes (tmux sockets, etc.)
@@ -43,7 +43,7 @@ curl -fsSL https://get.termanch.dev | bash
 
 ### Phase 2: TUI Wizard (gum)
 ```bash
-# gum style --title "Termanch Server Setup" ...
+# gum style --title "Termenbox Server Setup" ...
 # gum choose "Quick Tunnel (trycloudflare)" "Named Tunnel (my Cloudflare)"
 # If Named: gum input --placeholder "Tunnel token from dashboard"
 ```
@@ -63,7 +63,7 @@ SERVER_NAME=$(hostname)
 
 ### Phase 5: Start Services
 ```bash
-docker compose -f /opt/termanch/docker-compose.yml up -d
+docker compose -f /opt/termenbox/docker-compose.yml up -d
 # Wait for health checks
 ```
 
@@ -78,52 +78,52 @@ docker compose -f /opt/termanch/docker-compose.yml up -d
 ### Phase 7: Display Result
 ```bash
 # Print QR in terminal (ANSI)
-# Print instructions: "Open https://app.termanch.dev → Login → Scan QR"
+# Print instructions: "Open https://app.termenbox.dev → Login → Scan QR"
 ```
 
 ## Docker Compose Template (sidecar pattern)
 ```yaml
 services:
-  termanch-server:
-    image: ghcr.io/sergemso/termanch:latest
+  termenbox-server:
+    image: ghcr.io/termenbox/termenbox:latest
     environment:
-      - TERMANCH_HOST=0.0.0.0
-      - TERMANCH_PORT=8080
-      - TERMANCH_GITHUB_CLIENT_ID=${TERMANCH_GITHUB_CLIENT_ID}
-      - TERMANCH_GITHUB_CLIENT_SECRET=${TERMANCH_GITHUB_CLIENT_SECRET}
-      - TERMANCH_JWT_SECRET=${JWT_SECRET}
-      - TERMANCH_REGISTRATION_SECRET=${REGISTRATION_SECRET}
-      - TERMANCH_SERVER_NAME=${SERVER_NAME}
+      - TERMENBOX_HOST=0.0.0.0
+      - TERMENBOX_PORT=8080
+      - TERMENBOX_GITHUB_CLIENT_ID=${TERMENBOX_GITHUB_CLIENT_ID}
+      - TERMENBOX_GITHUB_CLIENT_SECRET=${TERMENBOX_GITHUB_CLIENT_SECRET}
+      - TERMENBOX_JWT_SECRET=${JWT_SECRET}
+      - TERMENBOX_REGISTRATION_SECRET=${REGISTRATION_SECRET}
+      - TERMENBOX_SERVER_NAME=${SERVER_NAME}
     volumes:
-      - ./data:/home/termanch/.config/termanch
-    networks: [termanch-net]
+      - ./data:/home/termenbox/.config/termenbox
+    networks: [termenbox-net]
     restart: unless-stopped
 
-  termanch-agent:
-    image: ghcr.io/sergemso/termanch:latest
-    command: termanch-agent
+  termenbox-agent:
+    image: ghcr.io/termenbox/termenbox:latest
+    command: termenbox-agent
     environment:
-      - TERMANCH_SERVER_URL=ws://termanch-server:8080/ws
-      - TERMANCH_SERVER_TOKEN=${REGISTRATION_SECRET}
-      - TERMANCH_SOCKET_PATH=/tmp/termanch-agent.sock
+      - TERMENBOX_SERVER_URL=ws://termenbox-server:8080/ws
+      - TERMENBOX_SERVER_TOKEN=${REGISTRATION_SECRET}
+      - TERMENBOX_SOCKET_PATH=/tmp/termenbox-agent.sock
     volumes:
-      - /tmp/termanch-agent.sock:/tmp/termanch-agent.sock
+      - /tmp/termenbox-agent.sock:/tmp/termenbox-agent.sock
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on: [termanch-server]
-    networks: [termanch-net]
+    depends_on: [termenbox-server]
+    networks: [termenbox-net]
     restart: unless-stopped
 
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: {{TUNNEL_CMD}}
-    # Quick: tunnel --no-autoupdate --url http://termanch-server:8080
+    # Quick: tunnel --no-autoupdate --url http://termenbox-server:8080
     # Named: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on: [termanch-server]
-    networks: [termanch-net]
+    depends_on: [termenbox-server]
+    networks: [termenbox-net]
     restart: unless-stopped
 
 networks:
-  termanch-net:
+  termenbox-net:
     driver: bridge
 ```
 
@@ -149,14 +149,14 @@ CLOUDFLARE_TUNNEL_TOKEN=eyJh...
 - Script in `scripts/bootstrap.sh`
 - `.github/workflows/bootstrap-publish.yaml`:
   - On tag `bootstrap-v*`: upload script to GH Pages or R2
-  - Served at `https://get.termanch.dev` (Cloudflare Pages custom domain)
+  - Served at `https://get.termenbox.dev` (Cloudflare Pages custom domain)
 
 ## Definition of Done
-1. `curl -fsSL https://get.termanch.dev | bash` works on fresh Ubuntu 22.04 VPS
+1. `curl -fsSL https://get.termenbox.dev | bash` works on fresh Ubuntu 22.04 VPS
 2. TUI wizard completes in ≤ 4 keypresses (default path)
 3. Services healthy: `docker compose ps` shows all running
 4. QR code renders in terminal, scannable by phone
-5. Client at app.termanch.dev connects, terminal works
+5. Client at app.termenbox.dev connects, terminal works
 6. Survives reboot: `systemctl enable docker` + compose restart policy
 
 ## Dependencies on Host

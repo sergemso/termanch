@@ -10,7 +10,7 @@ tags: [client, privacy, repo]
 
 ## Decision
 
-- A **Report a problem** button (header menu and the failure screen) opens a prefilled new-issue page on the Termanch repository. The user reads, edits and submits it with their own GitHub account.
+- A **Report a problem** button (header menu and the failure screen) opens a prefilled new-issue page on the Termenbox repository. The user reads, edits and submits it with their own GitHub account.
 - The text holds the app version, browser and OS, viewport numbers, connection state and the last few errors kept in memory. A scrubber removes certificates, claim secrets, tokens and addresses before the text is built.
 - If the text would exceed the URL limit it is copied to the clipboard and the issue opens with a paste note.
 - The repository gets an issue template for it. There is no automatic reporting and no endpoint of ours.

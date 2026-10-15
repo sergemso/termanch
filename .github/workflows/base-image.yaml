@@ -15,7 +15,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE: ghcr.io/sergemso/termanch-base
+  IMAGE: ghcr.io/termenbox/termenbox-base
 
 jobs:
   base:

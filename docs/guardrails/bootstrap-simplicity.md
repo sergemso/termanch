@@ -16,10 +16,10 @@ User onboarding from zero to working terminal **MUST** complete in ≤ 2 user-in
 1. **User provisions VPS** (outside our control — DigitalOcean, Hetzner, etc.)
 2. **User runs single command** on VPS:
    ```bash
-   curl -fsSL https://get.termanch.dev | bash
+   curl -fsSL https://get.termenbox.dev | bash
    # or: docker compose -f <url> up -d
    ```
-3. **User opens `https://app.termanch.dev`** → Login with GitHub (1 click)
+3. **User opens `https://app.termenbox.dev`** → Login with GitHub (1 click)
 4. **User clicks "Add Server"** → Scans QR code with phone (1 click)
 5. **Terminal works** — types `ls`, sees output
 
@@ -39,10 +39,10 @@ User onboarding from zero to working terminal **MUST** complete in ≤ 2 user-in
 - Docs: Single `README.md` with copy-paste deploy command
 
 ## Cost Corollary
-- **User pays**: VPS only ($5–10/mo). No Termanch subscription.
-- **Termanch pays**: Cloudflare Pages free tier. GitHub OAuth free. No per-user cost.
+- **User pays**: VPS only ($5–10/mo). No Termenbox subscription.
+- **Termenbox pays**: Cloudflare Pages free tier. GitHub OAuth free. No per-user cost.
 ## Scope (0052)
-The two-click bound applies to the Termanch-hosted client mode. The self-hosted client mode (own domain, Pages, OAuth app, Terraform) is exempt but must be documented as a separate path.
+The two-click bound applies to the Termenbox-hosted client mode. The self-hosted client mode (own domain, Pages, OAuth app, Terraform) is exempt but must be documented as a separate path.
 
 ## Scope (0056)
 The irreducible human step is pasting one client-generated command on the VPS. It must contain everything needed (secret included); the user never copies a URL, a token shown separately, or a link between terminal and browser. Nothing is printed for the user to act on.

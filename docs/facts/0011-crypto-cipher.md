@@ -19,7 +19,7 @@ date: 2026-10-09
 
 **Key derivation**:
 - ECDH on Curve25519 (X25519) for key exchange
-- HKDF-SHA256 with salt = session_id, info = "termanch-v1"
+- HKDF-SHA256 with salt = session_id, info = "termenbox-v1"
 - Output: 32-byte encryption key + 32-byte authentication key (for HMAC if needed)
 
 **Rekey**: Triggered at 1GB encrypted or 1 hour elapsed. New ECDH exchange, seamless key rotation (overlap window for in-flight packets).

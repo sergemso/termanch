@@ -1,12 +1,12 @@
 //! Where sessions live. The server only needs four things from a session manager: list them, create one,
 //! name the command that attaches a terminal to one, and survive a client detaching. tmux is built in;
-//! anything with a CLI that fits that shape (herdr, zellij, screen, ...) plugs in through `CommandBackend`;
+//! anything with a CLI that fits that shape (zellij, screen, ...) plugs in through `CommandBackend`;
 //! a server-native backend can implement `SessionBackend` directly (plan step 7.1).
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use termanch_core::protocol::SessionInfo;
+use termenbox_core::protocol::SessionInfo;
 use tokio::process::Command;
 
 use crate::control::WindowState;
@@ -225,25 +225,6 @@ impl Runner {
             .map_err(|e| anyhow!("cannot run {program}: {e}"))
     }
 
-    /// Starts a long-lived process (a session server) that must outlive this call and the connection.
-    fn spawn_detached(&self, program: &str, args: &[String]) -> Result<()> {
-        let (program, args) = self.wrap(true, program, args);
-        let mut child = Command::new(&program)
-            .args(&args)
-            .envs(crate::locale::utf8_env())
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .process_group(0)
-            .spawn()
-            .map_err(|e| anyhow!("cannot run {program}: {e}"))?;
-        // Reap it if it ever exits; a session server normally runs until its session is closed.
-        tokio::spawn(async move {
-            let _ = child.wait().await;
-        });
-        Ok(())
-    }
-
     fn attach(&self, program: &str, args: &[String], cols: u16, rows: u16) -> Result<Attachment> {
         let (program, args) = self.wrap(false, program, args);
         Attachment::spawn(&program, &args, cols, rows)
@@ -314,18 +295,20 @@ impl RunMode {
     pub fn parse(run: &str, user: &str) -> Result<Self> {
         match run {
             "container" => Ok(Self::Container),
-            "host" if user.is_empty() => Err(anyhow!("TERMANCH_RUN_USER must name a user or root")),
+            "host" if user.is_empty() => {
+                Err(anyhow!("TERMENBOX_RUN_USER must name a user or root"))
+            }
             "host" => Ok(Self::Host {
                 user: user.to_string(),
             }),
             "native" if user.is_empty() => {
-                Err(anyhow!("TERMANCH_RUN_USER must name a user or root"))
+                Err(anyhow!("TERMENBOX_RUN_USER must name a user or root"))
             }
             "native" => Ok(Self::Native {
                 user: user.to_string(),
             }),
             other => Err(anyhow!(
-                "unknown TERMANCH_RUN `{other}` (container, host or native)"
+                "unknown TERMENBOX_RUN `{other}` (container, host or native)"
             )),
         }
     }
@@ -621,109 +604,7 @@ impl SessionBackend for TmuxBackend {
     }
 }
 
-/// `herdr session list --json`: the running sessions, by name.
-pub fn parse_herdr_list(json: &str) -> Result<Vec<SessionInfo>> {
-    let v: serde_json::Value = serde_json::from_str(json)?;
-    Ok(v["sessions"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|s| s["running"].as_bool() == Some(true))
-        .filter_map(|s| s["name"].as_str())
-        .filter(|n| valid_name(n))
-        .map(|n| SessionInfo {
-            id: n.to_string(),
-            name: n.to_string(),
-            agent: None,
-            backend: None,
-        })
-        .collect())
-}
-
-/// herdr (https://herdr.dev): named persistent sessions, each with its own headless server. Verified on 0.9.3:
-/// a session is created by starting `herdr --session NAME server`, `herdr session attach NAME` repaints the
-/// whole screen and killing that client leaves the session running.
-pub struct HerdrBackend {
-    runner: Runner,
-    events: Option<EventEnv>,
-    event_prefix: String,
-}
-
-impl HerdrBackend {
-    pub fn new(runner: Runner) -> Self {
-        Self {
-            runner,
-            events: None,
-            event_prefix: String::new(),
-        }
-    }
-
-    pub fn with_event_prefix(mut self, prefix: &str) -> Self {
-        self.event_prefix = prefix.to_string();
-        self
-    }
-
-    pub fn with_events(mut self, events: EventEnv) -> Self {
-        self.events = Some(events);
-        self
-    }
-}
-
-#[async_trait]
-impl SessionBackend for HerdrBackend {
-    fn name(&self) -> &str {
-        "herdr"
-    }
-
-    async fn list(&self) -> Result<Vec<SessionInfo>> {
-        let args = ["session", "list", "--json"].map(String::from);
-        let out = self.runner.run("herdr", &args).await?;
-        if !out.status.success() {
-            return Err(anyhow!(
-                "herdr session list failed: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            ));
-        }
-        parse_herdr_list(&String::from_utf8_lossy(&out.stdout))
-    }
-
-    async fn create(&self, name: &str) -> Result<()> {
-        if !valid_name(name) {
-            return Err(anyhow!(
-                "Session names use letters, digits, - and _ (max 64)"
-            ));
-        }
-        if self.list().await?.iter().any(|s| s.id == name) {
-            return Err(anyhow!("Session {name} already exists"));
-        }
-        // The panes inherit the server's environment, so the event variables go through `env`.
-        let mut args: Vec<String> = self
-            .events
-            .iter()
-            .flat_map(|e| e.vars(&format!("{}{name}", self.event_prefix)))
-            .collect();
-        args.extend(["herdr", "--session", name, "server"].map(String::from));
-        self.runner.spawn_detached("env", &args)?;
-        // The server needs a moment to open its socket; attaching before that would start a second one.
-        for _ in 0..30 {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            if self.list().await?.iter().any(|s| s.id == name) {
-                return Ok(());
-            }
-        }
-        Err(anyhow!("herdr did not start session {name}"))
-    }
-
-    fn attach(&self, id: &str, cols: u16, rows: u16) -> Result<Attachment> {
-        if !valid_name(id) {
-            return Err(anyhow!("Unknown session"));
-        }
-        let args = ["session", "attach", id].map(String::from);
-        self.runner.attach("herdr", &args, cols, rows)
-    }
-}
-
-/// Several session managers at once. Session ids become `manager:name` so a tmux `work` and a herdr `work`
+/// Several session managers at once. Session ids become `manager:name` so a tmux `work` and a zellij `work`
 /// stay apart; the client shows the manager next to the name.
 pub struct CompositeBackend {
     parts: Vec<(String, Arc<dyn SessionBackend>)>,
@@ -749,7 +630,7 @@ impl SessionBackend for CompositeBackend {
         "mixed"
     }
 
-    /// A manager that fails to answer (herdr not installed, say) only hides its own sessions.
+    /// A manager that fails to answer (zellij not installed, say) only hides its own sessions.
     async fn list(&self) -> Result<Vec<SessionInfo>> {
         let mut all = Vec::new();
         for (kind, b) in &self.parts {
@@ -986,19 +867,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn herdr_list_keeps_running_sessions_with_safe_names() {
-        let json = r#"{"sessions":[{"name":"default","running":false},{"name":"work","running":true},{"name":"a b","running":true}]}"#;
-        let ids: Vec<_> = parse_herdr_list(json)
-            .unwrap()
-            .into_iter()
-            .map(|s| s.id)
-            .collect();
-        assert_eq!(ids, ["work"]);
-        assert!(parse_herdr_list("nope").is_err());
-        assert!(parse_herdr_list("{}").unwrap().is_empty());
-    }
-
     /// Two fake managers sharing a session name stay apart.
     #[tokio::test]
     async fn the_composite_keeps_same_named_sessions_of_different_managers_apart() {
@@ -1046,8 +914,8 @@ mod tests {
 
     #[test]
     fn the_native_mode_runs_commands_as_they_are_and_shows_the_host_badge() {
-        let native = RunMode::parse("native", "termanch").unwrap();
-        assert_eq!(native.label(), "host:termanch");
+        let native = RunMode::parse("native", "termenbox").unwrap();
+        assert_eq!(native.label(), "host:termenbox");
         assert!(native.is_host());
         let (prog, argv) = native
             .runner()
@@ -1063,7 +931,7 @@ mod tests {
     #[test]
     fn run_modes_parse_and_default_to_the_container() {
         assert_eq!(
-            RunMode::parse("container", "termanch").unwrap(),
+            RunMode::parse("container", "termenbox").unwrap(),
             RunMode::Container
         );
         let host = RunMode::parse("host", "root").unwrap();
@@ -1079,10 +947,10 @@ mod tests {
         let (prog, argv) = Runner::host("root").wrap(false, "tmux", &args);
         assert_eq!(prog, "nsenter");
         assert_eq!(argv.join(" "), "-t 1 -m -u -i -n -p tmux -V");
-        let (_, argv) = Runner::host("termanch").wrap(false, "tmux", &args);
+        let (_, argv) = Runner::host("termenbox").wrap(false, "tmux", &args);
         assert_eq!(
             argv.join(" "),
-            "-t 1 -m -u -i -n -p runuser -u termanch -- tmux -V"
+            "-t 1 -m -u -i -n -p runuser -u termenbox -- tmux -V"
         );
         let (prog, argv) = Runner::default().wrap(true, "tmux", &args);
         assert_eq!((prog.as_str(), argv), ("tmux", args.to_vec()));
@@ -1091,16 +959,16 @@ mod tests {
     #[test]
     fn a_server_start_leaves_the_container_cgroup_before_dropping_privileges() {
         let args = ["new-session".to_string()];
-        let (_, argv) = Runner::host("termanch").wrap(true, "tmux", &args);
+        let (_, argv) = Runner::host("termenbox").wrap(true, "tmux", &args);
         let line = argv.join(" ");
         let scope = line.find("systemd-run --scope").expect("scope");
-        let user = line.find("runuser -u termanch").expect("user");
+        let user = line.find("runuser -u termenbox").expect("user");
         assert!(
             scope < user,
             "systemd-run runs as root, then runuser: {line}"
         );
         assert!(
-            line.ends_with("sh runuser -u termanch -- tmux new-session"),
+            line.ends_with("sh runuser -u termenbox -- tmux new-session"),
             "{line}"
         );
     }
@@ -1156,120 +1024,6 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(String::from_utf8_lossy(&chunk).contains("hello"));
-    }
-
-    /// Needs a real herdr; skipped when the binary is absent. Runs in a throwaway config dir so no real session is touched.
-    #[tokio::test]
-    async fn herdr_backend_creates_lists_and_reattaches() {
-        if std::process::Command::new("herdr")
-            .arg("--version")
-            .output()
-            .is_err()
-        {
-            return;
-        }
-        let dir = std::env::temp_dir().join(format!("termanch-herdr-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let d = dir.to_str().unwrap();
-        let b = HerdrBackend::new(Runner::default().with_env(&[
-            ("HERDR_ENV", None),
-            ("HERDR_SOCKET_PATH", None),
-            ("HERDR_PANE_ID", None),
-            ("XDG_CONFIG_HOME", Some(d)),
-            ("HOME", Some(d)),
-        ]));
-        b.create("t-one").await.unwrap();
-        assert!(b.create("t-one").await.is_err());
-        assert!(b.list().await.unwrap().iter().any(|s| s.id == "t-one"));
-        for _ in 0..2 {
-            let mut att = b.attach("t-one", 100, 30).unwrap();
-            let chunk = tokio::time::timeout(std::time::Duration::from_secs(5), att.rx.recv())
-                .await
-                .unwrap()
-                .unwrap();
-            assert!(chunk.len() > 50, "the attach repaints the screen");
-        }
-        // Dropping an attachment only detached: the session is still there.
-        assert!(b.list().await.unwrap().iter().any(|s| s.id == "t-one"));
-        let _ = std::process::Command::new("env")
-            .args([
-                "-u",
-                "HERDR_ENV",
-                &format!("XDG_CONFIG_HOME={d}"),
-                &format!("HOME={d}"),
-                "herdr",
-                "--session",
-                "t-one",
-                "server",
-                "stop",
-            ])
-            .output();
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    /// Real tmux next to real herdr (private home), same session name in both.
-    #[tokio::test]
-    async fn tmux_and_herdr_sessions_with_one_name_live_side_by_side() {
-        let have = |bin: &str| {
-            std::process::Command::new(bin).arg("-V").output().is_ok()
-                || std::process::Command::new(bin)
-                    .arg("--version")
-                    .output()
-                    .is_ok()
-        };
-        if !have("tmux") || !have("herdr") {
-            return;
-        }
-        let name = format!("mix{}", &uuid::Uuid::new_v4().simple().to_string()[..6]);
-        let dir = std::env::temp_dir().join(format!("termanch-mix-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let d = dir.to_str().unwrap();
-        let herdr_env = [
-            ("HERDR_ENV", None),
-            ("HERDR_SOCKET_PATH", None),
-            ("HERDR_PANE_ID", None),
-            ("XDG_CONFIG_HOME", Some(d)),
-            ("HOME", Some(d)),
-        ];
-        let c = CompositeBackend::new(vec![
-            ("tmux".into(), Arc::new(TmuxBackend::new(Runner::default()))),
-            (
-                "herdr".into(),
-                Arc::new(HerdrBackend::new(Runner::default().with_env(&herdr_env))),
-            ),
-        ]);
-        c.create_in(&name, Some("tmux")).await.unwrap();
-        c.create_in(&name, Some("herdr")).await.unwrap();
-        let ids: Vec<String> = c.list().await.unwrap().into_iter().map(|s| s.id).collect();
-        assert!(
-            ids.contains(&format!("tmux:{name}")) && ids.contains(&format!("herdr:{name}")),
-            "{ids:?}"
-        );
-        for kind in ["tmux", "herdr"] {
-            let mut att = c.attach(&format!("{kind}:{name}"), 100, 30).unwrap();
-            let chunk = tokio::time::timeout(std::time::Duration::from_secs(5), att.rx.recv())
-                .await
-                .unwrap()
-                .unwrap();
-            assert!(!chunk.is_empty(), "{kind} painted nothing");
-        }
-        let _ = std::process::Command::new("tmux")
-            .args(["kill-session", "-t", &format!("={name}")])
-            .output();
-        let _ = std::process::Command::new("env")
-            .args([
-                "-u",
-                "HERDR_ENV",
-                &format!("XDG_CONFIG_HOME={d}"),
-                &format!("HOME={d}"),
-                "herdr",
-                "--session",
-                &name,
-                "server",
-                "stop",
-            ])
-            .output();
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Real tmux: text sent to a pane is typed there (with Enter for `\r`), and capture reads it back.
@@ -1360,11 +1114,8 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("tm-new-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let tmpdir = dir.to_string_lossy().into_owned();
-        let runner = Runner::default().with_env(&[
-            ("TMUX_TMPDIR", Some(tmpdir.as_str())),
-            ("TMUX", None),
-            ("HERDR_ENV", None),
-        ]);
+        let runner =
+            Runner::default().with_env(&[("TMUX_TMPDIR", Some(tmpdir.as_str())), ("TMUX", None)]);
         let b = TmuxBackend::new(runner.clone());
         assert!(b
             .create_with("nd", None, Some("relative"), None)

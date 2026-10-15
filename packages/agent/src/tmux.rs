@@ -65,7 +65,7 @@ impl TmuxManager {
     }
 
     pub async fn create_session(&self, name: &str) -> Result<TmuxSession> {
-        let id = format!("termanch-{}", &uuid::Uuid::new_v4().to_string()[..8]);
+        let id = format!("termenbox-{}", &uuid::Uuid::new_v4().to_string()[..8]);
 
         let output = Command::new("tmux")
             .args(["new-session", "-d", "-s", &id, "-n", name])

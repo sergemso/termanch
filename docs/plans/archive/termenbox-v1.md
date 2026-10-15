@@ -1,13 +1,13 @@
-> Archived 2026-10-14. Every open step was moved into `docs/plans/termanch-roadmap.md` (see the `[>]` markers); this file is history.
+> Archived 2026-10-14. Every open step was moved into `docs/plans/termenbox-roadmap.md` (see the `[>]` markers); this file is history.
 
-# Termanch Plan (re-baselined on the MVP)
+# Termenbox Plan (re-baselined on the MVP)
 
 **Goal**: A web terminal for managing remote AI coding agents from a phone browser; sessions survive disconnects. Self-hosted server, no subscriptions.
 **Baseline**: the shipped hybrid MVP (DECISION-0013, 0051): GitHub OAuth, WebSocket, xterm.js WebGL, tmux-backed sessions, Cloudflare Tunnel, QR + HMAC registration.
-**Modes**: hosted client (app.termanch.dev) and self-hosted client (DECISION-0052). Servers are single-owner (DECISION-0053).
+**Modes**: hosted client (app.termenbox.dev) and self-hosted client (DECISION-0052). Servers are single-owner (DECISION-0053).
 **Near-term bar**: mobile-usable via tmux persistence + fast reconnect/replay. SSP/CRDT, WebTransport, WASM core, SSH auth and app-layer E2E are deferred (see Backlog).
 **Constraints**: 512MB RAM / 1 vCPU, no paid services, internal sockets on 127.0.0.1, secrets never logged, builds run in CI.
-**Replaces**: docs/plans/archive/termanch-v1-original.md (issues #1-#12, closed as not planned).
+**Replaces**: docs/plans/archive/termenbox-v1-original.md (issues #1-#12, closed as not planned).
 
 ---
 
@@ -35,23 +35,23 @@ Done-when: CI is green on master; no doc describes deferred designs as current.
 ---
 
 ### 2.1 Single-owner server binding — [x]
-Status: code merged (#33); the real login and Add Server check passed on 2026-10-12; close #15 after the owner confirms in step 0.1 of `termanch-v2-environment-and-ux.md`.
+Status: code merged (#33); the real login and Add Server check passed on 2026-10-12; close #15 after the owner confirms in step 0.1 of `termenbox-v2-environment-and-ux.md`.
 Issue: #15
-Class: implement · Needs: 1.2 · Check: `cargo test -p termanch-server`
+Class: implement · Needs: 1.2 · Check: `cargo test -p termenbox-server`
 Context: DECISION-0053. Today any valid GitHub token passes auth (packages/server/src/auth.rs).
 Do:
 1. On `/register`, store the registering GitHub user id in `/config` (volume).
 2. `auth` rejects other ids; audit-log accept/reject (timestamp, ip, github id; never tokens/HMAC).
-3. Validate the GitHub token server-side per connection; define token lifetime and the OAuth code exchange location (client-only exchange needs the client secret: document how it is proxied without a Termanch backend in self-host mode).
+3. Validate the GitHub token server-side per connection; define token lifetime and the OAuth code exchange location (client-only exchange needs the client secret: document how it is proxied without a Termenbox backend in self-host mode).
 4. Tests: owner accepted, other user rejected, expired registration token rejected, token single-use.
 Done-when: a second GitHub account cannot attach; tests pass.
 
 ---
 
 ### 2.2 Reconnect and screen replay — [x]
-Status: code merged (#33); the drop-and-restore check is pending in step 0.1 of `termanch-v2-environment-and-ux.md`.
+Status: code merged (#33); the drop-and-restore check is pending in step 0.1 of `termenbox-v2-environment-and-ux.md`.
 Issue: #16
-Class: implement · Needs: 1.2 · Check: `cargo test -p termanch-server && pnpm --filter termanch-client test`
+Class: implement · Needs: 1.2 · Check: `cargo test -p termenbox-server && pnpm --filter termenbox-client test`
 Context: The "Mosh-level" promise on top of a session backend (DECISION-0051, 0054). Resume = re-attach: tmux and similar multiplexers repaint the screen on attach, so the server keeps no replay buffer.
 Do:
 1. Server owns the terminal path: backend trait, PTY attach per connection, detach-only on drop, heartbeat ping (done, e2e-tested).
@@ -62,9 +62,9 @@ Done-when: device test passes; the e2e test (drop socket, reconnect, same screen
 ---
 
 ### 3.1 Mobile terminal UX — [x] done: v2 A.1 (PR #46)
-Moved to `docs/plans/termanch-v2-environment-and-ux.md` step A.1.
+Moved to `docs/plans/termenbox-v2-environment-and-ux.md` step A.1.
 Issue: #17
-Class: implement · Needs: 1.1, 2.2 · Check: `pnpm --filter termanch-client build && pnpm --filter termanch-client test`
+Class: implement · Needs: 1.1, 2.2 · Check: `pnpm --filter termenbox-client build && pnpm --filter termenbox-client test`
 Context: Mobile is the target; the MVP is desktop Chrome only.
 Do:
 1. Key row (Esc, Tab, Ctrl, Alt, arrows) and soft-keyboard-aware layout.
@@ -76,9 +76,9 @@ Done-when: a user can run `ls`, `vim`-style Esc/Ctrl combos and scroll on a phon
 ---
 
 ### 3.2 Installable PWA — [x] done: v2 A.2 (PR #51)
-Moved to `docs/plans/termanch-v2-environment-and-ux.md` step A.2.
+Moved to `docs/plans/termenbox-v2-environment-and-ux.md` step A.2.
 Issue: #18
-Class: implement · Needs: 1.1, 3.1 · Check: `pnpm --filter termanch-client build && ls packages/client/dist/manifest.webmanifest`
+Class: implement · Needs: 1.1, 3.1 · Check: `pnpm --filter termenbox-client build && ls packages/client/dist/manifest.webmanifest`
 Context: Installed PWA is required for iOS Web Push and gives a fast cold start.
 Do:
 1. Web manifest, icons, service worker caching static assets only (no session secrets in IndexedDB/Cache).
@@ -88,9 +88,9 @@ Done-when: installable on iOS and Android; cold start from cache works offline-s
 ---
 
 ### 4.1 Agent detection and notifications — [x] done: v6 P.1-P.6
-Moved to `docs/plans/termanch-v2-environment-and-ux.md` step B.7.
+Moved to `docs/plans/termenbox-v2-environment-and-ux.md` step B.7.
 Issue: #19
-Class: implement · Needs: 2.2 · Check: `cargo test -p termanch-server`
+Class: implement · Needs: 2.2 · Check: `cargo test -p termenbox-server`
 Context: Goal "manage AI coding agents". MVP has toasts for spawn/complete/error; detection method is only "manual codex in tmux".
 Do:
 1. Define the agent-event contract (spawned/needs-input/completed/error) and how each is detected in tmux (process scan of pane pid tree for codex/claude/herdr; prompt-wait heuristics only as a documented best effort).
@@ -101,7 +101,7 @@ Done-when: running `claude` or `codex` in a tmux pane shows spawn and completion
 
 ---
 
-### 5.1 Container and one-command deploy — [>] moved to docs/plans/termanch-roadmap.md as R34 (installer and CI gates are done)
+### 5.1 Container and one-command deploy — [>] moved to docs/plans/termenbox-roadmap.md as R34 (installer and CI gates are done)
 Status: installer and CI image done (8.5); self-hosted client docs and the size/RSS gates remain (see v2 step 0.2).
 Issue: #20
 Class: implement · Needs: 2.1, 4.1, 8.5 · Check: `docker compose -f docker/docker-compose.yml config`
@@ -116,9 +116,9 @@ Done-when: fresh 512MB VPS reaches a working terminal following the README only;
 ---
 
 ### 6.1 End-to-end test and resource gates — [x] done: v2 0.2 (PR #44)
-Moved to `docs/plans/termanch-v2-environment-and-ux.md` step 0.2.
+Moved to `docs/plans/termenbox-v2-environment-and-ux.md` step 0.2.
 Issue: #21
-Class: review · Needs: 5.1 · Check: `pnpm --filter termanch-client test:e2e`
+Class: review · Needs: 5.1 · Check: `pnpm --filter termenbox-client test:e2e`
 Context: Nothing in the MVP proves the Definition of Done or the 512MB/1 vCPU limit.
 Do:
 1. Playwright e2e in CI: mocked OAuth → register → attach → type `ls` → reconnect → resumed.
@@ -129,7 +129,7 @@ Done-when: gates enforced in CI.
 ---
 
 ### 7.1 Verify herdr and other backend CLIs — [x] done: fact 0029, PR #82
-Moved to `docs/plans/termanch-v2-environment-and-ux.md` step B.1.
+Moved to `docs/plans/termenbox-v2-environment-and-ux.md` step B.1.
 Issue: #22
 Class: explore · Needs: 2.2 · Check: `test -s docs/facts/0017-backend-clis.md`
 Context: The user wants tmux, herdr or an own alternative (DECISION-0054). The `command` backend needs three CLI invocations per tool; herdr's are unverified (it advertises a CLI and local socket API; sources disagree on repo and license).
@@ -179,16 +179,16 @@ Done-when: a forged or replayed announcement is rejected; a valid one is served 
 
 ---
 
-### 8.3 Server: managed quick tunnel (fallback transport, after 8.8) — [>] moved to docs/plans/termanch-roadmap.md as R33
+### 8.3 Server: managed quick tunnel (fallback transport, after 8.8) — [>] moved to docs/plans/termenbox-roadmap.md as R33
 Issue: #26
-Class: implement · Needs: 8.1, 8.2 · Check: `cargo test -p termanch-server`
+Class: implement · Needs: 8.1, 8.2 · Check: `cargo test -p termenbox-server`
 Context: Fallback for networks or VPSes without a reachable UDP port (DECISION-0057). The server supervises `cloudflared`, learns the URL, and announces it as the record's `ws_url`; nobody prints or types URLs.
 Do:
 0. Start `cloudflared` with `--metrics 127.0.0.1:PORT` and read the URL from `GET /quicktunnel` (FACT-0018); health from `/ready`.
 1. Persistent ed25519 identity in the config dir (0600).
 2. Supervisor: start `cloudflared tunnel --url`, parse the URL, restart with backoff when it exits, re-announce on every URL change (signed, increasing `seq`).
 3. First announce carries `HMAC(claim secret, url|seq)` and `hash(claim secret)`; the claim secret comes from the install command, not from stdout.
-4. Remove `--register` printing; keep an explicit `TERMANCH_TUNNEL=off` for users with their own TLS endpoint.
+4. Remove `--register` printing; keep an explicit `TERMENBOX_TUNNEL=off` for users with their own TLS endpoint.
 5. Tests with a fake `cloudflared` script and a fake directory.
 Done-when: killing the tunnel yields a new URL announced within 30s without human input.
 
@@ -247,7 +247,7 @@ Done-when: a phone on LTE types into a tmux session on a real VPS over the proto
 
 ### 8.8 Server: WebRTC-direct transport — [x]
 Issue: #31
-Class: implement · Needs: 8.7, 2.1 · Check: `cargo test -p termanch-server`
+Class: implement · Needs: 8.7, 2.1 · Check: `cargo test -p termenbox-server`
 Context: Makes the session path transport-agnostic and adds the primary transport.
 Do:
 1. Extract a `Transport` seam under `sessions.rs` (messages in/out, close); WebSocket becomes one implementation.

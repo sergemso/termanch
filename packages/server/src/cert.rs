@@ -53,10 +53,10 @@ pub enum CertError {
 pub struct CertKeys(HashMap<String, EdKey>);
 
 impl CertKeys {
-    /// `TERMANCH_CERT_KEYS` (comma or newline separated `kid=key`) replaces the built-in list, for
+    /// `TERMENBOX_CERT_KEYS` (comma or newline separated `kid=key`) replaces the built-in list, for
     /// self-hosted deployments of the client function (DECISION-0052).
     pub fn from_env() -> Result<Self> {
-        match std::env::var("TERMANCH_CERT_KEYS") {
+        match std::env::var("TERMENBOX_CERT_KEYS") {
             Ok(v) if !v.trim().is_empty() => Self::parse(&v),
             _ => Self::parse(DEFAULT_KEYS),
         }
@@ -123,7 +123,7 @@ pub fn device_id(dpk: &[u8]) -> String {
 
 /// What the device signs: bound to this server and to this connection.
 pub fn challenge_message(server_id: &str, nonce: &str) -> Vec<u8> {
-    format!("termanch-auth-v1\n{server_id}\n{nonce}").into_bytes()
+    format!("termenbox-auth-v1\n{server_id}\n{nonce}").into_bytes()
 }
 
 impl DeviceCert {

@@ -1,12 +1,12 @@
 ---
 id: 0016
-title: Browser Capabilities Relevant to Termanch
+title: Browser Capabilities Relevant to Termenbox
 status: active
 tags: [client, browser-support, ios, pwa, crypto]
 date: 2026-10-11
 ---
 
-# Browser Capabilities Relevant to Termanch
+# Browser Capabilities Relevant to Termenbox
 
 Checked 2026-10-11 against MDN and WebKit-related sources. "Unverified" means no authoritative source was reached; confirm on MDN/caniuse before depending on it.
 

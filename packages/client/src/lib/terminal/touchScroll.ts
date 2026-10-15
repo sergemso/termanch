@@ -1,7 +1,7 @@
-// One-finger gestures on the terminal. Every Termanch session runs in the alternate screen (tmux, herdr), so there
+// One-finger gestures on the terminal. Every Termenbox session runs in the alternate screen (tmux), so there
 // is no native scrollback to pan, and the browser's tap is a press and release in the same millisecond. This turns
 // a vertical drag into wheel events (xterm then scrolls its buffer, reports the wheel to a mouse-aware app, or sends
-// arrow keys) and a tap into a press, a short pause and a release that an app like herdr registers as a click.
+// arrow keys) and a tap into a press, a short pause and a release that a mouse-aware app registers as a click.
 // Everything the browser provides is injected, so the logic runs under test with a fake clock.
 
 export interface ScrollDeps {

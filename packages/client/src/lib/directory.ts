@@ -17,7 +17,7 @@ export async function claimHash(secret: string): Promise<string> {
 /** True when the record's proof shows its server knows `secret`, i.e. it is the machine we just set up. */
 export async function verifyClaimProof(secret: string, r: DirRecord): Promise<boolean> {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const msg = `termanch-claim-v1\n${r.server_id}\n${r.fingerprint}\n${r.ip}:${r.udp_port}`;
+  const msg = `termenbox-claim-v1\n${r.server_id}\n${r.fingerprint}\n${r.ip}:${r.udp_port}`;
   const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg)));
   const expected = b64urlEncode(mac);
   return expected.length === r.claim_proof.length && expected === r.claim_proof;

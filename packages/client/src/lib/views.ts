@@ -26,7 +26,7 @@ export const PRESETS: { id: Preset; label: string }[] = [
 const GROUPS: GroupBy[] = ['server', 'agent', 'status', 'project', 'none'];
 const SORTS: SortBy[] = ['human', 'response', 'cache', 'name'];
 const STATES: AgentState[] = ['idle', 'working', 'needs_input', 'done', 'error', 'unknown'];
-const KEY = 'termanch_session_view';
+const KEY = 'termenbox_session_view';
 
 /** A fresh object: editing free controls never mutates a shared preset. */
 export function presetView(preset: Preset): SessionView {

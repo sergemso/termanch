@@ -14,18 +14,18 @@ use server_client::ServerClient;
 use tmux::TmuxManager;
 
 #[derive(Parser, Debug)]
-#[command(name = "termanch-agent")]
+#[command(name = "termenbox-agent")]
 struct Args {
-    #[arg(long, env = "TERMANCH_SERVER_URL")]
+    #[arg(long, env = "TERMENBOX_SERVER_URL")]
     server_url: String,
 
-    #[arg(long, env = "TERMANCH_SERVER_TOKEN")]
+    #[arg(long, env = "TERMENBOX_SERVER_TOKEN")]
     server_token: String,
 
     #[arg(
         long,
-        env = "TERMANCH_SOCKET_PATH",
-        default_value = "/tmp/termanch-agent.sock"
+        env = "TERMENBOX_SOCKET_PATH",
+        default_value = "/tmp/termenbox-agent.sock"
     )]
     socket_path: String,
 

@@ -27,7 +27,7 @@ export function recentDirs(windows: WindowMap, serverPrefix: string, limit = 6):
   return [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, limit).map(([p]) => p);
 }
 
-/** A name the server accepts (letters, digits, - and _; at most 64) that is not taken: `termanch-claude`, `termanch-claude-2`. */
+/** A name the server accepts (letters, digits, - and _; at most 64) that is not taken: `termenbox-claude`, `termenbox-claude-2`. */
 export function suggestName(dir: string, template: string, taken: string[]): string {
   const tail = dir.split('/').filter(Boolean).pop() ?? '';
   const base = (tail || 'session').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'session';

@@ -62,6 +62,8 @@ export class Connection {
   private pongTimer: ReturnType<typeof setTimeout> | null = null;
   private listeners = new Set<(msg: ServerMessage) => void>();
   private authed = false;
+  /** The server put terminal bytes on their own lane for this connection (`auth_ok.channels`). */
+  private lanes = false;
   private everReady = false;
   private stopped = false;
   private opening = false;
@@ -93,7 +95,10 @@ export class Connection {
   }
 
   send(msg: ClientMessage) {
-    if (this.transport && this.authed) this.transport.send(JSON.stringify(msg));
+    if (!this.transport || !this.authed) return;
+    // Keystrokes go as raw bytes on the lane when there is one, and as JSON otherwise.
+    if (msg.type === 'input' && this.lanes && this.transport.sendTerm?.(b64ToBytes(msg.data))) return;
+    this.transport.send(JSON.stringify(msg));
   }
 
   close() {
@@ -140,6 +145,7 @@ export class Connection {
     this.opening = true;
     this.clearTimers();
     this.authed = false;
+    this.lanes = false;
     this.opts.onState(this.everReady ? 'reconnecting' : 'connecting');
 
     let transport: Transport;
@@ -160,6 +166,13 @@ export class Connection {
 
     this.transport = transport;
     transport.onmessage = (text) => this.onText(transport, text);
+    if (transport.lanes) {
+      transport.onterm = (bytes) => {
+        if (this.transport !== transport) return;
+        this.heard();
+        this.listeners.forEach((fn) => fn({ type: 'term', bytes }));
+      };
+    }
     transport.onclose = () => {
       if (this.transport !== transport || this.stopped) return;
       this.dropped('the transport closed');
@@ -183,6 +196,7 @@ export class Connection {
     if (msg.type === 'auth_ok') {
       const isReconnect = this.everReady;
       this.authed = true;
+      this.lanes = !!transport.lanes && !!msg.channels?.includes('term');
       this.everReady = true;
       this.attempt = 0;
       this.readyAt = performance.now();
@@ -212,7 +226,9 @@ export class Connection {
       const { cert, sign } = await this.opts.credentials();
       const signature = await sign(serverId, nonce);
       if (this.transport === transport) {
-        transport.send(JSON.stringify({ type: 'auth', cert, signature, server_token: this.opts.claim ?? '' }));
+        const auth: ClientMessage = { type: 'auth', cert, signature, server_token: this.opts.claim ?? '' };
+        if (transport.lanes) auth.channels = true;
+        transport.send(JSON.stringify(auth));
       }
     } catch (e) {
       if (this.transport !== transport) return;

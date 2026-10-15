@@ -9,7 +9,7 @@ Minimal JSON-serializable types for WebSocket protocol + HTTP registration (no p
 1. **`packages/core/Cargo.toml`**
    ```toml
    [package]
-   name = "termanch-core"
+   name = "termenbox-core"
    version = "0.1.0"
    edition = "2021"
 
@@ -115,6 +115,6 @@ Minimal JSON-serializable types for WebSocket protocol + HTTP registration (no p
 
 ## Check
 ```bash
-cargo test -p termanch-core
+cargo test -p termenbox-core
 # TS types importable in client
 ```

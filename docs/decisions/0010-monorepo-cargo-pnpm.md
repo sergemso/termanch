@@ -11,7 +11,7 @@ accepted-by: architect
 # Decision: Monorepo with Cargo Workspace and pnpm Workspace
 
 ## Context
-Termanch has multiple components:
+Termenbox has multiple components:
 - Rust: server, agent, hook, core (WASM)
 - TypeScript: client (Svelte)
 - Shared: wire protocol types, constants
@@ -25,15 +25,15 @@ Build and release must be atomic for cross-cutting changes (protocol changes aff
 
 ## Structure
 ```
-termanch/
+termenbox/
 ├── Cargo.toml                    # [workspace] members = ["packages/*"]
 ├── pnpm-workspace.yaml           # packages: ["packages/client"]
 ├── packages/
-│   ├── server/                   # termanch-server (bin)
-│   ├── agent/                    # termanch-agent (bin)
-│   ├── hook/                     # termanch-hook (bin)
-│   ├── core/                     # termanch-core (cdylib → WASM)
-│   └── client/                   # termanch-client (Svelte + TS)
+│   ├── server/                   # termenbox-server (bin)
+│   ├── agent/                    # termenbox-agent (bin)
+│   ├── hook/                     # termenbox-hook (bin)
+│   ├── core/                     # termenbox-core (cdylib → WASM)
+│   └── client/                   # termenbox-client (Svelte + TS)
 ├── docker/Dockerfile             # Multi-stage: builds all Rust, copies client dist
 └── .github/workflows/ci.yaml     # cargo test + pnpm test + wasm-pack test
 ```
@@ -42,7 +42,7 @@ termanch/
 - `packages/core/src/protocol.rs` defines wire protocol structs
 - Annotated with `#[derive(Serialize, Deserialize)]` + `bincode`/`postcard` encode
 - `build.rs` in core generates TS types via `wasm-bindgen` + custom codegen
-- Client imports: `import { HandshakeInit, DeltaFrame } from 'termanch-core'`
+- Client imports: `import { HandshakeInit, DeltaFrame } from 'termenbox-core'`
 
 ## Rationale
 - **Atomic commits**: Protocol change = single PR updating core + server + client

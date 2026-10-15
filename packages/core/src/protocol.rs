@@ -12,6 +12,10 @@ pub enum ClientMessage {
         cert: String,
         signature: String,
         server_token: String,
+        /// Asks for terminal bytes on their own lane (decision 0096); absent from older clients, which keep
+        /// the single JSON pipe.
+        #[serde(default)]
+        channels: bool,
     },
     /// Owner-only: refuse this device key from now on.
     RevokeDevice {
@@ -80,7 +84,7 @@ pub enum ClientMessage {
     ListSessions,
     NewSession {
         name: String,
-        /// Which session manager to create it in (`tmux`, `herdr`); the first one when absent.
+        /// Which session manager to create it in (`tmux`, `command`); the first one when absent.
         #[serde(default)]
         backend: Option<String>,
         /// Absolute working directory to start in; the manager's default when absent.
@@ -103,6 +107,32 @@ pub enum ClientMessage {
         cols: u16,
         rows: u16,
     },
+    /// Asks whether this server can send Web Push, and its public key.
+    PushInfo,
+    /// This device's push subscription (the browser's `PushSubscription` fields).
+    PushSubscribe {
+        endpoint: String,
+        p256dh: String,
+        auth: String,
+    },
+    PushUnsubscribe {
+        endpoint: String,
+    },
+    /// Which session this device shows in the foreground right now (none when hidden or on the list): the server
+    /// sends no push for a session someone is looking at.
+    Foreground {
+        #[serde(default)]
+        session: Option<String>,
+    },
+    /// A device shows this session in the foreground: clears its `finished_unseen` and `failed` items, never
+    /// a `needs_input` (decision 0095).
+    Ack {
+        attention_id: String,
+    },
+    /// Explicitly dismiss an attention item.
+    Dismiss {
+        attention_id: String,
+    },
 }
 
 /// Server → Client (WebSocket)
@@ -123,6 +153,9 @@ pub enum ServerMessage {
     },
     AuthOk {
         user: String,
+        /// The lanes this connection uses besides JSON (`term`); absent means the single pipe.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        channels: Vec<String>,
         server_name: String,
         /// `container` or `host:<user>`; absent from older servers.
         #[serde(default)]
@@ -179,7 +212,25 @@ pub enum ServerMessage {
     AgentEvents {
         events: Vec<crate::events::AgentEvent>,
     },
-    /// Legacy message of the parked termanch-agent.
+    /// Answers `push_info`. `configured` is false until the owner has run `termenbox-server --setup-push`.
+    PushInfo {
+        configured: bool,
+        /// The application server key to subscribe with (base64url); empty when not configured.
+        public_key: String,
+        /// Devices subscribed to this server.
+        devices: u32,
+        /// Whether the asking device's subscription is among them.
+        subscribed: bool,
+    },
+    /// The derived Activity (with task) of every session; answers `agent_sync`, then follows each change.
+    Activity {
+        sessions: Vec<crate::events::SessionActivity>,
+    },
+    /// The open attention items, and again whenever one is raised or cleared.
+    Attention {
+        items: Vec<crate::events::Attention>,
+    },
+    /// Legacy message of the parked termenbox-agent.
     AgentEvent {
         event: AgentEventType,
         agent: String,
@@ -211,7 +262,7 @@ pub struct SessionInfo {
     pub id: String,
     pub name: String,
     pub agent: Option<String>,
-    /// The session manager it lives in (`tmux`, `herdr`).
+    /// The session manager it lives in (`tmux`, `command`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend: Option<String>,
 }
@@ -245,6 +296,7 @@ mod tests {
         assert_eq!(v["type"], "list_sessions");
         let v = serde_json::to_value(ServerMessage::AuthOk {
             user: "u".into(),
+            channels: vec![],
             server_name: "s".into(),
             mode: "container".into(),
             version: "0.1.0+dev".into(),
@@ -288,6 +340,23 @@ mod tests {
         assert_eq!(v["type"], "agent_snapshot");
         let v = serde_json::to_value(ServerMessage::AgentEvents { events: vec![] }).unwrap();
         assert_eq!(v["type"], "agent_events");
+        let v = serde_json::to_value(ServerMessage::Activity { sessions: vec![] }).unwrap();
+        assert_eq!(v["type"], "activity");
+        let v = serde_json::to_value(ServerMessage::Attention { items: vec![] }).unwrap();
+        assert_eq!(v["type"], "attention");
+        let v = serde_json::to_value(ClientMessage::Ack {
+            attention_id: "a".into(),
+        })
+        .unwrap();
+        assert_eq!(
+            (v["type"].as_str(), v["attention_id"].as_str()),
+            (Some("ack"), Some("a"))
+        );
+        let v = serde_json::to_value(ClientMessage::Dismiss {
+            attention_id: "a".into(),
+        })
+        .unwrap();
+        assert_eq!(v["type"], "dismiss");
         let v = serde_json::to_value(ServerMessage::SessionAttached {
             session_id: "x".into(),
         })
@@ -400,6 +469,7 @@ mod tests {
             cert: "cert".into(),
             signature: "sig".into(),
             server_token: "server".into(),
+            channels: true,
         };
         let json = serde_json::to_string(&msg).unwrap();
         let parsed: ClientMessage = serde_json::from_str(&json).unwrap();
@@ -419,5 +489,22 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         let parsed: ServerMessage = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, parsed);
+    }
+
+    #[test]
+    fn an_auth_from_an_older_client_asks_for_no_lanes() {
+        let m: ClientMessage =
+            serde_json::from_str(r#"{"type":"auth","cert":"c","signature":"s","server_token":""}"#)
+                .unwrap();
+        assert!(matches!(
+            m,
+            ClientMessage::Auth {
+                channels: false,
+                ..
+            }
+        ));
+        let ok: ServerMessage =
+            serde_json::from_str(r#"{"type":"auth_ok","user":"u","server_name":"s"}"#).unwrap();
+        assert!(matches!(ok, ServerMessage::AuthOk { channels, .. } if channels.is_empty()));
     }
 }

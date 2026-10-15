@@ -11,8 +11,8 @@ describe('needs-you signals', () => {
     expect(list.map(w => w.key)).toEqual(['b', 'a']);
   });
   it('words the count and the title', () => {
-    expect(titleFor(2)).toBe('(2) Termanch');
-    expect(titleFor(0)).toBe('Termanch');
+    expect(titleFor(2)).toBe('(2) Termenbox');
+    expect(titleFor(0)).toBe('Termenbox');
     expect(bannerText(1)).toBe('1 needs you');
     expect(bannerText(3)).toBe('3 need you');
   });
@@ -28,7 +28,7 @@ describe('needs-you signals', () => {
     const doc = { title: '' };
     const nav = { setAppBadge: vi.fn(async () => {}), clearAppBadge: vi.fn(async () => {}) };
     announce(2, doc, nav);
-    expect(doc.title).toBe('(2) Termanch');
+    expect(doc.title).toBe('(2) Termenbox');
     expect(nav.setAppBadge).toHaveBeenCalledWith(2);
     announce(0, doc, nav);
     expect(nav.clearAppBadge).toHaveBeenCalled();

@@ -21,8 +21,8 @@ tags: [deployment, performance, limits]
 | Hook RSS | ≤ 20 MB | same |
 | CPU (steady) | ≤ 50% of 1 vCPU | `top -p $PID` |
 | CPU (burst) | ≤ 100% for < 5s | same |
-| Disk (binaries) | ≤ 50 MB total | `du -sh /usr/local/bin/termanch-*` |
-| Disk (data) | ≤ 100 MB (session state) | `du -sh ~/.termanch/` |
+| Disk (binaries) | ≤ 50 MB total | `du -sh /usr/local/bin/termenbox-*` |
+| Disk (data) | ≤ 100 MB (session state) | `du -sh ~/.termenbox/` |
 
 ## Performance Budgets
 - **Connection handshake**: < 100ms (WebTransport 0-RTT), < 300ms (WebSocket)
@@ -40,5 +40,5 @@ tags: [deployment, performance, limits]
 ## Enforcement
 - CI: `cargo bloat --release --time 10` — top 20 functions by size
 - CI: `cargo check --release 2>&1 | grep "warning: unused" | wc -l` — zero unused deps
-- Release: `docker run --memory=512m --cpus=1 termanch-server --bench`
+- Release: `docker run --memory=512m --cpus=1 termenbox-server --bench`
 - Monitoring: Server exports Prometheus metrics (`rss_bytes`, `cpu_seconds_total`)

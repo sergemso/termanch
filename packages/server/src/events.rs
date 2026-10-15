@@ -8,8 +8,9 @@ use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
-use termanch_core::events::{
-    AgentEvent, AgentState, Confidence, EventKind, PlanItem, SessionAgentState, Source,
+use termenbox_core::events::{
+    Activity, AgentEvent, AgentState, Attention, AttentionKind, Confidence, EventKind, PlanItem,
+    SessionActivity, SessionAgentState, Source, Task,
 };
 use tokio::sync::broadcast;
 
@@ -19,6 +20,9 @@ pub const SUMMARY_CHARS: usize = 120;
 pub const PLAN_ITEM_CHARS: usize = 200;
 pub const PLAN_ITEMS: usize = 20;
 pub const STALE_AFTER_MS: u64 = 60_000;
+/// Attention items kept in memory; the oldest go first.
+pub const MAX_ATTENTION: usize = 200;
+pub const TASK_CHARS: usize = 120;
 
 // ---------------------------------------------------------------------------------------------------
 // Sanitiser
@@ -181,6 +185,9 @@ pub fn sanitize_kind(kind: EventKind) -> EventKind {
                 .map(|c| sanitize_text(c, 40))
                 .collect(),
         },
+        EventKind::Task { title } => EventKind::Task {
+            title: sanitize_text(&title, TASK_CHARS),
+        },
         other => other,
     }
 }
@@ -197,6 +204,61 @@ struct Ring {
     last_event_at: u64,
     last_response_at: Option<u64>,
     waiting_since: Option<u64>,
+    /// The latest state and when it was reported, per source tier: hook, screen, scan (decision 0095).
+    by_source: [Option<(AgentState, u64)>; 3],
+    task: Option<Task>,
+}
+
+/// Hook and Codex report facts; screen and scan only suspect. Lower index wins.
+fn tier(source: Source) -> Option<usize> {
+    match source {
+        Source::Hook | Source::Codex => Some(0),
+        Source::Screen => Some(1),
+        Source::Scan => Some(2),
+        Source::Unknown => None,
+    }
+}
+
+fn activity_of(state: AgentState) -> Activity {
+    match state {
+        AgentState::Working => Activity::Working,
+        AgentState::NeedsInput => Activity::Blocked,
+        AgentState::Idle | AgentState::Done | AgentState::Error => Activity::Idle,
+        AgentState::Unknown => Activity::Unknown,
+    }
+}
+
+/// The Activity of the freshest signal of the highest tier that is still live. A `working` signal that has
+/// been quiet for a minute is not live; if no tier is, the Activity is unknown.
+fn derive_activity(r: &Ring, now: u64) -> Activity {
+    for (state, ts) in r.by_source.iter().flatten() {
+        let a = activity_of(*state);
+        if a == Activity::Working && now.saturating_sub(*ts) > STALE_AFTER_MS {
+            continue;
+        }
+        return a;
+    }
+    Activity::Unknown
+}
+
+/// What screen or scan suspect, when a live signal of theirs says the agent waits or failed.
+fn derive_hint(r: &Ring, now: u64) -> Option<AttentionKind> {
+    r.by_source[1..]
+        .iter()
+        .flatten()
+        .filter(|(_, ts)| now.saturating_sub(*ts) <= STALE_AFTER_MS)
+        .find_map(|(state, _)| match state {
+            AgentState::NeedsInput => Some(AttentionKind::NeedsInput),
+            AgentState::Error => Some(AttentionKind::Failed),
+            _ => None,
+        })
+}
+
+/// What a status-channel client is told as it happens.
+#[derive(Clone, Debug)]
+pub enum StatusChange {
+    Activity(SessionActivity),
+    Attention(Vec<Attention>),
 }
 
 /// A session id as events know it: a plain name, or `manager:name` when several managers run.
@@ -221,6 +283,11 @@ pub struct EventHub {
     /// The agent the scan found in each session; only sessions that have events report it.
     agents: Arc<Mutex<HashMap<String, String>>>,
     tx: broadcast::Sender<AgentEvent>,
+    attention: Arc<Mutex<Vec<Attention>>>,
+    next_attention: Arc<std::sync::atomic::AtomicU64>,
+    /// The Activity last announced per session, so only a change is sent.
+    derived: Arc<Mutex<HashMap<String, SessionActivity>>>,
+    status_tx: broadcast::Sender<StatusChange>,
 }
 
 impl EventHub {
@@ -230,6 +297,10 @@ impl EventHub {
             rings: Arc::default(),
             agents: Arc::default(),
             tx: broadcast::channel(256).0,
+            attention: Arc::default(),
+            next_attention: Arc::default(),
+            derived: Arc::default(),
+            status_tx: broadcast::channel(256).0,
         }
     }
 
@@ -252,7 +323,7 @@ impl EventHub {
 
     fn mac(&self, session: &str) -> Hmac<Sha256> {
         let mut m = Hmac::<Sha256>::new_from_slice(&*self.key).expect("any key length");
-        m.update(b"termanch-event-session\0");
+        m.update(b"termenbox-event-session\0");
         m.update(session.as_bytes());
         m
     }
@@ -271,6 +342,10 @@ impl EventHub {
 
     pub fn subscribe(&self) -> broadcast::Receiver<AgentEvent> {
         self.tx.subscribe()
+    }
+
+    pub fn subscribe_status(&self) -> broadcast::Receiver<StatusChange> {
+        self.status_tx.subscribe()
     }
 
     /// An event reported by a session's own tool: accepted only with that session's token.
@@ -292,7 +367,7 @@ impl EventHub {
         Ok(())
     }
 
-    /// An event from the server's own adapters (scan, herdr). A repeated state is not an event.
+    /// An event from the server's own adapters (scan, screen). A repeated state is not an event.
     pub fn report(&self, session: &str, source: Source, confidence: Confidence, kind: EventKind) {
         self.push(session, source, confidence, kind, now_ms());
     }
@@ -327,12 +402,45 @@ impl EventHub {
             last_event_at: now,
             last_response_at: None,
             waiting_since: None,
+            by_source: [None; 3],
+            task: None,
         });
+        // The raw signal of each source is kept whatever the merged state does with it.
+        let mut prev_hook = None;
+        if let EventKind::State { state } = &kind {
+            if let Some(t) = tier(source) {
+                if t == 0 {
+                    prev_hook = ring.by_source[0].map(|(s, _)| s);
+                }
+                ring.by_source[t] = Some((*state, now));
+            }
+        }
+        match &kind {
+            EventKind::Task { title } if tier(source) == Some(0) => {
+                ring.task = Some(Task {
+                    title: title.clone(),
+                    started_at: now,
+                    source,
+                });
+            }
+            EventKind::Plan { items } if tier(source) == Some(0) => {
+                if let Some(item) = items.iter().find(|i| i.status.contains("progress")) {
+                    ring.task = Some(Task {
+                        title: item.text.clone(),
+                        started_at: ring.task.as_ref().map(|t| t.started_at).unwrap_or(now),
+                        source,
+                    });
+                }
+            }
+            _ => {}
+        }
         if let EventKind::State { state } = &kind {
             // The same state again only refreshes the clock; a low-confidence source never overrides a
             // fresher state from a precise one within a minute.
             if *state == ring.state {
                 ring.last_event_at = now;
+                drop(rings);
+                self.settle(session, source, confidence, &kind, prev_hook, now);
                 return;
             }
             if confidence == Confidence::Low && source != Source::Screen {
@@ -345,6 +453,8 @@ impl EventHub {
                     if last.confidence != Confidence::Low
                         && now.saturating_sub(last.ts) < STALE_AFTER_MS
                     {
+                        drop(rings);
+                        self.settle(session, source, confidence, &kind, prev_hook, now);
                         return;
                     }
                 }
@@ -388,7 +498,178 @@ impl EventHub {
         drop(rings);
         // Counts and kinds only, never content (audit-logging-no-secrets).
         tracing::info!(target: "audit", event = "agent_event", session = %event.session, source = ?event.source, seq = event.seq);
+        self.settle(session, source, confidence, &event.kind, prev_hook, now);
         let _ = self.tx.send(event);
+    }
+
+    /// After an event: move the session's Attention items by fact, then announce a changed Activity.
+    /// Only a hook or Codex (a fact, not a guess) raises or clears Attention.
+    fn settle(
+        &self,
+        session: &str,
+        source: Source,
+        confidence: Confidence,
+        kind: &EventKind,
+        prev_hook: Option<AgentState>,
+        now: u64,
+    ) {
+        if tier(source) == Some(0) && confidence != Confidence::Low {
+            match kind {
+                EventKind::State { state } if prev_hook != Some(*state) => {
+                    if *state != AgentState::NeedsInput {
+                        self.clear_where(session, |a| a.kind == AttentionKind::NeedsInput);
+                    }
+                    let raise = match state {
+                        AgentState::NeedsInput => Some(AttentionKind::NeedsInput),
+                        AgentState::Done => Some(AttentionKind::FinishedUnseen),
+                        AgentState::Idle if prev_hook == Some(AgentState::Working) => {
+                            Some(AttentionKind::FinishedUnseen)
+                        }
+                        AgentState::Error => Some(AttentionKind::Failed),
+                        _ => None,
+                    };
+                    if let Some(k) = raise {
+                        self.raise(session, k, source, now);
+                    }
+                }
+                EventKind::Message { summary } => {
+                    // The notification text arrives right after its `needs_input`.
+                    let mut list = self.attention.lock().unwrap();
+                    if let Some(a) = list.iter_mut().find(|a| {
+                        a.session == session
+                            && a.kind == AttentionKind::NeedsInput
+                            && a.prompt.is_none()
+                    }) {
+                        a.prompt = Some(summary.clone());
+                        let snapshot = list.clone();
+                        drop(list);
+                        let _ = self.status_tx.send(StatusChange::Attention(snapshot));
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.refresh(now);
+    }
+
+    fn raise(&self, session: &str, kind: AttentionKind, source: Source, now: u64) {
+        let task = self
+            .rings
+            .lock()
+            .unwrap()
+            .get(session)
+            .and_then(|r| r.task.clone());
+        let mut list = self.attention.lock().unwrap();
+        // One open item per session and kind: a newer one replaces the older.
+        list.retain(|a| !(a.session == session && a.kind == kind));
+        let id = self
+            .next_attention
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            + 1;
+        list.push(Attention {
+            id: format!("a{id}"),
+            session: session.to_string(),
+            kind,
+            raised_at: now,
+            task,
+            prompt: None,
+        });
+        while list.len() > MAX_ATTENTION {
+            list.remove(0);
+        }
+        let snapshot = list.clone();
+        drop(list);
+        // Session, kind and source only (audit-logging-no-secrets).
+        tracing::info!(target: "audit", event = "attention_raised", session = %session, kind = ?kind, source = ?source);
+        let _ = self.status_tx.send(StatusChange::Attention(snapshot));
+    }
+
+    fn clear_where(&self, session: &str, pred: impl Fn(&Attention) -> bool) {
+        let mut list = self.attention.lock().unwrap();
+        let before = list.len();
+        list.retain(|a| !(a.session == session && pred(a)));
+        if list.len() != before {
+            let snapshot = list.clone();
+            drop(list);
+            tracing::info!(target: "audit", event = "attention_cleared", session = %session, by = "fact");
+            let _ = self.status_tx.send(StatusChange::Attention(snapshot));
+        }
+    }
+
+    /// A device shows the item's session in the foreground, or the owner dismisses it. A `needs_input`
+    /// stays until the prompt is really gone. Returns whether an item was cleared.
+    pub fn ack(&self, attention_id: &str) -> bool {
+        let mut list = self.attention.lock().unwrap();
+        let Some(pos) = list
+            .iter()
+            .position(|a| a.id == attention_id && a.kind != AttentionKind::NeedsInput)
+        else {
+            return false;
+        };
+        let gone = list.remove(pos);
+        let snapshot = list.clone();
+        drop(list);
+        tracing::info!(target: "audit", event = "attention_cleared", session = %gone.session, by = "ack");
+        let _ = self.status_tx.send(StatusChange::Attention(snapshot));
+        true
+    }
+
+    pub fn attention_items(&self) -> Vec<Attention> {
+        self.attention.lock().unwrap().clone()
+    }
+
+    /// Recomputes every session's Activity and announces the ones that changed. Called after each event and
+    /// on a timer, so a silent `working` decays to `unknown`.
+    pub fn refresh(&self, now: u64) {
+        let open: Vec<String> = self
+            .attention
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|a| a.session.clone())
+            .collect();
+        let rings = self.rings.lock().unwrap();
+        let agents = self.agents.lock().unwrap();
+        let mut derived = self.derived.lock().unwrap();
+        let mut changed = Vec::new();
+        for (session, r) in rings.iter() {
+            let next = SessionActivity {
+                session: session.clone(),
+                activity: derive_activity(r, now),
+                ts: now,
+                task: r.task.clone(),
+                agent: agents.get(session).cloned(),
+                hint: if open.contains(session) {
+                    None
+                } else {
+                    derive_hint(r, now)
+                },
+            };
+            let same = derived.get(session).is_some_and(|d| {
+                (d.activity, &d.task, &d.agent, d.hint)
+                    == (next.activity, &next.task, &next.agent, next.hint)
+            });
+            if !same {
+                derived.insert(session.clone(), next.clone());
+                changed.push(next);
+            }
+        }
+        drop((derived, agents, rings));
+        for a in changed {
+            let _ = self.status_tx.send(StatusChange::Activity(a));
+        }
+    }
+
+    /// The Activity of every session, for a client that has just connected.
+    pub fn activities(&self) -> Vec<SessionActivity> {
+        self.activities_at(now_ms())
+    }
+
+    pub fn activities_at(&self, now: u64) -> Vec<SessionActivity> {
+        self.refresh(now);
+        let mut out: Vec<_> = self.derived.lock().unwrap().values().cloned().collect();
+        out.sort_by(|a, b| a.session.cmp(&b.session));
+        out
     }
 
     /// Forget a session that no longer exists.
@@ -402,6 +683,18 @@ impl EventHub {
             .lock()
             .unwrap()
             .retain(|k, _| !k.starts_with(prefix) || live.contains(k));
+        self.derived
+            .lock()
+            .unwrap()
+            .retain(|k, _| !k.starts_with(prefix) || live.contains(k));
+        let mut list = self.attention.lock().unwrap();
+        let before = list.len();
+        list.retain(|a| !a.session.starts_with(prefix) || live.contains(&a.session));
+        if list.len() != before {
+            let snapshot = list.clone();
+            drop(list);
+            let _ = self.status_tx.send(StatusChange::Attention(snapshot));
+        }
     }
 
     /// Records which agent the process scan found in `session`.
@@ -512,7 +805,7 @@ pub fn socket_path(state_dir: &Path) -> std::path::PathBuf {
     if preferred.as_os_str().len() <= 100 {
         return preferred;
     }
-    let dir = std::env::temp_dir().join(format!("termanch-{}", unsafe { libc::geteuid() }));
+    let dir = std::env::temp_dir().join(format!("termenbox-{}", unsafe { libc::geteuid() }));
     let _ = std::fs::create_dir_all(&dir);
     {
         use std::os::unix::fs::PermissionsExt;
@@ -531,9 +824,9 @@ pub struct EventEnv {
 impl EventEnv {
     pub fn vars(&self, session: &str) -> Vec<String> {
         vec![
-            format!("TERMANCH_SESSION={session}"),
-            format!("TERMANCH_EVENT_TOKEN={}", self.hub.token(session)),
-            format!("TERMANCH_EVENT_SOCKET={}", self.socket.display()),
+            format!("TERMENBOX_SESSION={session}"),
+            format!("TERMENBOX_EVENT_TOKEN={}", self.hub.token(session)),
+            format!("TERMENBOX_EVENT_SOCKET={}", self.socket.display()),
         ]
     }
 }
@@ -542,7 +835,7 @@ impl EventEnv {
 // Ingest socket
 // ---------------------------------------------------------------------------------------------------
 
-/// One line a tool (via `termanch-server hook`) writes: which session, its token, which adapter, and the
+/// One line a tool (via `termenbox-server hook`) writes: which session, its token, which adapter, and the
 /// tool's own JSON, untouched.
 #[derive(serde::Deserialize)]
 struct Wire {
@@ -589,7 +882,7 @@ pub async fn serve_socket(hub: EventHub, path: std::path::PathBuf) -> Result<()>
 }
 
 // ---------------------------------------------------------------------------------------------------
-// The hook command a tool runs: `termanch-server --hook <adapter>`
+// The hook command a tool runs: `termenbox-server --hook <adapter>`
 // ---------------------------------------------------------------------------------------------------
 
 /// Copies the tool's JSON from stdin to the ingest socket. It never fails and never waits long: whatever
@@ -598,9 +891,9 @@ pub fn run_hook(adapter: &str) {
     let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
     run_hook_with(
         adapter,
-        env("TERMANCH_SESSION"),
-        env("TERMANCH_EVENT_TOKEN"),
-        env("TERMANCH_EVENT_SOCKET"),
+        env("TERMENBOX_SESSION"),
+        env("TERMENBOX_EVENT_TOKEN"),
+        env("TERMENBOX_EVENT_SOCKET"),
     );
 }
 
@@ -644,10 +937,297 @@ mod tests {
         EventKind::State { state: s }
     }
 
+    fn activity(h: &EventHub, session: &str, now: u64) -> Option<SessionActivity> {
+        h.activities_at(now)
+            .into_iter()
+            .find(|a| a.session == session)
+    }
+
+    #[test]
+    fn a_scan_event_cannot_overwrite_a_hooks_needs_input() {
+        let h = hub();
+        h.push(
+            "s",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::NeedsInput),
+            1_000,
+        );
+        h.push(
+            "s",
+            Source::Scan,
+            Confidence::Low,
+            state(AgentState::Working),
+            2_000,
+        );
+        h.push(
+            "s",
+            Source::Screen,
+            Confidence::Low,
+            state(AgentState::Idle),
+            3_000,
+        );
+        let a = activity(&h, "s", 4_000).unwrap();
+        assert_eq!(a.activity, Activity::Blocked);
+        let items = h.attention_items();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].kind, AttentionKind::NeedsInput);
+    }
+
+    #[test]
+    fn scan_and_screen_only_hint_and_never_raise_attention() {
+        let h = hub();
+        h.push(
+            "s",
+            Source::Screen,
+            Confidence::Low,
+            state(AgentState::NeedsInput),
+            1_000,
+        );
+        h.push(
+            "s",
+            Source::Scan,
+            Confidence::Low,
+            state(AgentState::Working),
+            1_500,
+        );
+        h.push(
+            "s",
+            Source::Scan,
+            Confidence::Low,
+            state(AgentState::Idle),
+            2_000,
+        );
+        assert!(h.attention_items().is_empty());
+        let a = activity(&h, "s", 2_500).unwrap();
+        assert_eq!(a.activity, Activity::Blocked);
+        assert_eq!(a.hint, Some(AttentionKind::NeedsInput));
+    }
+
+    #[test]
+    fn silence_decays_working_to_unknown_but_not_idle() {
+        let h = hub();
+        h.push(
+            "w",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::Working),
+            1_000,
+        );
+        h.push(
+            "i",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::Idle),
+            1_000,
+        );
+        assert_eq!(
+            activity(&h, "w", 30_000).unwrap().activity,
+            Activity::Working
+        );
+        assert_eq!(
+            activity(&h, "w", 62_000).unwrap().activity,
+            Activity::Unknown
+        );
+        assert_eq!(activity(&h, "i", 600_000).unwrap().activity, Activity::Idle);
+        // A fresh lower-tier signal takes over from a hook that went quiet.
+        h.push(
+            "w",
+            Source::Scan,
+            Confidence::Low,
+            state(AgentState::Working),
+            61_000,
+        );
+        assert_eq!(
+            activity(&h, "w", 62_000).unwrap().activity,
+            Activity::Working
+        );
+    }
+
+    #[test]
+    fn ack_clears_finished_unseen_but_not_needs_input() {
+        let h = hub();
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::Working),
+            1_000,
+        );
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::Done),
+            2_000,
+        );
+        h.push(
+            "b",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::NeedsInput),
+            2_000,
+        );
+        let items = h.attention_items();
+        assert_eq!(items.len(), 2);
+        let id_of = |k| items.iter().find(|i| i.kind == k).unwrap().id.clone();
+        assert!(!h.ack(&id_of(AttentionKind::NeedsInput)));
+        assert!(h.ack(&id_of(AttentionKind::FinishedUnseen)));
+        let left = h.attention_items();
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].kind, AttentionKind::NeedsInput);
+        assert!(!h.ack("nope"));
+    }
+
+    #[test]
+    fn needs_input_clears_by_fact_and_failures_are_raised() {
+        let h = hub();
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::NeedsInput),
+            1_000,
+        );
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            EventKind::Message {
+                summary: "Claude needs your permission".into(),
+            },
+            1_001,
+        );
+        assert_eq!(
+            h.attention_items()[0].prompt.as_deref(),
+            Some("Claude needs your permission")
+        );
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::Working),
+            2_000,
+        );
+        assert!(h.attention_items().is_empty());
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::Error),
+            3_000,
+        );
+        assert_eq!(h.attention_items()[0].kind, AttentionKind::Failed);
+    }
+
+    #[test]
+    fn a_hooks_needs_input_is_raised_even_when_a_scan_already_said_it() {
+        let h = hub();
+        h.push(
+            "a",
+            Source::Screen,
+            Confidence::Low,
+            state(AgentState::NeedsInput),
+            1_000,
+        );
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::NeedsInput),
+            2_000,
+        );
+        assert_eq!(h.attention_items().len(), 1);
+    }
+
+    #[test]
+    fn the_task_title_is_sanitised_and_keeps_its_start() {
+        let h = hub();
+        h.push(
+            "t",
+            Source::Hook,
+            Confidence::High,
+            EventKind::Task {
+                title: format!(
+                    "fix\u{1b}[31m login {}{} {}",
+                    "ghp_",
+                    "a".repeat(36),
+                    "x".repeat(200)
+                ),
+            },
+            5_000,
+        );
+        let t = activity(&h, "t", 6_000).unwrap().task.unwrap();
+        assert_eq!(t.started_at, 5_000);
+        assert!(!t.title.contains('\u{1b}') && !t.title.contains("ghp_"));
+        assert!(t.title.chars().count() <= TASK_CHARS);
+        h.push(
+            "t",
+            Source::Hook,
+            Confidence::High,
+            EventKind::Plan {
+                items: vec![
+                    PlanItem {
+                        text: "write tests".into(),
+                        status: "completed".into(),
+                    },
+                    PlanItem {
+                        text: "wire the hub".into(),
+                        status: "in_progress".into(),
+                    },
+                ],
+            },
+            7_000,
+        );
+        let t = activity(&h, "t", 8_000).unwrap().task.unwrap();
+        assert_eq!((t.title.as_str(), t.started_at), ("wire the hub", 5_000));
+    }
+
+    #[test]
+    fn status_changes_are_announced_once() {
+        let h = hub();
+        let mut rx = h.subscribe_status();
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::Working),
+            1_000,
+        );
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::Working),
+            1_500,
+        );
+        let mut activities = 0;
+        while let Ok(c) = rx.try_recv() {
+            if matches!(c, StatusChange::Activity(_)) {
+                activities += 1;
+            }
+        }
+        assert_eq!(activities, 1);
+    }
+
+    #[test]
+    fn forgetting_a_session_drops_its_attention() {
+        let h = hub();
+        h.push(
+            "a",
+            Source::Hook,
+            Confidence::High,
+            state(AgentState::NeedsInput),
+            1_000,
+        );
+        h.forget_except("", &[]);
+        assert!(h.attention_items().is_empty() && h.activities().is_empty());
+    }
+
     #[test]
     fn a_long_state_directory_gets_a_socket_path_that_fits() {
-        let short = socket_path(Path::new("/var/lib/termanch"));
-        assert_eq!(short, Path::new("/var/lib/termanch/events.sock"));
+        let short = socket_path(Path::new("/var/lib/termenbox"));
+        assert_eq!(short, Path::new("/var/lib/termenbox/events.sock"));
         let long = socket_path(&Path::new("/tmp").join("x".repeat(120)));
         assert!(
             long.as_os_str().len() <= 100 && long.ends_with("events.sock"),
@@ -657,7 +1237,7 @@ mod tests {
 
     #[test]
     fn event_session_ids_may_carry_a_manager_prefix() {
-        assert!(valid_event_session("work") && valid_event_session("herdr:work"));
+        assert!(valid_event_session("work") && valid_event_session("tmux:work"));
         assert!(
             !valid_event_session("a:b:c")
                 && !valid_event_session(":x")
@@ -676,9 +1256,9 @@ mod tests {
             1,
         );
         h.push(
-            "herdr:b",
-            Source::Herdr,
-            Confidence::High,
+            "cmd:b",
+            Source::Screen,
+            Confidence::Low,
             state(AgentState::Idle),
             1,
         );
@@ -688,7 +1268,7 @@ mod tests {
                 .iter()
                 .map(|s| s.session.as_str())
                 .collect::<Vec<_>>(),
-            ["herdr:b"]
+            ["cmd:b"]
         );
     }
 
@@ -929,7 +1509,7 @@ mod tests {
         );
         let send = |session: &str, token: String| {
             let line = serde_json::json!({"session": session, "token": token, "adapter": "claude",
-                "data": {"hook_event_name": "UserPromptSubmit", "prompt": "secret prompt"}})
+                "data": {"hook_event_name": "UserPromptSubmit", "prompt": "fix the login\nthe second line stays in the hook payload"}})
             .to_string()
                 + "\n";
             let sock = sock.clone();
@@ -945,13 +1525,17 @@ mod tests {
         send("one", h.token("one")).await;
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         let ev = h.since("one", 0);
-        assert_eq!(ev.len(), 1);
+        assert_eq!(ev.len(), 2);
         assert_eq!(ev[0].kind, state(AgentState::Working));
+        assert_eq!(
+            ev[1].kind,
+            EventKind::Task {
+                title: "fix the login".into()
+            }
+        );
         assert!(
-            !serde_json::to_string(&ev)
-                .unwrap()
-                .contains("secret prompt"),
-            "prompt text never leaves the hook payload"
+            !serde_json::to_string(&ev).unwrap().contains("second line"),
+            "only the first prompt line leaves the hook payload"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -966,7 +1550,7 @@ mod tests {
             for n in 0..20 {
                 for e in 0..20u64 {
                     let kind = if e % 2 == 0 {
-                        EventKind::Tool { name: "Bash".into(), summary: "cargo test --workspace -- --nocapture token=abcdefghijklmnopqrstuvwxyz0123456789".into(), phase: termanch_core::events::ToolPhase::Started }
+                        EventKind::Tool { name: "Bash".into(), summary: "cargo test --workspace -- --nocapture token=abcdefghijklmnopqrstuvwxyz0123456789".into(), phase: termenbox_core::events::ToolPhase::Started }
                     } else {
                         EventKind::Message {
                             summary: "working on the next step of the plan".into(),
