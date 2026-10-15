@@ -4,10 +4,17 @@ import { openTransport, Unreachable, type Openers, type Target, type Transport }
 import { openWs } from './ws';
 import type { Credentials } from './device';
 
-export type ConnState = 'connecting' | 'connected' | 'reconnecting' | 'unreachable' | 'closed';
+/** `checking`: still connected on paper, but the server has not answered for a few seconds (input may be lost). */
+export type ConnState = 'connecting' | 'connected' | 'checking' | 'reconnecting' | 'unreachable' | 'closed';
 
 const BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 30000];
 const PING_EVERY_MS = 5000;
+/** A hidden tab keeps pinging, slowly: a link that carries nothing for a minute or two is cut by NATs, tunnels and proxies. */
+const HIDDEN_PING_EVERY_MS = 20000;
+/** Coming back to the tab, a link that died while hidden is found out in seconds, not after the full window. */
+const WAKE_PONG_WITHIN_MS = 3000;
+/** This long without a reply to a ping, the UI is told the link is being checked. */
+const STALE_AFTER_MS = 2500;
 /** One late reply on a mobile link is normal; this long without any message means the connection is half-open. */
 const PONG_WITHIN_MS = 12000;
 
@@ -60,6 +67,10 @@ export class Connection {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private pongTimer: ReturnType<typeof setTimeout> | null = null;
+  private staleTimer: ReturnType<typeof setTimeout> | null = null;
+  private checking = false;
+  private retryAttempt = 0;
+  private retryAt = 0;
   private listeners = new Set<(msg: ServerMessage) => void>();
   private authed = false;
   /** The server put terminal bytes on their own lane for this connection (`auth_ok.channels`). */
@@ -83,6 +94,18 @@ export class Connection {
   /** Which transport is carrying the session, for a connection-quality indicator. */
   get kind(): 'rtc' | 'ws' | null {
     return this.transport?.kind ?? null;
+  }
+
+  /** While reconnecting: which attempt is next or running, and how long until it starts (null: running now). */
+  get retry(): { attempt: number; inMs: number | null } | null {
+    if (!this.retryAttempt) return null;
+    return { attempt: this.retryAttempt, inMs: this.retryAt ? Math.max(0, this.retryAt - Date.now()) : null };
+  }
+
+  /** The user's "retry now": skips the backoff wait. Nothing happens while connected or already connecting. */
+  retryNow() {
+    if (this.stopped || this.opening || (this.transport && this.authed)) return;
+    this.reconnectNow();
   }
 
   subscribe(fn: (msg: ServerMessage) => void): () => void {
@@ -114,16 +137,11 @@ export class Connection {
 
   private wake = () => {
     if (this.stopped) return;
-    if (document.visibilityState === 'hidden') {
-      if (this.pingTimer) clearInterval(this.pingTimer);
-      if (this.pongTimer) clearTimeout(this.pongTimer);
-      this.pingTimer = this.pongTimer = null;
-      return;
-    }
+    const hidden = document.visibilityState === 'hidden';
     if (this.transport && this.authed) {
-      this.startHeartbeat();
-      this.ping(); // the heartbeat will drop it if it went stale while hidden
-    } else if (!this.opening) {
+      this.restartHeartbeat(); // the cadence depends on whether the tab is in view
+      if (!hidden) this.ping(WAKE_PONG_WITHIN_MS); // a link that died while hidden shows itself within seconds
+    } else if (!hidden && !this.opening) {
       this.reconnectNow();
     }
   };
@@ -132,18 +150,24 @@ export class Connection {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.attempt = 0;
+    this.retryAttempt = 0;
+    this.retryAt = 0;
     void this.open();
   }
 
   private scheduleRetry() {
     if (this.stopped) return;
-    this.timer = setTimeout(() => void this.open(), backoffDelay(this.attempt++));
+    const delay = backoffDelay(this.attempt++);
+    this.retryAttempt = this.attempt;
+    this.retryAt = Date.now() + delay;
+    this.timer = setTimeout(() => void this.open(), delay);
   }
 
   private async open() {
     if (this.stopped || this.opening) return;
     this.opening = true;
     this.clearTimers();
+    this.retryAt = 0; // an attempt is running now
     this.authed = false;
     this.lanes = false;
     this.opts.onState(this.everReady ? 'reconnecting' : 'connecting');
@@ -199,6 +223,9 @@ export class Connection {
       this.lanes = !!transport.lanes && !!msg.channels?.includes('term');
       this.everReady = true;
       this.attempt = 0;
+      this.retryAttempt = 0;
+      this.retryAt = 0;
+      this.checking = false;
       this.readyAt = performance.now();
       this.startHeartbeat();
       this.opts.onState('connected');
@@ -240,27 +267,44 @@ export class Connection {
   }
 
   private startHeartbeat() {
-    if (this.pingTimer || document.visibilityState === 'hidden') return;
-    this.pingTimer = setInterval(() => this.ping(), PING_EVERY_MS);
+    if (this.pingTimer) return;
+    const every = document.visibilityState === 'hidden' ? HIDDEN_PING_EVERY_MS : PING_EVERY_MS;
+    this.pingTimer = setInterval(() => this.ping(), every);
   }
 
-  private ping() {
-    if (this.stopped || document.visibilityState === 'hidden' || !this.authed) return;
+  private restartHeartbeat() {
+    if (this.pingTimer) clearInterval(this.pingTimer);
+    this.pingTimer = null;
+    this.startHeartbeat();
+  }
+
+  private ping(within = PONG_WITHIN_MS) {
+    if (this.stopped || !this.authed) return;
     this.pingSentAt = performance.now();
     this.send({ type: 'ping' });
-    this.armPongTimeout();
+    this.armPongTimeout(within);
   }
 
-  private armPongTimeout() {
-    if (this.pongTimer) return;
+  private armPongTimeout(within: number) {
+    if (this.pongTimer) {
+      if (within >= PONG_WITHIN_MS) return; // one deadline at a time...
+      clearTimeout(this.pongTimer); // ...unless a foregrounding wants a sooner one
+    }
     // Any message counts as proof of life (see heard()); silence means a half-open connection.
     this.pongTimer = setTimeout(() => {
       this.pongTimer = null;
-      this.dropped(`no reply for ${PONG_WITHIN_MS / 1000} s`);
+      this.dropped(`no reply for ${within / 1000} s`);
       this.transport?.close();
       // close() on our own transport does not notify; treat it as a drop.
       this.transport?.onclose?.();
-    }, PONG_WITHIN_MS);
+    }, within);
+    if (this.staleTimer) clearTimeout(this.staleTimer);
+    this.staleTimer = setTimeout(() => {
+      this.staleTimer = null;
+      if (!this.authed || this.checking) return;
+      this.checking = true;
+      this.opts.onState('checking', 'The server has not answered for a few seconds');
+    }, Math.min(STALE_AFTER_MS, within - 500));
   }
 
   private dropped(reason: string) {
@@ -272,13 +316,20 @@ export class Connection {
 
   private heard() {
     if (this.pongTimer) clearTimeout(this.pongTimer);
-    this.pongTimer = null;
+    if (this.staleTimer) clearTimeout(this.staleTimer);
+    this.pongTimer = this.staleTimer = null;
+    if (this.checking) {
+      this.checking = false;
+      this.opts.onState('connected'); // it was only slow
+    }
   }
 
   private clearTimers() {
     if (this.timer) clearTimeout(this.timer);
     if (this.pingTimer) clearInterval(this.pingTimer);
     if (this.pongTimer) clearTimeout(this.pongTimer);
-    this.timer = this.pingTimer = this.pongTimer = null;
+    if (this.staleTimer) clearTimeout(this.staleTimer);
+    this.timer = this.pingTimer = this.pongTimer = this.staleTimer = null;
+    this.checking = false;
   }
 }

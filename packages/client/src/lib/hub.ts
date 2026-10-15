@@ -5,7 +5,7 @@ import type { ClientMessage, ServerListItem, ServerMessage, SessionInfo } from '
 import type { Target } from './transport';
 import { applyWindowList, forgetWindows, type WindowMap } from './windows';
 
-export type HubConnection = Pick<Connection, 'start' | 'close' | 'subscribe' | 'send'> & Partial<Pick<Connection, 'kind' | 'rtt' | 'drops'>>;
+export type HubConnection = Pick<Connection, 'start' | 'close' | 'subscribe' | 'send'> & Partial<Pick<Connection, 'kind' | 'rtt' | 'drops' | 'retry' | 'retryNow'>>;
 export type ServerState = ConnState | 'paused';
 export interface HubServer {
   id: string;

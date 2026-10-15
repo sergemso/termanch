@@ -119,7 +119,17 @@
   const batch = new InputBatcher((data) => {
     if (activeSessionId) connection.send({ type: 'input', data: textToB64(data) });
   });
+  /** Not connected (or the server is not answering): keys are not queued, so the user is told instead of typing into the void. */
+  $: offline = connState !== 'connected';
+  let inputRefused = false;
+  let refusedTimer: ReturnType<typeof setTimeout> | undefined;
+  function refuseInput() {
+    inputRefused = true;
+    clearTimeout(refusedTimer);
+    refusedTimer = setTimeout(() => (inputRefused = false), 1500);
+  }
   function sendInput(data: string) {
+    if (offline) return refuseInput();
     batch.add(data);
   }
 
@@ -338,6 +348,23 @@
     sendResize(term.cols, term.rows);
   }
 
+  // The countdown to the next attempt ticks once a second, and only while there is something to count.
+  let now = Date.now();
+  let tick: ReturnType<typeof setInterval> | undefined;
+  $: if (connState === 'reconnecting' || connState === 'unreachable') tick ??= setInterval(() => (now = Date.now()), 1000);
+  else if (tick) (clearInterval(tick), (tick = undefined));
+  function connMessage(state: ServerState, at: number): { title: string; detail: string } {
+    const retry = connection.retry ?? null;
+    if (state === 'checking') return { title: 'No answer from the server', detail: 'Checking the connection. Input may not be arriving.' };
+    if (state === 'connecting') return { title: 'Connecting…', detail: 'Input is unavailable until connected.' };
+    if (state === 'closed') return { title: 'Connection closed', detail: 'Input is unavailable. Open Servers to reconnect.' };
+    void at; // re-evaluated every second so the countdown moves
+    let when = 'Reconnecting…';
+    if (retry) when = retry.inMs == null ? `Reconnecting now (attempt ${retry.attempt})…` : `Next attempt in ${Math.max(1, Math.ceil(retry.inMs / 1000))} s (attempt ${retry.attempt})`;
+    return { title: 'Disconnected', detail: `Input is paused. ${when}` };
+  }
+  $: connInfo = offline ? connMessage(connState, now) : null;
+
   $: if (term && $settings) term.options.theme = terminalTheme(document.documentElement.dataset.theme === 'light');
 
   onMount(() => {
@@ -373,6 +400,7 @@
     fitAddon.fit();
 
     cleanups.push(installAudioUnlock());
+    cleanups.push(() => (clearInterval(tick), clearTimeout(refusedTimer)));
     if (term.textarea) {
       cleanups.push(attachInputLogger(term.textarea));
       cleanups.push(attachSwipeSupport(term.textarea, sendInput, words)); // fact 0027
@@ -451,7 +479,7 @@
 
 <div class="wrap">
   {#if debug}<InputLog />{/if}
-  <div class="screenbox">
+  <div class="screenbox" class:offline>
     <div
       class="screen"
       class:previewing
@@ -474,7 +502,13 @@
     {/if}
     {#if selStatus}<div class="selstatus">{selStatus}</div>{/if}
     {#if listening || voiceError}<div class="voicebar" role="status">{voiceError || interim || `Listening (${spoken})…`}</div>{/if}
-    {#if connState !== 'connected'}<div class="connstate" role="status">{connState}</div>{/if}
+    {#if connInfo}
+      <div class="connbar" class:soft={connState === 'checking'} class:refused={inputRefused} role="status" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="msg"><strong>{connInfo.title}</strong> {connInfo.detail}</span>
+        {#if connState !== 'checking' && connState !== 'closed'}<button on:click={() => connection.retryNow?.()}>Retry now</button>{/if}
+      </div>
+    {/if}
   </div>
   <KeyRow bind:mods bind:prefixArmed {profile} prefixLabel={prefixLabel(prefix)} onnewline={() => sendKey(newline.seq)} newlineHint={newline.hint} onkey={sendKey} {fnOpen}
     onfn={() => keyboard.toggleFn()} onkeyboard={() => keyboard.toggleSystem()} voiceSupported={!!voice} {listening} onvoice={toggleVoice} {voiceLang} onvoicelang={cycleVoiceLang} onfont={(d) => setFont(fontSize + d)} />
@@ -529,16 +563,69 @@
     border: 1px solid var(--accent);
     pointer-events: none;
   }
-  .connstate {
+  .connbar {
     position: absolute;
-    bottom: 6px;
+    left: 6px;
     right: 6px;
+    bottom: 6px;
     z-index: 5;
-    padding: 2px 8px;
-    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--danger);
     background: var(--bg-secondary);
-    color: var(--danger);
-    font-size: 0.75rem;
+    color: var(--text-primary, inherit);
+    font-size: 0.8rem;
+  }
+  .connbar.soft {
+    border-color: var(--warning, var(--danger));
+  }
+  .connbar.refused {
+    animation: refused 0.3s;
+  }
+  .connbar .dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  .connbar.soft .dot {
+    background: var(--warning, var(--danger));
+  }
+  .connbar .msg {
+    flex: 1;
+    min-width: 0;
+  }
+  .connbar button {
+    flex: none;
+    padding: 2px 10px;
+    font-size: 0.8rem;
+  }
+  .screenbox.offline .screen {
+    opacity: 0.55;
+  }
+  @keyframes pulse {
+    50% {
+      opacity: 0.3;
+    }
+  }
+  @keyframes refused {
+    25% {
+      transform: translateX(-4px);
+    }
+    75% {
+      transform: translateX(4px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .connbar .dot,
+    .connbar.refused {
+      animation: none;
+    }
   }
   .selstatus {
     position: absolute;
