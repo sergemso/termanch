@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
-use termanch_core::protocol::ServerMessage;
+use termenbox_core::protocol::ServerMessage;
 use tokio::sync::{mpsc, Notify};
 
 /// First byte of a binary WebSocket frame that carries terminal bytes.

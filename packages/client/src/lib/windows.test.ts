@@ -21,7 +21,7 @@ describe('window state', () => {
 
 describe('short paths', () => {
   it('shows the last two segments, and ~ for a home directory', () => {
-    expect(shortPath('/home/u/projects/termanch')).toBe('~/projects/termanch');
+    expect(shortPath('/home/u/projects/termenbox')).toBe('~/projects/termenbox');
     expect(shortPath('/home/u/a/b/c')).toBe('…/b/c');
     expect(shortPath('/home/u')).toBe('~');
     expect(shortPath('/root')).toBe('~');

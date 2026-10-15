@@ -4,7 +4,7 @@ use anyhow::Result;
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use tracing::{debug, info};
 
-use termanch_core::protocol::{ClientMessage, ServerMessage};
+use termenbox_core::protocol::{ClientMessage, ServerMessage};
 
 use std::sync::Arc;
 
@@ -539,8 +539,8 @@ async fn next_output(attachment: &mut Option<Attachment>) -> Option<Vec<u8>> {
 /// The next agent events (up to 20 at once); `None` when this connection fell behind; pends forever
 /// when events are off.
 async fn next_events(
-    rx: &mut Option<tokio::sync::broadcast::Receiver<termanch_core::events::AgentEvent>>,
-) -> Option<Vec<termanch_core::events::AgentEvent>> {
+    rx: &mut Option<tokio::sync::broadcast::Receiver<termenbox_core::events::AgentEvent>>,
+) -> Option<Vec<termenbox_core::events::AgentEvent>> {
     use tokio::sync::broadcast::error::{RecvError, TryRecvError};
     let Some(rx) = rx else {
         return std::future::pending().await;
@@ -686,7 +686,7 @@ pub async fn answer(
     seq: u64,
     choice: u8,
 ) -> Result<()> {
-    use termanch_core::events::{Confidence, EventKind};
+    use termenbox_core::events::{Confidence, EventKind};
     let current = hub
         .current_prompt(session)
         .ok_or_else(|| anyhow::anyhow!(PROMPT_CHANGED))?;
@@ -717,7 +717,7 @@ mod answer_tests {
     use super::*;
     use crate::agentwatch::hex8;
     use std::sync::Mutex;
-    use termanch_core::events::{AgentState, Confidence, EventKind, Source};
+    use termenbox_core::events::{AgentState, Confidence, EventKind, Source};
 
     struct Fake {
         screen: Mutex<String>,
@@ -728,7 +728,7 @@ mod answer_tests {
         fn name(&self) -> &str {
             "fake"
         }
-        async fn list(&self) -> Result<Vec<termanch_core::protocol::SessionInfo>> {
+        async fn list(&self) -> Result<Vec<termenbox_core::protocol::SessionInfo>> {
             Ok(vec![])
         }
         async fn create(&self, _: &str) -> Result<()> {
@@ -855,7 +855,7 @@ mod peek_tests {
         fn name(&self) -> &str {
             "fake"
         }
-        async fn list(&self) -> Result<Vec<termanch_core::protocol::SessionInfo>> {
+        async fn list(&self) -> Result<Vec<termenbox_core::protocol::SessionInfo>> {
             Ok(vec![])
         }
         async fn create(&self, _: &str) -> Result<()> {

@@ -13,7 +13,7 @@ export function tabLabel(session: HubSession, agent: SessionAgent | undefined, s
   return [session.name, ...(serverCount > 1 ? [session.serverName] : []), agent ? chipFor(agent, now).label : 'No status'].join(' · ');
 }
 
-const HIDDEN_KEY = 'termanch_hidden_tabs';
+const HIDDEN_KEY = 'termenbox_hidden_tabs';
 const store = () => typeof localStorage === 'undefined' ? undefined : localStorage;
 /** Sessions the user detached on this device: their tab is closed while the session keeps running. */
 export function loadHidden(storage: Pick<Storage, 'getItem'> | undefined = store()): Set<string> {

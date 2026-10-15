@@ -18,4 +18,4 @@ tags: [deployment, security, client]
 
 ## Why
 
-Agents work where the owner's repositories, credentials and tools already are. The dedicated `termanch` user needs those copied or shared, which is the main adoption friction of host mode; running as the owner removes it at a cost the owner must see before agreeing.
+Agents work where the owner's repositories, credentials and tools already are. The dedicated `termenbox` user needs those copied or shared, which is the main adoption friction of host mode; running as the owner removes it at a cost the owner must see before agreeing.

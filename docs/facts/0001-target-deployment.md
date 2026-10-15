@@ -8,7 +8,7 @@ date: 2026-10-09
 
 # Target Deployment Environment
 
-The primary target deployment for `termanch-server` is a Linux VPS with:
+The primary target deployment for `termenbox-server` is a Linux VPS with:
 - Docker (Compose) for the server and agent, with a cloudflared sidecar
 - 512 MB RAM minimum
 - 1 vCPU minimum

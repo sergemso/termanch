@@ -8,7 +8,7 @@
   let debug = debugEnabled(location.search, localStorage.getItem(DEBUG_KEY));
   let box: Box = viewportBox(null, window);
   let overlay = '';
-  const savedKb = Number(localStorage.getItem('termanch_kb_height'));
+  const savedKb = Number(localStorage.getItem('termenbox_kb_height'));
   if (savedKb) document.documentElement.style.setProperty('--kb-height', `${savedKb}px`);
 
   function measure() {
@@ -20,7 +20,7 @@
       const kb = Math.round(Math.min(340, Math.max(240, window.innerHeight - box.height - box.top)));
       document.documentElement.style.setProperty('--kb-height', `${kb}px`);
       try {
-        localStorage.setItem('termanch_kb_height', String(kb));
+        localStorage.setItem('termenbox_kb_height', String(kb));
       } catch {
         /* private mode */
       }
@@ -34,7 +34,7 @@
       debug = debugEnabled(location.search, localStorage.getItem(DEBUG_KEY));
       measure();
     };
-    window.addEventListener('termanch-debug', toggle);
+    window.addEventListener('termenbox-debug', toggle);
     measure();
     // iOS fires `scroll` (not `resize`) when it pans the visual viewport to show the focused field.
     vv?.addEventListener('resize', measure);
@@ -42,7 +42,7 @@
     window.addEventListener('resize', measure);
     window.addEventListener('orientationchange', measure);
     return () => {
-      window.removeEventListener('termanch-debug', toggle);
+      window.removeEventListener('termenbox-debug', toggle);
       vv?.removeEventListener('resize', measure);
       vv?.removeEventListener('scroll', measure);
       window.removeEventListener('resize', measure);

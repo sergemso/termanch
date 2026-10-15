@@ -49,7 +49,7 @@ pub struct Updater<'a> {
     pub service: &'a dyn Service,
     pub keys: &'a ReleaseKeys,
     pub binary: PathBuf,
-    /// The root-only directory with the journal (`/var/lib/termanch-root`).
+    /// The root-only directory with the journal (`/var/lib/termenbox-root`).
     pub root_dir: PathBuf,
     /// Where releases are published; assets are fetched from here, only the hash comes from the manifest.
     pub release_url: String,
@@ -92,7 +92,7 @@ impl Updater<'_> {
         let expected = manifest.binary(&self.arch)?.sha256.to_ascii_lowercase();
         let bytes = self
             .fetch
-            .get(&format!("{base}/termanch-server-{}-linux", self.arch))
+            .get(&format!("{base}/termenbox-server-{}-linux", self.arch))
             .await?;
         if hex(&Sha256::digest(&bytes)) != expected {
             bail!("the downloaded server does not match the signed hash; nothing was changed");
@@ -111,7 +111,7 @@ impl Updater<'_> {
         std::fs::create_dir_all(&backups)?;
         // Named by version and content, so a retried update never overwrites the backup of an earlier binary.
         let backup = backups.join(format!(
-            "termanch-server.{}.{}",
+            "termenbox-server.{}.{}",
             core_version(&self.current),
             &crate::journal::hash_file(&self.binary)?[..12]
         ));
@@ -278,7 +278,7 @@ mod tests {
         }
     }
 
-    const BASE: &str = "https://github.com/sergemso/termanch/releases/download/v9.9.9";
+    const BASE: &str = "https://github.com/termenbox/termenbox/releases/download/v9.9.9";
 
     struct World {
         dir: PathBuf,
@@ -289,10 +289,10 @@ mod tests {
 
     /// A signed release 9.9.9 whose x86_64 binary is `new_binary`, signed with the real ssh-keygen. None without it.
     fn world(version: &str, freeze: bool, new_binary: &[u8]) -> Option<World> {
-        let dir = std::env::temp_dir().join(format!("termanch-updater-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("termenbox-updater-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).ok()?;
         let manifest = format!(
-            r#"{{"version":"{version}","freeze":{freeze},"notes":"","binaries":{{"x86_64":{{"url":"{BASE}/termanch-server-x86_64-linux","sha256":"{}"}}}}}}"#,
+            r#"{{"version":"{version}","freeze":{freeze},"notes":"","binaries":{{"x86_64":{{"url":"{BASE}/termenbox-server-x86_64-linux","sha256":"{}"}}}}}}"#,
             hex(&Sha256::digest(new_binary))
         );
         let key = dir.join("key");
@@ -307,7 +307,7 @@ mod tests {
         }
         std::fs::write(dir.join("manifest.json"), &manifest).ok()?;
         if !Command::new("ssh-keygen")
-            .args(["-Y", "sign", "-n", "termanch-release", "-f"])
+            .args(["-Y", "sign", "-n", "termenbox-release", "-f"])
             .arg(&key)
             .arg(dir.join("manifest.json"))
             .output()
@@ -337,10 +337,10 @@ mod tests {
             std::fs::read(dir.join("manifest.json.sig")).ok()?,
         );
         files.insert(
-            "https://rel/termanch-server-x86_64-linux".to_string(),
+            "https://rel/termenbox-server-x86_64-linux".to_string(),
             new_binary.to_vec(),
         );
-        let binary = dir.join("termanch-server");
+        let binary = dir.join("termenbox-server");
         std::fs::write(&binary, b"old binary").ok()?;
         Some(World {
             dir,
@@ -398,10 +398,10 @@ mod tests {
         );
         assert_eq!(std::fs::read(&w.binary).unwrap(), b"new binary");
         assert_eq!(
-            std::fs::read(w.dir.join("termanch-server.prev")).unwrap(),
+            std::fs::read(w.dir.join("termenbox-server.prev")).unwrap(),
             b"old binary"
         );
-        assert!(!w.dir.join("termanch-server.new").exists());
+        assert!(!w.dir.join("termenbox-server.new").exists());
         assert_eq!(*s.restarts.lock().unwrap(), 1);
         let journal = Journal::open(&w.dir.join("root")).unwrap();
         let pending = journal.pending().unwrap();
@@ -543,7 +543,7 @@ mod tests {
         // a binary that is not what the manifest says
         let mut swapped = fake(&w);
         swapped.files.insert(
-            "https://rel/termanch-server-x86_64-linux".into(),
+            "https://rel/termenbox-server-x86_64-linux".into(),
             b"evil".to_vec(),
         );
         assert!(updater(&w, &swapped, &s, "0.1.0")
@@ -563,7 +563,7 @@ mod tests {
             .contains("does not run"));
         assert_eq!(std::fs::read(&w.binary).unwrap(), b"old binary");
         assert!(
-            !w.dir.join("termanch-server.new").exists(),
+            !w.dir.join("termenbox-server.new").exists(),
             "no half-installed file is left"
         );
         assert_eq!(

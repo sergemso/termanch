@@ -22,7 +22,7 @@ Use **ChaCha20-Poly1305 (RFC 8439)** with 256-bit keys, 96-bit nonces, 128-bit t
 
 ## Key Derivation
 - ECDH: X25519 (Curve25519) for key exchange
-- HKDF-SHA256: `HKDF(salt=session_id, ikm=shared_secret, info="termanch-v1")`
+- HKDF-SHA256: `HKDF(salt=session_id, ikm=shared_secret, info="termenbox-v1")`
 - Output: 32-byte encryption key (split: 32B for ChaCha20, or use XChaCha20 if available)
 
 ## Rekey Policy
@@ -45,7 +45,7 @@ Use **ChaCha20-Poly1305 (RFC 8439)** with 256-bit keys, 96-bit nonces, 128-bit t
 - **XChaCha20-Poly1305**: Preferred if using `chacha20poly1305` crate's `XChaCha20Poly1305` (192-bit nonce) — eliminates nonce reuse risk at high volume
 
 ## Consequences
-- `termanch-core` uses `chacha20poly1305` crate with `aead` trait
+- `termenbox-core` uses `chacha20poly1305` crate with `aead` trait
 - Client WASM uses same crate compiled to WASM (or Web Crypto API polyfill)
 - Nonce construction: `nonce = frame_counter (8 bytes) || random_salt (4 bytes)`
 - Frame counter increments per encrypted frame; wraps at 2^64 (effectively never)

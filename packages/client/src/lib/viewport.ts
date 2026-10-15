@@ -59,7 +59,7 @@ export function debugText(vv: (ViewportSource & Partial<ViewportReading>) | null
   ].join('\n');
 }
 
-export const DEBUG_KEY = 'termanch_debug';
+export const DEBUG_KEY = 'termenbox_debug';
 
 /** `?debug` in the address, or the switch saved by tapping the title five times (an installed PWA has no address bar). */
 export function debugEnabled(search: string, stored: string | null): boolean {

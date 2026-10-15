@@ -329,7 +329,7 @@ mod tests {
     use super::*;
 
     fn temp_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("termanch-test-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("termenbox-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
@@ -463,7 +463,7 @@ mod tests {
 
     #[test]
     fn the_qr_encodes_the_link_and_fits_a_terminal() {
-        let link = claim_link("https://app.termanch.dev", &"A".repeat(43));
+        let link = claim_link("https://app.termenbox.dev", &"A".repeat(43));
         let qr = claim_qr(&link).unwrap();
         let widest = qr.lines().map(|l| l.chars().count()).max().unwrap();
         assert!(widest <= 60, "QR is {widest} columns wide");

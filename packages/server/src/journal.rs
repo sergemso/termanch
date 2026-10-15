@@ -487,7 +487,7 @@ mod tests {
     use super::*;
 
     fn temp() -> PathBuf {
-        let d = std::env::temp_dir().join(format!("termanch-journal-{}", uuid::Uuid::new_v4()));
+        let d = std::env::temp_dir().join(format!("termenbox-journal-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&d).unwrap();
         d
     }
@@ -558,8 +558,8 @@ mod tests {
         })
         .unwrap();
         j.record(Change::UserCreated {
-            name: "termanch".into(),
-            home: "/home/termanch".into(),
+            name: "termenbox".into(),
+            home: "/home/termenbox".into(),
         })
         .unwrap();
         j.record(Change::FileCreated {
@@ -574,8 +574,8 @@ mod tests {
         })
         .unwrap();
         j.record(Change::UnitInstalled {
-            name: "termanch.service".into(),
-            path: "/etc/systemd/system/termanch.service".into(),
+            name: "termenbox.service".into(),
+            path: "/etc/systemd/system/termenbox.service".into(),
         })
         .unwrap();
         j.record(Change::FirewallRuleAdded {
@@ -594,7 +594,7 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&replaced).unwrap(), "original");
         assert!(
             ops.calls
-                .contains(&"userdel termanch home=false".to_string()),
+                .contains(&"userdel termenbox home=false".to_string()),
             "the home directory is kept by default"
         );
     }
@@ -649,7 +649,7 @@ mod tests {
         })
         .unwrap();
         j.record(Change::UserCreated {
-            name: "termanch".into(),
+            name: "termenbox".into(),
             home: "/h".into(),
         })
         .unwrap();
@@ -678,7 +678,7 @@ mod tests {
         })
         .unwrap();
         j.record(Change::UserCreated {
-            name: "termanch".into(),
+            name: "termenbox".into(),
             home: "/h".into(),
         })
         .unwrap();
@@ -694,7 +694,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(report.reverted, vec![2]);
-        assert_eq!(ops.calls, vec!["userdel termanch home=true"]);
+        assert_eq!(ops.calls, vec!["userdel termenbox home=true"]);
         assert_eq!(j.pending().unwrap().len(), 1);
     }
 
@@ -707,7 +707,7 @@ mod tests {
         })
         .unwrap();
         j.record(Change::UserCreated {
-            name: "termanch".into(),
+            name: "termenbox".into(),
             home: "/h".into(),
         })
         .unwrap();

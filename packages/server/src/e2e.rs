@@ -88,7 +88,7 @@ fn keep_tmux_alive() {
 
 async fn fixture() -> Fixture {
     keep_tmux_alive();
-    let dir = std::env::temp_dir().join(format!("termanch-e2e-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("termenbox-e2e-{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     let signer = Signer::new("k1");
     let server_id = "test-server-id".to_string();
@@ -726,7 +726,7 @@ async fn agent_events_flow_from_a_session_tool_to_the_client(kind: Kind) {
     c.recv_type("sessions").await;
     c.send(json!({"type":"attach","session_id":name})).await;
     c.recv_type("session_attached").await;
-    c.send(json!({"type":"input","data":B64.encode("echo who:$TERMANCH_SESSION; test -S \"$TERMANCH_EVENT_SOCKET\" && echo sock:ok\n")})).await;
+    c.send(json!({"type":"input","data":B64.encode("echo who:$TERMENBOX_SESSION; test -S \"$TERMENBOX_EVENT_SOCKET\" && echo sock:ok\n")})).await;
     assert!(
         c.output_contains(&format!("who:{name}")).await,
         "the session knows its name"

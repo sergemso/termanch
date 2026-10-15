@@ -17,7 +17,7 @@
 | 0013 | Project License | license, legal, mit | active |
 | 0014 | Terminal Emulation Library | terminal, vte, wasm, emulation | deferred |
 | 0015 | User-Managed Cloudflare Tunnel | deployment, networking, cloudflare | active |
-| 0016 | Browser Capabilities Relevant to Termanch | client, browser-support, ios, pwa, crypto | active |
+| 0016 | Browser Capabilities Relevant to Termenbox | client, browser-support, ios, pwa, crypto | active |
 | 0018 | Quick Tunnel, Directory Budget and Cloudflare OAuth Limits | networking, cloudflare, limits, tunnels | active |
 | 0019 | Server Onboarding Options and VPS Provider Capabilities | onboarding, deployment, providers, ux | active |
 | 0020 | Free Relay Service Limits for Terminal Traffic | networking, limits, relay | active |

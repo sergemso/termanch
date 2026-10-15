@@ -1,9 +1,9 @@
-# Termanch v1 Implementation Plan
+# Termenbox v1 Implementation Plan
 
 **Self-sufficient plan for a fresh session with zero prior context.**
 
 ## Overview
-Build Termanch: a web-based terminal for managing remote AI coding agents (Codex, Claude Code, Herdr) from mobile browsers, with Mosh-level session persistence. Self-hosted, no native apps, MIT licensed.
+Build Termenbox: a web-based terminal for managing remote AI coding agents (Codex, Claude Code, Herdr) from mobile browsers, with Mosh-level session persistence. Self-hosted, no native apps, MIT licensed.
 
 **Target**: Linux VPS (512MB RAM, 1 vCPU), iOS Safari 16+, Chrome Android 100+
 **Architecture**: Monorepo (Cargo workspace + pnpm workspace)
@@ -28,7 +28,7 @@ Done-when: `cargo check --workspace` and `pnpm install` succeed; CI passes on em
 
 ### 1.2 Core Protocol Types (Shared) — [ ]
 Issue: #2
-Class: implement · Needs: 1.1 · Check: `cargo check -p termanch-core && ls packages/core/src/protocol.rs`
+Class: implement · Needs: 1.1 · Check: `cargo check -p termenbox-core && ls packages/core/src/protocol.rs`
 Context: Define wire protocol types per DECISION-0004, FACT-0006. Single source of truth for Rust + TS.
 Do:
 1. `packages/core/Cargo.toml`: deps `serde`, `postcard`, `thiserror`, `bytes`
@@ -36,13 +36,13 @@ Do:
 3. Implement `Encode`/`Decode` using `postcard` (varint + length-prefixed)
 4. `build.rs`: Generate TS types via `wasm-bindgen` + custom codegen to `packages/client/src/protocol/`
 5. Unit tests: round-trip encode/decode for each message type
-Done-when: `cargo test -p termanch-core` passes; TS types importable in client.
+Done-when: `cargo test -p termenbox-core` passes; TS types importable in client.
 
 ---
 
-### 2.1 termanch-core: WASM Terminal Engine — [ ]
+### 2.1 termenbox-core: WASM Terminal Engine — [ ]
 Issue: #3
-Class: implement · Needs: 1.2 · Check: `wasm-pack build --target web --out-dir pkg && ls pkg/termanch_core_bg.wasm`
+Class: implement · Needs: 1.2 · Check: `wasm-pack build --target web --out-dir pkg && ls pkg/termenbox_core_bg.wasm`
 Context: WASM core per FACT-0014 (vte), FACT-0005 (Rope/CRDT), DECISION-0003, DECISION-0009 (ChaCha20).
 Do:
 1. `packages/core/Cargo.toml`: add `vte`, `ropey`, `chacha20poly1305`, `x25519-dalek`, `hkdf`, `rand`, `wasm-bindgen`, `web-sys`, `js-sys`, `console_error_panic_hook`
@@ -65,12 +65,12 @@ Done-when: WASM builds; `wasm-pack test --headless --firefox` passes; bundle siz
 
 ---
 
-### 2.2 termanch-server: WebTransport/WebSocket Server — [ ]
+### 2.2 termenbox-server: WebTransport/WebSocket Server — [ ]
 Issue: #4
-Class: implement · Needs: 1.1, 1.2 · Check: `cargo build --release -p termanch-server && ./target/release/termanch-server --help`
+Class: implement · Needs: 1.1, 1.2 · Check: `cargo build --release -p termenbox-server && ./target/release/termenbox-server --help`
 Context: Server per FACT-0001, DECISION-0001, DECISION-0004, DECISION-0008, GUARDRAIL-resource-constraints.
 Do:
-1. `packages/server/Cargo.toml`: deps `tokio`, `quinn`, `tokio-tungstenite`, `http`, `h3`, `rustls`, `pem`, `termanch-core` (protocol types only), `tracing`, `clap`
+1. `packages/server/Cargo.toml`: deps `tokio`, `quinn`, `tokio-tungstenite`, `http`, `h3`, `rustls`, `pem`, `termenbox-core` (protocol types only), `tracing`, `clap`
 2. `packages/server/src/main.rs`: CLI args (config path, log level, paranoid mode)
 3. `packages/server/src/config.rs`: Config struct (listen addr, TLS cert/key, session limits, rate limits)
 4. `packages/server/src/transport.rs`: Transport abstraction:
@@ -85,34 +85,34 @@ Do:
    - `verify_ssh_signature(challenge, signature, fingerprint) -> bool`
 7. `packages/server/src/pty.rs`: PTY management (spawn shell, resize, read/write)
 8. `packages/server/src/metrics.rs`: Prometheus exporter on `127.0.0.1:9090` (GUARDRAIL-internal-network-binding)
-7. systemd unit: `termanch-server.service` with `CAP_NET_BIND_SERVICE`, `AmbientCapabilities`, `MemoryLimit=300M`
+7. systemd unit: `termenbox-server.service` with `CAP_NET_BIND_SERVICE`, `AmbientCapabilities`, `MemoryLimit=300M`
 Done-when: Server starts, accepts WebTransport + WebSocket, completes handshake, spawns PTY, serves metrics on 127.0.0.1:9090.
 
 ---
 
-### 2.3 termanch-agent: PTY Owner + Event Bus — [ ]
+### 2.3 termenbox-agent: PTY Owner + Event Bus — [ ]
 Issue: #5
-Class: implement · Needs: 2.2 · Check: `cargo build --release -p termanch-agent && ./target/release/termanch-agent --help`
+Class: implement · Needs: 2.2 · Check: `cargo build --release -p termenbox-agent && ./target/release/termenbox-agent --help`
 Context: Agent per FACT-0009, DECISION-0007. Owns PTY, emits events to Unix socket.
 Do:
-1. `packages/agent/Cargo.toml`: deps `tokio`, `nix`, `termanch-core` (protocol), `tracing`
+1. `packages/agent/Cargo.toml`: deps `tokio`, `nix`, `termenbox-core` (protocol), `tracing`
 2. `packages/agent/src/main.rs`: Daemon entry; single instance per user (lock file)
 3. `packages/agent/src/pty_owner.rs`: Spawns user's `$SHELL` as PTY leader; bridges PTY ↔ server via stdin/stdout
-4. `packages/agent/src/event_socket.rs`: Unix socket listener at `~/.termanch/agent.sock` (chmod 600)
+4. `packages/agent/src/event_socket.rs`: Unix socket listener at `~/.termenbox/agent.sock` (chmod 600)
    - Accepts connections from hook/client; sends `AgentEvent` frames (postcard)
 5. `packages/agent/src/hooks.rs`: Shell hook installer (generates bash/zsh/fish snippets)
 6. `packages/agent/src/detection.rs`: Agent detection via `ps` scan + env var parsing
-7. systemd user unit: `termanch-agent.service` (Type=notify, Restart=on-failure)
+7. systemd user unit: `termenbox-agent.service` (Type=notify, Restart=on-failure)
 Done-when: Agent starts, owns PTY, Unix socket accepts connections, emits `AgentSpawned` on `codex` launch.
 
 ---
 
-### 2.4 termanch-hook: Shell Hook Installer — [ ]
+### 2.4 termenbox-hook: Shell Hook Installer — [ ]
 Issue: #6
-Class: implement · Needs: 2.3 · Check: `cargo build --release -p termanch-hook && ./target/release/termanch-hook install --dry-run`
+Class: implement · Needs: 2.3 · Check: `cargo build --release -p termenbox-hook && ./target/release/termenbox-hook install --dry-run`
 Context: Hook per DECISION-0007. Installs shell config for prompt markers + agent wrappers.
 Do:
-1. `packages/hook/Cargo.toml`: deps `clap`, `dirs`, `shell-words`, `termanch-agent` (hook snippets)
+1. `packages/hook/Cargo.toml`: deps `clap`, `dirs`, `shell-words`, `termenbox-agent` (hook snippets)
 2. `packages/hook/src/main.rs`: CLI: `install [--shell bash|zsh|fish]`, `uninstall`, `status`
 3. `packages/hook/src/snippets.rs`: Embedded shell snippets for:
    - Bash: `PROMPT_COMMAND` + `preexec` (source `bash-preexec.sh`)
@@ -122,13 +122,13 @@ Do:
    - Wrapper functions: `codex() { notify_agent_spawn "codex" $$; command codex "$@"; }`
 4. `packages/hook/src/installer.rs`: Detects shell, backs up rc file, appends snippet, sources
 5. Tests: Dry-run install/uninstall for each shell; verify snippets syntactically correct
-Done-when: `termanch-hook install` modifies `~/.bashrc`/`.zshrc`/`.config/fish/config.fish` correctly; `uninstall` restores backup.
+Done-when: `termenbox-hook install` modifies `~/.bashrc`/`.zshrc`/`.config/fish/config.fish` correctly; `uninstall` restores backup.
 
 ---
 
-### 3.1 termanch-client: Svelte 5 PWA Shell — [ ]
+### 3.1 termenbox-client: Svelte 5 PWA Shell — [ ]
 Issue: #7
-Class: implement · Needs: 1.1, 2.1 · Check: `pnpm --filter termanch-client build && ls packages/client/dist/`
+Class: implement · Needs: 1.1, 2.1 · Check: `pnpm --filter termenbox-client build && ls packages/client/dist/`
 Context: Client per DECISION-0002, FACT-0002, FACT-0010, DECISION-0005 (PWA).
 Do:
 1. `packages/client/package.json`: Svelte 5, Vite, TypeScript, `xterm@5`, `@xterm/addon-webgl@5`, `@xterm/addon-fit@5`, `workbox`, `idb`
@@ -141,7 +141,7 @@ Do:
    - WASM worker: `new Worker(new URL('./core.worker.ts', import.meta.url))`
    - `postMessage` with `Transferable` for delta frames
 7. `packages/client/src/workers/core.worker.ts`: WASM core bridge
-   - `import init, { TerminalCore, SspEngine, CryptoEngine } from 'termanch-core'`
+   - `import init, { TerminalCore, SspEngine, CryptoEngine } from 'termenbox-core'`
    - Handles `Intent` → WASM → `DeltaFrame` → main thread
 8. `packages/client/src/lib/transport.ts`: Transport abstraction (WebTransport + WebSocket fallback)
    - `WebTransportClient` + `WebSocketClient` implementing common interface
@@ -153,7 +153,7 @@ Done-when: `pnpm build` produces `dist/`; `pnpm preview` loads terminal; WebGL r
 
 ### 3.2 Client: Transport + Crypto Integration — [ ]
 Issue: #8
-Class: implement · Needs: 3.1, 2.1 · Check: `pnpm --filter termanch-client test:integration`
+Class: implement · Needs: 3.1, 2.1 · Check: `pnpm --filter termenbox-client test:integration`
 Context: Wire up transport, handshake, encryption per DECISION-0001, DECISION-0004, DECISION-0009.
 Do:
 1. `packages/client/src/lib/crypto.ts`: Web Crypto API wrappers for X25519 + HKDF + ChaCha20-Poly1305
@@ -172,7 +172,7 @@ Done-when: Client connects to local server, authenticates, renders shell prompt,
 
 ### 3.3 Client: Mobile UX + iOS Mitigations — [ ]
 Issue: #9
-Class: implement · Needs: 3.2 · Check: `pnpm --filter termanch-client test:e2e -- --grep mobile`
+Class: implement · Needs: 3.2 · Check: `pnpm --filter termenbox-client test:e2e -- --grep mobile`
 Context: Mobile UX per FACT-0002, FACT-0010, DECISION-0005, GUARDRAIL-minimum-browser-support.
 Do:
 1. `packages/client/src/components/KeyboardRow.svelte`: Ctrl/Esc/Tab/Alt, arrows, history up/down
@@ -191,17 +191,17 @@ Done-when: Mobile Lighthouse PWA score > 90; background/foreground cycle restore
 
 ### 4.1 Docker + Deployment — [ ]
 Issue: #10
-Class: implement · Needs: 2.2, 2.3, 2.4, 3.3 · Check: `docker build -t termanch . && docker run --rm -p 443:443 termanch`
+Class: implement · Needs: 2.2, 2.3, 2.4, 3.3 · Check: `docker build -t termenbox . && docker run --rm -p 443:443 termenbox`
 Context: Single-container deployment per FACT-0001, GUARDRAIL-resource-constraints.
 Do:
 1. `docker/Dockerfile`: Multi-stage
    - Stage 1 (builder): `rust:1.80` + `node:20` → `cargo build --release --workspace` + `pnpm build`
    - Stage 2 (runner): `debian:bookworm-slim` → copy binaries + client `dist/` + TLS certs
-   - Entry: `termanch-server` (runs agent + hook install on first start via init script)
+   - Entry: `termenbox-server` (runs agent + hook install on first start via init script)
 2. `docker/compose.yaml`: Optional compose for local dev (server + postgres if needed)
 3. `docs/deploy.md`: VPS setup (user, SSH keys, firewall, systemd, TLS via Let's Encrypt)
 4. `docs/paranoid-mode.md`: nftables rules for GUARDRAIL-paranoid-mode
-Done-when: Docker image < 200MB; runs on 512MB VM; `systemctl status termanch-server` shows active; mobile client connects.
+Done-when: Docker image < 200MB; runs on 512MB VM; `systemctl status termenbox-server` shows active; mobile client connects.
 
 ---
 
@@ -224,7 +224,7 @@ Done-when: All docs render; `cargo doc` passes; deployment guide tested on fresh
 
 ### 5.1 Load Testing + Optimization — [ ]
 Issue: #12
-Class: debug · Needs: 4.1 · Check: `cargo bench -p termanch-server && pnpm --filter termanch-client run benchmark`
+Class: debug · Needs: 4.1 · Check: `cargo bench -p termenbox-server && pnpm --filter termenbox-client run benchmark`
 Context: Optimize for GUARDRAIL-resource-constraints, mobile battery.
 Do:
 1. Server: `cargo bench` for SSP diff, crypto, PTY throughput; target: 10k lines/sec < 50% CPU
@@ -265,4 +265,4 @@ Done-when: All benchmarks pass thresholds; Lighthouse > 90; memory < 300MB RSS.
 ---
 
 ## Next Steps (go-getter plan next)
-Run `go-getter plan next docs/plans/termanch-v1.md` to see ready steps.
+Run `go-getter plan next docs/plans/termenbox-v1.md` to see ready steps.

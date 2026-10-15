@@ -11,7 +11,7 @@ use url::Url;
 
 use crate::pty::PtyManager;
 use crate::tmux::TmuxManager;
-use termanch_core::protocol::{ClientMessage, ServerMessage};
+use termenbox_core::protocol::{ClientMessage, ServerMessage};
 
 pub struct ServerClient {
     server_url: String,

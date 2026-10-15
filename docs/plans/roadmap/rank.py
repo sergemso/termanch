@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate the Order table in docs/plans/termanch-roadmap.md from the step files in this directory.
+"""Regenerate the Order table in docs/plans/termenbox-roadmap.md from the step files in this directory.
 
 Edit a step by changing its `Status:` or `Score:` line, then run `python3 docs/plans/roadmap/rank.py`.
 Step file header (one per step, R01.md ...):  # Rnn Title / Status: pending|blocked (why)|done (PR) /
@@ -8,7 +8,7 @@ WSJF = (V+T+R)/S. A step takes the best bundle score of any chain it unlocks. Pa
 """
 import re, sys, pathlib
 D = pathlib.Path(__file__).parent
-INDEX = D.parent / 'termanch-roadmap.md'
+INDEX = D.parent / 'termenbox-roadmap.md'
 steps = {}
 for f in sorted(D.glob('R*.md')):
     t = f.read_text().split('\n')

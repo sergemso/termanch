@@ -127,7 +127,7 @@ export type AgentEvent = { session: string; seq: number; ts: number; source: str
   | { kind: string }
 );
 
-/** Legacy message of the parked termanch-agent. */
+/** Legacy message of the parked termenbox-agent. */
 export type AgentEventType = 'spawned' | 'completed' | 'error';
 
 export interface ServerListItem {

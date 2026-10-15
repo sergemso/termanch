@@ -3,7 +3,7 @@
 
 usage: make_manifest.py VERSION ASSET_DIR OUT [--freeze] [--notes TEXT]
 
-ASSET_DIR holds one file per architecture named termanch-server-<arch>-linux (x86_64, aarch64). The manifest
+ASSET_DIR holds one file per architecture named termenbox-server-<arch>-linux (x86_64, aarch64). The manifest
 lists each with its download URL under this project's GitHub releases and its SHA-256. CI signs the exact bytes
 written here, so the output is deterministic (sorted keys, no timestamps).
 """
@@ -13,7 +13,7 @@ import re
 import sys
 from pathlib import Path
 
-BASE = "https://github.com/sergemso/termanch/releases/download"
+BASE = "https://github.com/termenbox/termenbox/releases/download"
 ARCHES = ("x86_64", "aarch64")
 
 
@@ -31,7 +31,7 @@ def main(argv):
         sys.exit(f"version must look like 1.2.3, got {version!r}")
     binaries = {}
     for arch in ARCHES:
-        path = asset_dir / f"termanch-server-{arch}-linux"
+        path = asset_dir / f"termenbox-server-{arch}-linux"
         if not path.is_file():
             sys.exit(f"missing {path}")
         binaries[arch] = {

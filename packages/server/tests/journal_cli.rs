@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::process::{Command, Output};
 
 fn temp() -> PathBuf {
-    let d = std::env::temp_dir().join(format!("termanch-journal-cli-{}", uuid_like()));
+    let d = std::env::temp_dir().join(format!("termenbox-journal-cli-{}", uuid_like()));
     std::fs::create_dir_all(&d).unwrap();
     d
 }
@@ -21,7 +21,7 @@ fn uuid_like() -> String {
 }
 
 fn server(journal: &std::path::Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_termanch-server"))
+    Command::new(env!("CARGO_BIN_EXE_termenbox-server"))
         .args(["--journal-dir", journal.to_str().unwrap()])
         .args(args)
         .output()
@@ -36,7 +36,7 @@ fn text(o: &Output) -> String {
 fn install_then_revert_restores_the_starting_state() {
     let dir = temp();
     let journal = dir.join("journal");
-    let file = dir.join("termanch-server");
+    let file = dir.join("termenbox-server");
     let unit_free = dir.join("conf");
 
     // Record before applying, as the installer does, then apply.

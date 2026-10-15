@@ -1,7 +1,7 @@
 // Two real server processes behind the real app on a phone-sized browser (roadmap R03, plans G.10 and H.11).
-// Real tmux (one private tmux server per termanch server), a fake `aider` program so the windows look like agents.
+// Real tmux (one private tmux server per termenbox server), a fake `aider` program so the windows look like agents.
 // Usage: node e2e/two-servers.mjs   (needs a built server, a built client (pnpm build), a built harness (pnpm e2e:build) and Chrome)
-//   TERMANCH_BIN   server binary          (default ../../target/release/termanch-server)
+//   TERMENBOX_BIN   server binary          (default ../../target/release/termenbox-server)
 //   CHROME_PATH    Chrome/Chromium binary (default: Playwright's "chrome" channel)
 // Not covered here (checked in e2e/navigation.mjs with injected states): the tab label frozen while a finger is down.
 import { chromium } from 'playwright-core';
@@ -13,7 +13,7 @@ import { join, extname, resolve } from 'node:path';
 import { randomBytes, generateKeyPairSync, sign, createPrivateKey, createPublicKey } from 'node:crypto';
 
 const here = import.meta.dirname;
-const BIN = process.env.TERMANCH_BIN ?? resolve(here, '../../../target/release/termanch-server');
+const BIN = process.env.TERMENBOX_BIN ?? resolve(here, '../../../target/release/termenbox-server');
 let failed = false;
 const fail = (msg) => {
   console.error(`FAIL: ${msg}`);
@@ -60,7 +60,7 @@ const harnessDist = join(here, 'dist');
 if (!existsSync(join(appDist, 'index.html'))) throw new Error('client not built: run pnpm build');
 if (!existsSync(join(harnessDist, 'index.html'))) throw new Error('harness not built: run pnpm e2e:build');
 
-const root = mkdtempSync(join(tmpdir(), 'termanch-two-'));
+const root = mkdtempSync(join(tmpdir(), 'termenbox-two-'));
 // A fake agent: bash under the name `aider`, so the window's process name is an agent's and it waits on the terminal. (An agent name
 // that is not installed: a shell profile may put the real one first on the PATH.), it prints a marker and stays in the foreground.
 const fakeBin = join(root, 'bin');
@@ -86,15 +86,15 @@ async function startServer(label) {
       PATH: `${fakeBin}:${process.env.PATH}`,
       HOME: homeDir,
       TMUX_TMPDIR: home,
-      TERMANCH_CONFIG_DIR: join(home, 'config'),
-      TERMANCH_HOST: '127.0.0.1',
-      TERMANCH_PORT: String(httpPort),
-      TERMANCH_UDP_PORT: String(randomPort()),
-      TERMANCH_PUBLIC_IP: '127.0.0.1',
-      TERMANCH_DIRECTORY_URL: '',
-      TERMANCH_DEV_INFO: 'on',
-      TERMANCH_CERT_KEYS: `e2e=${signerPublic}`,
-      TERMANCH_CLAIM_SECRET: claim,
+      TERMENBOX_CONFIG_DIR: join(home, 'config'),
+      TERMENBOX_HOST: '127.0.0.1',
+      TERMENBOX_PORT: String(httpPort),
+      TERMENBOX_UDP_PORT: String(randomPort()),
+      TERMENBOX_PUBLIC_IP: '127.0.0.1',
+      TERMENBOX_DIRECTORY_URL: '',
+      TERMENBOX_DEV_INFO: 'on',
+      TERMENBOX_CERT_KEYS: `e2e=${signerPublic}`,
+      TERMENBOX_CLAIM_SECRET: claim,
     },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
@@ -155,7 +155,7 @@ try {
   const deviceKey = await page.evaluate(async () => {
     const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign', 'verify']);
     await new Promise((done, no) => {
-      const r = indexedDB.open('termanch', 1);
+      const r = indexedDB.open('termenbox', 1);
       r.onupgradeneeded = () => r.result.createObjectStore('device');
       r.onsuccess = () => {
         const tx = r.result.transaction('device', 'readwrite');
@@ -170,8 +170,8 @@ try {
   });
   await page.evaluate(
     ([cert, items]) => {
-      localStorage.setItem('termanch_auth', JSON.stringify({ cert, login: 'alice' }));
-      localStorage.setItem('termanch_servers', JSON.stringify(items));
+      localStorage.setItem('termenbox_auth', JSON.stringify({ cert, login: 'alice' }));
+      localStorage.setItem('termenbox_servers', JSON.stringify(items));
     },
     [mint(deviceKey, alice.id, alice.login), [a, b].map((s) => ({ server_url: '', server_id: s.serverId, server_name: s.label, registered_at: Date.now(), record: s.record }))],
   );
@@ -217,7 +217,7 @@ try {
   const sendNeedsInput = (s, name) =>
     s.tmux(
       'new-window', '-d', '-t', `=${name}:`,
-      `python3 -c 'import os,socket,json;c=socket.socket(socket.AF_UNIX);c.connect(os.environ["TERMANCH_EVENT_SOCKET"]);c.send((json.dumps({"session":os.environ["TERMANCH_SESSION"],"token":os.environ["TERMANCH_EVENT_TOKEN"],"adapter":"claude","data":{"hook_event_name":"Notification","message":"Allow rm?"}})+"\\n").encode())'`,
+      `python3 -c 'import os,socket,json;c=socket.socket(socket.AF_UNIX);c.connect(os.environ["TERMENBOX_EVENT_SOCKET"]);c.send((json.dumps({"session":os.environ["TERMENBOX_SESSION"],"token":os.environ["TERMENBOX_EVENT_TOKEN"],"adapter":"claude","data":{"hook_event_name":"Notification","message":"Allow rm?"}})+"\\n").encode())'`,
     );
   sendNeedsInput(a, 'docs');
   await page.getByRole('status').filter({ hasText: /needs you/i }).first().waitFor({ timeout: 15000 });

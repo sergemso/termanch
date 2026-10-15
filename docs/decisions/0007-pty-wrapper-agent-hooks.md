@@ -11,7 +11,7 @@ accepted-by: architect
 # Decision: PTY Wrapper with Shell Config Hooks for Agent Detection
 
 ## Context
-Termanch must integrate with AI coding agents (Codex, Claude Code, Herdr) to provide:
+Termenbox must integrate with AI coding agents (Codex, Claude Code, Herdr) to provide:
 - Chat View: agent events as cards (not raw TUI)
 - Diff Viewer: intercept git changes
 - Live Activity: notifications on agent completion/confirmation
@@ -20,12 +20,12 @@ Termanch must integrate with AI coding agents (Codex, Claude Code, Herdr) to pro
 ## Decision
 **Three-component architecture**:
 
-1. **termanch-agent** (Rust daemon):
+1. **termenbox-agent** (Rust daemon):
    - Owns the PTY (spawns user's `$SHELL`)
    - Reads PTY output → feeds SSP buffer
-   - Listens on Unix socket `~/.termanch/agent.sock` for structured events
+   - Listens on Unix socket `~/.termenbox/agent.sock` for structured events
 
-2. **Shell hooks** (installed by `termanch-hook install`):
+2. **Shell hooks** (installed by `termenbox-hook install`):
    - Bash: `PROMPT_COMMAND` + `preexec` (via `bash-preexec.sh`)
    - Zsh: `precmd` + `preexec`
    - Fish: `fish_prompt` + `fish_preexec`
@@ -59,7 +59,7 @@ Termanch must integrate with AI coding agents (Codex, Claude Code, Herdr) to pro
 | Agent-specific APIs | Clean | Vendor lock-in, not all have APIs |
 
 ## Consequences
-- `termanch-hook` CLI handles install/uninstall per shell
+- `termenbox-hook` CLI handles install/uninstall per shell
 - Hooks detect shell type automatically
 - Agent socket protected by `chmod 600` + uid check
 - WASM client subscribes to agent events via server WebSocket stream

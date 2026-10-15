@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use termanch_core::protocol::WindowInfo;
+use termenbox_core::protocol::WindowInfo;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::broadcast;
 use tokio::time::Instant;
@@ -237,7 +237,7 @@ async fn watch(hub: WindowHub, runner: Runner, prefix: String, name: String) {
         return;
     };
     // Every pane, so a command or directory change in any window is heard (tmux checks about once a second).
-    let sub = "refresh-client -B \"termanch:%*:#{pane_current_command}|#{pane_current_path}|#{window_activity}\"\n";
+    let sub = "refresh-client -B \"termenbox:%*:#{pane_current_command}|#{pane_current_path}|#{window_activity}\"\n";
     if stdin.write_all(sub.as_bytes()).await.is_err() {
         return;
     }
@@ -415,7 +415,7 @@ mod tests {
         assert!(is_trigger("%window-add @1"));
         assert!(is_trigger("%unlinked-window-close @1"));
         assert!(is_trigger(
-            "%subscription-changed termanch $0 @0 0 %0 : bash|/tmp|1"
+            "%subscription-changed termenbox $0 @0 0 %0 : bash|/tmp|1"
         ));
         assert!(!is_trigger("%output %0 secret\\040text"));
         assert!(!is_trigger("%begin 1 2 0"));

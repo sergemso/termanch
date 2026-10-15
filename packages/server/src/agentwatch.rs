@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use sha2::{Digest, Sha256};
-use termanch_core::events::{AgentState, Confidence, EventKind, Source};
+use termenbox_core::events::{AgentState, Confidence, EventKind, Source};
 
 use crate::adapters;
 use crate::backend::Runner;

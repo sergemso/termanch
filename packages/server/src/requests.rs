@@ -96,7 +96,7 @@ mod tests {
     use super::*;
 
     fn dir() -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!("termanch-requests-{}", uuid::Uuid::new_v4()));
+        let d = std::env::temp_dir().join(format!("termenbox-requests-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&d).unwrap();
         d
     }

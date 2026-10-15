@@ -1,10 +1,10 @@
-# Termanch Roadmap: every open step in one plan, ordered by WSJF and dependencies
+# Termenbox Roadmap: every open step in one plan, ordered by WSJF and dependencies
 
 Written 2026-10-14 by consolidating plans v1-v10 and session-tabs (now in `docs/plans/archive/`) after checking each step against the code and `git log`. This file alone is enough for a cold session.
 
 ## Cold start
 
-Repository: Rust server `packages/server`, shared wire types `packages/core/src/protocol.rs` (mirrored by hand in `packages/client/src/lib/protocol.ts`), Svelte 5 client `packages/client/src` (`npx --yes pnpm@9`), directory Pages Functions `packages/client/functions/api`. Knowledge base in `docs/{facts,decisions,guardrails,skills}`; read `CLAUDE.md` first. One squashed pull request per step from its own branch off master, green CI, merge only on the owner's "merge" (guardrails `changes-land-as-one-squashed-pull-request`, `no-commits-on-the-default-branch`). Constraints: 512 MB RAM, 1 vCPU, no paid services in the required stack, secrets never logged, builds only in CI. The owner tests on an iPhone; emulated Chrome is never claimed as a phone check. Never touch the owner's own `termanch.service` (read its journal only). Pre-push hook: commit subject `type(scope): ...` with a one-word scope. Plans are tracked in GitHub issues (decision 0049); ask before writing to the tracker.
+Repository: Rust server `packages/server`, shared wire types `packages/core/src/protocol.rs` (mirrored by hand in `packages/client/src/lib/protocol.ts`), Svelte 5 client `packages/client/src` (`npx --yes pnpm@9`), directory Pages Functions `packages/client/functions/api`. Knowledge base in `docs/{facts,decisions,guardrails,skills}`; read `CLAUDE.md` first. One squashed pull request per step from its own branch off master, green CI, merge only on the owner's "merge" (guardrails `changes-land-as-one-squashed-pull-request`, `no-commits-on-the-default-branch`). Constraints: 512 MB RAM, 1 vCPU, no paid services in the required stack, secrets never logged, builds only in CI. The owner tests on an iPhone; emulated Chrome is never claimed as a phone check. Never touch the owner's own `termenbox.service` (read its journal only). Pre-push hook: commit subject `type(scope): ...` with a one-word scope. Plans are tracked in GitHub issues (decision 0049); ask before writing to the tracker.
 
 ## How to use this plan (cheap to re-enter and update)
 

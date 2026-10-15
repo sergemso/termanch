@@ -69,7 +69,7 @@ impl Record {
     /// packages/client/functions/api/directory/_lib.ts.
     pub fn canonical(&self) -> String {
         [
-            "termanch-announce-v1",
+            "termenbox-announce-v1",
             &self.server_id,
             &self.seq.to_string(),
             &self.ip,
@@ -97,7 +97,7 @@ pub fn claim_proof(
     port: u16,
 ) -> String {
     let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("any key length");
-    mac.update(format!("termanch-claim-v1\n{server_id}\n{fingerprint}\n{ip}:{port}").as_bytes());
+    mac.update(format!("termenbox-claim-v1\n{server_id}\n{fingerprint}\n{ip}:{port}").as_bytes());
     B64.encode(mac.finalize().into_bytes())
 }
 
@@ -254,7 +254,7 @@ mod tests {
 
     /// Both sides read this file: the JS directory verifies it (directory.test.ts) and this test
     /// proves the Rust signer reproduces it byte for byte. Ed25519 signatures are deterministic.
-    /// Regenerate with UPDATE_FIXTURE=1 cargo test -p termanch-server fixture.
+    /// Regenerate with UPDATE_FIXTURE=1 cargo test -p termenbox-server fixture.
     #[test]
     fn the_signed_fixture_matches_what_the_directory_verifies() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata/announce.json");
@@ -320,7 +320,7 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
 
-        let dir = std::env::temp_dir().join(format!("termanch-ann-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("termenbox-ann-{}", uuid::Uuid::new_v4()));
         let auth = Arc::new(
             AuthState::new(dir.clone(), crate::cert::CertKeys::default(), "srv".into()).unwrap(),
         );
@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn the_server_key_is_stable_across_restarts() {
-        let dir = std::env::temp_dir().join(format!("termanch-key-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("termenbox-key-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         assert_eq!(
             ServerKey::load_or_create(&dir).unwrap().server_id(),

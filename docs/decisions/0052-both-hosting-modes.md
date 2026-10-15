@@ -10,7 +10,7 @@ accepted-by: Sergey Strebulaev <s@vivantel.dev>
 
 ## Decision
 
-Two client modes: a Termanch-hosted client at app.termanch.dev with Termanch's OAuth app (quick start, two clicks), and a self-hosted client on the user's own Cloudflare Pages, domain and OAuth app (README, BOOTSTRAP, Terraform). The server is always user-hosted. The `bootstrap-simplicity` two-click bound applies to the hosted mode only.
+Two client modes: a Termenbox-hosted client at app.termenbox.dev with Termenbox's OAuth app (quick start, two clicks), and a self-hosted client on the user's own Cloudflare Pages, domain and OAuth app (README, BOOTSTRAP, Terraform). The server is always user-hosted. The `bootstrap-simplicity` two-click bound applies to the hosted mode only.
 
 ## Why
 

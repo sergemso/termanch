@@ -135,7 +135,7 @@ try {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('Cache TTL').selectOption('3600000');
   await page.getByLabel('Theme').selectOption('light');
-  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('termanch_settings')));
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('termenbox_settings')));
   if (stored.cacheTtlMs !== 3600000 || stored.theme !== 'light') fail('settings did not persist together');
   await page.getByRole('button', { name: 'Close menu', exact: true }).click();
   console.log('ok  long press opens actions without switching; menu settings persist');

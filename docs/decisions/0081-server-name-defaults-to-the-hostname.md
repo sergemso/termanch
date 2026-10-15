@@ -10,7 +10,7 @@ tags: [server, client, deployment]
 
 ## Decision (draft: needs the owner's acceptance)
 
-- Without `TERMANCH_SERVER_NAME` the server names itself with the short hostname (`vps-1` for `vps-1.example.com`), cleaned to letters, digits, `-` and `_`, at most 40 characters; `termanch-server` when it is empty or `localhost`.
+- Without `TERMENBOX_SERVER_NAME` the server names itself with the short hostname (`vps-1` for `vps-1.example.com`), cleaned to letters, digits, `-` and `_`, at most 40 characters; `termenbox-server` when it is empty or `localhost`.
 - The container installer passes the host's hostname, because inside a container the hostname is the container id.
 - Add Server leaves the name empty; a name the owner types is kept, otherwise the name the server reports on first connect is stored.
 - Not `user@hostname`: the user is already shown by the mode badge, and the name is what the owner types to confirm a remote uninstall (0072), so it stays short.

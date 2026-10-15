@@ -11,7 +11,7 @@ supersedes: [0001, 0003, 0005, 0006, 0009, 0012]
 
 ## Decision
 
-Termanch evolves the shipped MVP: GitHub OAuth, WebSocket, xterm.js WebGL, tmux-backed sessions, Cloudflare Tunnel (0013). Decisions 0001, 0003, 0005, 0006, 0009, 0012 and facts 0004, 0005, 0007, 0008, 0011, 0014 describe the v1 design (WebTransport, WASM/SSP, SSH-agent auth, app-layer ChaCha20) and are `deferred`: they are not requirements until a new decision reactivates them. Persistence on mobile comes from tmux server-side plus fast client reconnect and screen replay, not from SSP.
+Termenbox evolves the shipped MVP: GitHub OAuth, WebSocket, xterm.js WebGL, tmux-backed sessions, Cloudflare Tunnel (0013). Decisions 0001, 0003, 0005, 0006, 0009, 0012 and facts 0004, 0005, 0007, 0008, 0011, 0014 describe the v1 design (WebTransport, WASM/SSP, SSH-agent auth, app-layer ChaCha20) and are `deferred`: they are not requirements until a new decision reactivates them. Persistence on mobile comes from tmux server-side plus fast client reconnect and screen replay, not from SSP.
 
 ## Why
 

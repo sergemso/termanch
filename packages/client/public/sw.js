@@ -2,8 +2,8 @@
 // /api/*, the installer, OAuth callbacks, cross-origin requests or anything with a query string, and it holds no
 // tokens: the GitHub token and device keys live in localStorage/IndexedDB, not here.
 const VERSION = 'v2';
-const SHELL = `termanch-shell-${VERSION}`;
-const ASSETS = `termanch-assets-${VERSION}`;
+const SHELL = `termenbox-shell-${VERSION}`;
+const ASSETS = `termenbox-assets-${VERSION}`;
 const STATIC = /^\/(favicon\.svg|manifest\.webmanifest|icons\/[\w.-]+)$/;
 
 self.addEventListener('install', (event) => {

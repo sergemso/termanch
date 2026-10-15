@@ -38,9 +38,9 @@ describe('inbox', () => {
     const l = merge([], [att('a1', 5)]);
     saveInbox(l, s);
     expect(loadInbox(s)).toEqual(l);
-    mem.termanch_inbox = '{"not":"a list"}';
+    mem.termenbox_inbox = '{"not":"a list"}';
     expect(loadInbox(s)).toEqual([]);
-    mem.termanch_inbox = 'garbage';
+    mem.termenbox_inbox = 'garbage';
     expect(loadInbox(s)).toEqual([]);
   });
 });

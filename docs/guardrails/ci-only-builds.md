@@ -30,7 +30,7 @@ tags: [process, ci, build, release]
 | `ci.yaml` | PR, push to master | Test results, typecheck |
 | `docker-build.yaml` | push to master, tags | Multi-arch Docker images to GHCR |
 | `deploy-pages.yaml` | push to master | Client to Cloudflare Pages |
-| `bootstrap-publish.yaml` | tag `bootstrap-v*` | Bootstrap script to get.termanch.dev |
+| `bootstrap-publish.yaml` | tag `bootstrap-v*` | Bootstrap script to get.termenbox.dev |
 
 ## Enforcement
 ```bash

@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store';
 
 export interface Settings { theme: 'dark' | 'light' | 'system'; cacheTtlMs: 300000 | 3600000; /** What Keep warm sends; empty hides the button. */ keepWarm: string; /** WebGL is fast; the DOM renderer is the plain fallback to try when the screen flickers or goes blank. */ renderer: 'webgl' | 'dom' }
-const KEY = 'termanch_settings';
+const KEY = 'termenbox_settings';
 const DEFAULT: Settings = { theme: 'dark', cacheTtlMs: 300000, keepWarm: '', renderer: 'webgl' };
 const storage = () => typeof localStorage === 'undefined' ? undefined : localStorage;
 export function loadSettings(store: Pick<Storage, 'getItem'> | undefined = storage()): Settings {

@@ -82,7 +82,7 @@
     }
     const s = parseClaim(text);
     if (!s) {
-      error = 'That QR is not a Termanch code.';
+      error = 'That QR is not a Termenbox code.';
       return;
     }
     stopScan();
@@ -166,7 +166,7 @@
         <div class="sub">
           <label class="choice">
             <input type="radio" bind:group={hostAs} value="user" />
-            <span>As a dedicated user <code>termanch</code> (recommended)<br /><small>Created for you. It can only touch its own files and what you give it access to.</small></span>
+            <span>As a dedicated user <code>termenbox</code> (recommended)<br /><small>Created for you. It can only touch its own files and what you give it access to.</small></span>
           </label>
           <label class="choice">
             <input type="radio" bind:group={hostAs} value="me" />
@@ -179,7 +179,7 @@
         </div>
         <div class="warning" role="note">
           <strong>This gives your browser a shell on your server.</strong>
-          Anything you run in a session can read and change this machine's files and run programs as {hostAs === 'root' ? 'root, so it can change anything' : hostAs === 'me' ? 'you, with access to everything you can reach, including your SSH keys and agent logins' : 'the termanch user'}.
+          Anything you run in a session can read and change this machine's files and run programs as {hostAs === 'root' ? 'root, so it can change anything' : hostAs === 'me' ? 'you, with access to everything you can reach, including your SSH keys and agent logins' : 'the termenbox user'}.
           Only continue on a machine you own. The installer lists every change it makes first and can undo them all.
         </div>
         <label class="choice">

@@ -6,9 +6,9 @@
 set -eu
 
 MODE="$1"
-ORIGIN=https://app.termanch.vivantel.dev
+ORIGIN=https://app.termenbox.dev
 SECRET="$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 43)"
-RUN_USER=termanch
+RUN_USER=termenbox
 [ "$MODE" = host ] && RUN_USER=root
 # host-me runs sessions as whoever invoked the installer; sudo hands the name over as SUDO_USER, which is set here the same way.
 if [ "$MODE" = host-me ]; then
@@ -18,10 +18,10 @@ if [ "$MODE" = host-me ]; then
 fi
 
 # /release (first install), /release2 (9.0.1 works), /release3 (9.0.2 starts but never serves), /release4 (9.0.3 is frozen)
-export TERMANCH_RELEASE_URL=file:///release
-TERMANCH_RELEASE_KEYS="$(cat /keys.txt)"
-export TERMANCH_RELEASE_KEYS
-export TERMANCH_SKIP_FIREWALL=1
+export TERMENBOX_RELEASE_URL=file:///release
+TERMENBOX_RELEASE_KEYS="$(cat /keys.txt)"
+export TERMENBOX_RELEASE_KEYS
+export TERMENBOX_SKIP_FIREWALL=1
 
 fail() { echo "FAIL: $*"; exit 1; }
 snapshot() { ls -A /etc/systemd/system /usr/local/bin /var/lib /home 2>/dev/null | sort | md5sum; }
@@ -35,69 +35,69 @@ if [ "$MODE" = host-me ]; then
 fi
 
 echo "== a dry run changes nothing"
-TERMANCH_DRY_RUN=1 sh /install.sh "$SECRET" "$ORIGIN" "$MODE"
+TERMENBOX_DRY_RUN=1 sh /install.sh "$SECRET" "$ORIGIN" "$MODE"
 [ "$(snapshot)" = "$before" ] || fail "the dry run changed the machine"
 
 echo "== install"
 sh /install.sh "$SECRET" "$ORIGIN" "$MODE"
-systemctl is-active --quiet termanch || fail "the service is not active"
-port="$(sed -n 's/^Environment=TERMANCH_PORT=//p' /etc/systemd/system/termanch.service)"
+systemctl is-active --quiet termenbox || fail "the service is not active"
+port="$(sed -n 's/^Environment=TERMENBOX_PORT=//p' /etc/systemd/system/termenbox.service)"
 curl -fs "http://127.0.0.1:$port/health" >/dev/null || fail "the server does not answer on its health port"
-pid="$(systemctl show -p MainPID --value termanch)"
+pid="$(systemctl show -p MainPID --value termenbox)"
 [ "$pid" -gt 0 ] || fail "the service has no main process"
 [ "$(stat -c %U "/proc/$pid")" = "$RUN_USER" ] || fail "the server does not run as $RUN_USER"
-[ "$MODE" != host-user ] || id termanch >/dev/null || fail "the user termanch was not created"
-[ "$MODE" != host-me ] || ! id termanch >/dev/null 2>&1 || fail "host-me created a user"
-[ "$MODE" != host-me ] || grep -q '^User=alice' /etc/systemd/system/termanch.service || fail "the unit does not run as the invoking user"
+[ "$MODE" != host-user ] || id termenbox >/dev/null || fail "the user termenbox was not created"
+[ "$MODE" != host-me ] || ! id termenbox >/dev/null 2>&1 || fail "host-me created a user"
+[ "$MODE" != host-me ] || grep -q '^User=alice' /etc/systemd/system/termenbox.service || fail "the unit does not run as the invoking user"
 command -v tmux >/dev/null || fail "tmux was not installed"
-grep -q '^KillMode=process' /etc/systemd/system/termanch.service || fail "sessions would die with the service"
-[ -f /var/lib/termanch/server_key ] || fail "the server did not create its state"
-termanch-server --journal-list | grep -q unit_installed || fail "the journal has no unit entry"
-termanch-server --journal-list | grep -q file_created || fail "the journal has no binary entry"
+grep -q '^KillMode=process' /etc/systemd/system/termenbox.service || fail "sessions would die with the service"
+[ -f /var/lib/termenbox/server_key ] || fail "the server did not create its state"
+termenbox-server --journal-list | grep -q unit_installed || fail "the journal has no unit entry"
+termenbox-server --journal-list | grep -q file_created || fail "the journal has no binary entry"
 
 echo "== installing again changes nothing"
-entries="$(termanch-server --journal-list | wc -l)"
+entries="$(termenbox-server --journal-list | wc -l)"
 sh /install.sh "$SECRET" "$ORIGIN" "$MODE"
-[ "$(termanch-server --journal-list | wc -l)" = "$entries" ] || fail "a second install wrote more journal entries"
-systemctl is-active --quiet termanch || fail "the service stopped"
+[ "$(termenbox-server --journal-list | wc -l)" = "$entries" ] || fail "a second install wrote more journal entries"
+systemctl is-active --quiet termenbox || fail "the service stopped"
 
 echo "== the updater and the request handler are installed and running"
-systemctl is-active --quiet termanch-update.timer || fail "the update timer is not active"
-systemctl is-active --quiet termanch-request.path || fail "the request path unit is not active"
-[ -d /var/lib/termanch/requests ] || fail "the requests directory is missing"
-[ "$(stat -c %U /var/lib/termanch/requests)" = "$RUN_USER" ] || fail "the requests directory does not belong to $RUN_USER"
-termanch-server --journal-list | grep -q termanch-update.timer || fail "the updater units are not in the journal"
+systemctl is-active --quiet termenbox-update.timer || fail "the update timer is not active"
+systemctl is-active --quiet termenbox-request.path || fail "the request path unit is not active"
+[ -d /var/lib/termenbox/requests ] || fail "the requests directory is missing"
+[ "$(stat -c %U /var/lib/termenbox/requests)" = "$RUN_USER" ] || fail "the requests directory does not belong to $RUN_USER"
+termenbox-server --journal-list | grep -q termenbox-update.timer || fail "the updater units are not in the journal"
 sha() { sha256sum "$1" | cut -d' ' -f1; }
-helper() { TERMANCH_RELEASE_URL="file://$1" termanch-server --root-helper update; }
+helper() { TERMENBOX_RELEASE_URL="file://$1" termenbox-server --root-helper update; }
 
 echo "== a frozen release is not installed"
-before_sha="$(sha /usr/local/bin/termanch-server)"
+before_sha="$(sha /usr/local/bin/termenbox-server)"
 helper /release4 | grep -q "paused" || fail "a frozen release was not reported"
-[ "$(sha /usr/local/bin/termanch-server)" = "$before_sha" ] || fail "a frozen release changed the binary"
+[ "$(sha /usr/local/bin/termenbox-server)" = "$before_sha" ] || fail "a frozen release changed the binary"
 
 echo "== a newer release is installed, the old binary is kept, the service comes back"
 helper /release2 | grep -q "updated .* -> 9.0.1" || fail "the update did not report success"
-[ "$(sha /usr/local/bin/termanch-server)" = "$(sha /release2/termanch-server-x86_64-linux)" ] || fail "the new binary is not in place"
-[ -f /usr/local/bin/termanch-server.prev ] || fail "the previous binary was not kept"
-systemctl is-active --quiet termanch || fail "the service is not active after the update"
+[ "$(sha /usr/local/bin/termenbox-server)" = "$(sha /release2/termenbox-server-x86_64-linux)" ] || fail "the new binary is not in place"
+[ -f /usr/local/bin/termenbox-server.prev ] || fail "the previous binary was not kept"
+systemctl is-active --quiet termenbox || fail "the service is not active after the update"
 # (applying the same release twice is covered by the unit tests: the test binaries all report the crate's own version)
 
 echo "== a release that does not come up is rolled back"
-good_sha="$(sha /usr/local/bin/termanch-server)"
+good_sha="$(sha /usr/local/bin/termenbox-server)"
 set +e
 helper /release3 > /tmp/rollback.txt 2>&1
 code=$?
 set -e
 [ "$code" = 2 ] || { cat /tmp/rollback.txt; fail "a failed update did not exit with 2 (got $code)"; }
 grep -q "rolled back" /tmp/rollback.txt || fail "the rollback was not reported"
-[ "$(sha /usr/local/bin/termanch-server)" = "$good_sha" ] || fail "the old binary was not restored"
-systemctl is-active --quiet termanch || fail "the service is not active after the rollback"
-port="$(sed -n 's/^Environment=TERMANCH_PORT=//p' /etc/systemd/system/termanch.service)"
+[ "$(sha /usr/local/bin/termenbox-server)" = "$good_sha" ] || fail "the old binary was not restored"
+systemctl is-active --quiet termenbox || fail "the service is not active after the rollback"
+port="$(sed -n 's/^Environment=TERMENBOX_PORT=//p' /etc/systemd/system/termenbox.service)"
 for i in 1 2 3 4 5 6 7 8 9 10; do curl -fs "http://127.0.0.1:$port/health" >/dev/null && break; sleep 1; done
 curl -fs "http://127.0.0.1:$port/health" >/dev/null || fail "the restored server does not answer"
 
 echo "== a request from the server reaches the root helper, and junk does not"
-requests=/var/lib/termanch/requests
+requests=/var/lib/termenbox/requests
 printf '{"action":"update-now"}' > $requests/r1.json
 printf '{"action":"rm","path":"/"}' > $requests/r2.json
 ln -s /etc/hostname $requests/r3.json
@@ -106,12 +106,12 @@ i=0
 while [ -n "$(ls -A $requests)" ] && [ $i -lt 30 ]; do i=$((i + 1)); sleep 1; done
 [ -z "$(ls -A $requests)" ] || fail "the helper did not consume the requests"
 [ -f /etc/hostname ] || fail "a link in the requests directory damaged its target"
-journalctl -u termanch-request --no-pager | grep -q "up to date\|updated" || { journalctl -u termanch-request --no-pager | tail; fail "the helper did not act on the update request"; }
+journalctl -u termenbox-request --no-pager | grep -q "up to date\|updated" || { journalctl -u termenbox-request --no-pager | tail; fail "the helper did not act on the update request"; }
 
 echo "== a changed release is refused"
 cp /release/manifest.json /tmp/manifest.good
 echo " " >> /release/manifest.json 2>/dev/null || true
-if TERMANCH_FORCE=1 sh /install.sh "$SECRET" "$ORIGIN" "$MODE" >/tmp/refused.txt 2>&1; then
+if TERMENBOX_FORCE=1 sh /install.sh "$SECRET" "$ORIGIN" "$MODE" >/tmp/refused.txt 2>&1; then
   cp /tmp/manifest.good /release/manifest.json 2>/dev/null || true
   fail "a release with a broken signature was installed"
 fi
@@ -122,14 +122,14 @@ echo "== uninstall.sh shows the plan first and changes nothing"
 before_un="$(snapshot)"
 sh /uninstall.sh | grep -q "Nothing was changed" || fail "the uninstall preview did not say it changed nothing"
 [ "$(snapshot)" = "$before_un" ] || fail "the uninstall preview changed the machine"
-systemctl is-active --quiet termanch || fail "the preview stopped the service"
+systemctl is-active --quiet termenbox || fail "the preview stopped the service"
 
 echo "== uninstall.sh --yes restores the machine"
 sh /uninstall.sh --yes
-[ ! -e /etc/systemd/system/termanch.service ] || fail "the unit is still there"
-[ ! -e /usr/local/bin/termanch-server ] || fail "the binary is still there"
-[ ! -e /var/lib/termanch ] || fail "the state directory is still there"
-[ "$MODE" != host-user ] || ! id termanch >/dev/null 2>&1 || fail "the user is still there"
+[ ! -e /etc/systemd/system/termenbox.service ] || fail "the unit is still there"
+[ ! -e /usr/local/bin/termenbox-server ] || fail "the binary is still there"
+[ ! -e /var/lib/termenbox ] || fail "the state directory is still there"
+[ "$MODE" != host-user ] || ! id termenbox >/dev/null 2>&1 || fail "the user is still there"
 [ "$MODE" != host-me ] || [ -d /home/alice ] || fail "the invoking user's home was touched"
-[ "$MODE" != host-user ] || [ -d /home/termanch ] || fail "the created user's home was deleted without --delete-home"
+[ "$MODE" != host-user ] || [ -d /home/termenbox ] || fail "the created user's home was deleted without --delete-home"
 echo "OK: $MODE"

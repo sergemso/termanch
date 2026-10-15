@@ -31,9 +31,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build client
-        run: pnpm --filter termanch-client run build
+        run: pnpm --filter termenbox-client run build
         env:
-          VITE_GITHUB_CLIENT_ID: ${{ vars.TERMANCH_GITHUB_CLIENT_ID }}
+          VITE_GITHUB_CLIENT_ID: ${{ vars.TERMENBOX_GITHUB_CLIENT_ID }}
 
       - name: Install Wrangler
         run: npm install -g wrangler
@@ -45,28 +45,28 @@ jobs:
         working-directory: packages/client
         run: |
           cat > wrangler.toml <<EOF
-          name = "${{ vars.TERMANCH_PAGES_PROJECT_NAME || 'termanch' }}"
+          name = "${{ vars.TERMENBOX_PAGES_PROJECT_NAME || 'termenbox' }}"
           pages_build_output_dir = "dist"
           compatibility_date = "2026-10-01"
 
           [[d1_databases]]
           binding = "DB"
-          database_name = "termanch-directory"
-          database_id = "${{ vars.TERMANCH_D1_DATABASE_ID }}"
+          database_name = "termenbox-directory"
+          database_id = "${{ vars.TERMENBOX_D1_DATABASE_ID }}"
           migrations_dir = "migrations"
           EOF
 
       - name: Apply directory migrations
-        if: ${{ vars.TERMANCH_D1_DATABASE_ID != '' }}
+        if: ${{ vars.TERMENBOX_D1_DATABASE_ID != '' }}
         working-directory: packages/client
-        run: wrangler d1 migrations apply termanch-directory --remote
+        run: wrangler d1 migrations apply termenbox-directory --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy to Cloudflare Pages
         working-directory: packages/client
-        run: wrangler pages deploy dist --project-name=${{ vars.TERMANCH_PAGES_PROJECT_NAME || 'termanch' }} --branch=master
+        run: wrangler pages deploy dist --project-name=${{ vars.TERMENBOX_PAGES_PROJECT_NAME || 'termenbox' }} --branch=master
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

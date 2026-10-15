@@ -49,8 +49,8 @@ jobs:
       - name: Keep the server binary for the browser end-to-end job
         uses: actions/upload-artifact@v4
         with:
-          name: termanch-server
-          path: target/release/termanch-server
+          name: termenbox-server
+          path: target/release/termenbox-server
           retention-days: 1
 
   client:
@@ -73,12 +73,12 @@ jobs:
       - name: Check the installer script
         run: for f in install uninstall; do sh -n packages/client/public/$f.sh && dash -n packages/client/public/$f.sh; done
 
-      - run: pnpm --filter termanch-client run build
+      - run: pnpm --filter termenbox-client run build
 
-      - run: pnpm --filter termanch-client run test
+      - run: pnpm --filter termenbox-client run test
 
       - name: Gate - client bundle size
-        run: pnpm --filter termanch-client run check:bundle
+        run: pnpm --filter termenbox-client run check:bundle
 
   # Real Chrome against the real server binary: login and claim over WebRTC, typing, reconnect with screen replay,
   # plus the resource gates (server RSS with 10 sessions, CPU while output streams). Only GitHub is a stand-in.
@@ -105,23 +105,23 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: termanch-server
+          name: termenbox-server
           path: bin
 
-      - run: chmod +x bin/termanch-server
+      - run: chmod +x bin/termenbox-server
 
-      - run: pnpm --filter termanch-client run e2e:build
+      - run: pnpm --filter termenbox-client run e2e:build
 
       - name: Run the browser end-to-end test
         working-directory: packages/client
         env:
-          TERMANCH_BIN: ${{ github.workspace }}/bin/termanch-server
+          TERMENBOX_BIN: ${{ github.workspace }}/bin/termenbox-server
         run: node e2e/run.mjs
 
       - name: Touch gestures and session cards in the browser
         working-directory: packages/client
         env:
-          TERMANCH_BIN: ${{ github.workspace }}/bin/termanch-server
+          TERMENBOX_BIN: ${{ github.workspace }}/bin/termenbox-server
         run: |
           node e2e/touch.mjs
           node e2e/cards.mjs
@@ -163,11 +163,11 @@ jobs:
           RUSTFLAGS: -C target-feature=+crt-static
           CC_x86_64_unknown_linux_musl: musl-gcc
           CC_aarch64_unknown_linux_musl: musl-gcc
-        run: cargo build --release -p termanch-server --target ${{ matrix.target }}
+        run: cargo build --release -p termenbox-server --target ${{ matrix.target }}
 
       - name: Gate - the binary is fully static
         run: |
-          bin=target/${{ matrix.target }}/release/termanch-server
+          bin=target/${{ matrix.target }}/release/termenbox-server
           strip "$bin"
           file "$bin"
           # A static binary has no program interpreter and needs no shared library (ldd words this differently
@@ -178,8 +178,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: termanch-server-musl-${{ matrix.arch }}
-          path: target/${{ matrix.target }}/release/termanch-server
+          name: termenbox-server-musl-${{ matrix.arch }}
+          path: target/${{ matrix.target }}/release/termenbox-server
           retention-days: 7
 
   # The same end-to-end test as above against the static binary, so musl-specific problems (DNS, DTLS, PTY, the
@@ -207,17 +207,17 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: termanch-server-musl-x86_64
+          name: termenbox-server-musl-x86_64
           path: bin
 
-      - run: chmod +x bin/termanch-server
+      - run: chmod +x bin/termenbox-server
 
-      - run: pnpm --filter termanch-client run e2e:build
+      - run: pnpm --filter termenbox-client run e2e:build
 
       - name: Run the browser end-to-end test
         working-directory: packages/client
         env:
-          TERMANCH_BIN: ${{ github.workspace }}/bin/termanch-server
+          TERMENBOX_BIN: ${{ github.workspace }}/bin/termenbox-server
         run: node e2e/run.mjs
 
   # The native installer (decision 0075) run for real: a machine with systemd, a release signed with a throwaway
@@ -236,11 +236,11 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: termanch-server-musl-x86_64
+          name: termenbox-server-musl-x86_64
           path: release
 
       - name: Make signed test releases (0.1.0, a newer one, a broken one, a frozen one)
-        run: .github/scripts/make-test-releases.sh release/termanch-server work
+        run: .github/scripts/make-test-releases.sh release/termenbox-server work
 
       - name: Start a machine with systemd
         run: |
@@ -258,4 +258,4 @@ jobs:
 
       - name: Service log (on failure)
         if: failure()
-        run: docker exec machine journalctl -u termanch --no-pager | tail -50
+        run: docker exec machine journalctl -u termenbox --no-pager | tail -50

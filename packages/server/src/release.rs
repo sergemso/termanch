@@ -12,9 +12,9 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256, Sha512};
 
 /// The `ssh-keygen -Y sign -n` namespace; a signature made for anything else is refused.
-pub const NAMESPACE: &str = "termanch-release";
+pub const NAMESPACE: &str = "termenbox-release";
 /// Release assets are only fetched from this project's GitHub releases.
-pub const URL_PREFIX: &str = "https://github.com/sergemso/termanch/releases/download/";
+pub const URL_PREFIX: &str = "https://github.com/termenbox/termenbox/releases/download/";
 const DEFAULT_KEYS: &str = include_str!("../release-keys.txt");
 
 /// The trusted release public keys: `kid ssh-ed25519 <base64 blob>` per line.
@@ -22,9 +22,9 @@ const DEFAULT_KEYS: &str = include_str!("../release-keys.txt");
 pub struct ReleaseKeys(Vec<(String, [u8; 32])>);
 
 impl ReleaseKeys {
-    /// `TERMANCH_RELEASE_KEYS` replaces the built-in list (tests, forks that publish their own releases).
+    /// `TERMENBOX_RELEASE_KEYS` replaces the built-in list (tests, forks that publish their own releases).
     pub fn from_env() -> Result<Self> {
-        match std::env::var("TERMANCH_RELEASE_KEYS") {
+        match std::env::var("TERMENBOX_RELEASE_KEYS") {
             Ok(v) if !v.trim().is_empty() => Self::parse(&v),
             _ => Self::parse(DEFAULT_KEYS),
         }
@@ -222,7 +222,7 @@ mod tests {
 
     /// Signs `manifest` with a throwaway key through the real `ssh-keygen`, the way CI does. None when absent.
     fn sign_with_ssh_keygen(manifest: &str, namespace: &str) -> Option<(ReleaseKeys, String)> {
-        let dir = std::env::temp_dir().join(format!("termanch-release-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("termenbox-release-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).ok()?;
         let key = dir.join("key");
         let gen = Command::new("ssh-keygen")
@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn a_real_ssh_keygen_signature_verifies_and_any_change_breaks_it() {
-        let m = manifest_json("1.2.3", &format!("{PREFIX}v1.2.3/termanch-server-x86_64"));
+        let m = manifest_json("1.2.3", &format!("{PREFIX}v1.2.3/termenbox-server-x86_64"));
         let Some((keys, sig)) = sign_with_ssh_keygen(&m, NAMESPACE) else {
             eprintln!("ssh-keygen not available; skipping");
             return;
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn a_verified_manifest_is_parsed_and_checked() {
-        let url = format!("{PREFIX}v1.2.3/termanch-server-x86_64");
+        let url = format!("{PREFIX}v1.2.3/termenbox-server-x86_64");
         let m = manifest_json("1.2.3", &url);
         let Some((keys, sig)) = sign_with_ssh_keygen(&m, NAMESPACE) else {
             return;
@@ -313,7 +313,7 @@ mod tests {
     fn a_manifest_pointing_elsewhere_or_with_a_bad_hash_is_refused_even_when_signed() {
         for (m, why) in [
             (
-                manifest_json("1.0.0", "https://evil.example/termanch-server"),
+                manifest_json("1.0.0", "https://evil.example/termenbox-server"),
                 "not hosted",
             ),
             (

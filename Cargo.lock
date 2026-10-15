@@ -2457,7 +2457,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "termanch-agent"
+name = "termenbox-agent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2468,7 +2468,7 @@ dependencies = [
  "nix 0.27.1",
  "serde",
  "serde_json",
- "termanch-core",
+ "termenbox-core",
  "tokio",
  "tokio-tungstenite 0.21.0",
  "tracing",
@@ -2479,7 +2479,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "termanch-core"
+name = "termenbox-core"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -2488,7 +2488,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "termanch-server"
+name = "termenbox-server"
 version = "0.1.16"
 dependencies = [
  "aes-gcm",
@@ -2510,7 +2510,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "str0m",
- "termanch-core",
+ "termenbox-core",
  "tokio",
  "tokio-tungstenite 0.21.0",
  "tower 0.4.13",

@@ -212,7 +212,7 @@ pub enum ServerMessage {
     AgentEvents {
         events: Vec<crate::events::AgentEvent>,
     },
-    /// Answers `push_info`. `configured` is false until the owner has run `termanch-server --setup-push`.
+    /// Answers `push_info`. `configured` is false until the owner has run `termenbox-server --setup-push`.
     PushInfo {
         configured: bool,
         /// The application server key to subscribe with (base64url); empty when not configured.
@@ -230,7 +230,7 @@ pub enum ServerMessage {
     Attention {
         items: Vec<crate::events::Attention>,
     },
-    /// Legacy message of the parked termanch-agent.
+    /// Legacy message of the parked termenbox-agent.
     AgentEvent {
         event: AgentEventType,
         agent: String,

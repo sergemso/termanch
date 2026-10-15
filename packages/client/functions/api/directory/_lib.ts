@@ -53,7 +53,7 @@ export function b64urlEncode(bytes: Uint8Array): string {
 /** The exact bytes a server signs. Keep in sync with packages/server/src/directory.rs. */
 export function canonicalMessage(r: DirRecord): string {
   return [
-    'termanch-announce-v1',
+    'termenbox-announce-v1',
     r.server_id,
     String(r.seq),
     r.ip,

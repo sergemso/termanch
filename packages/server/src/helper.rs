@@ -1,4 +1,4 @@
-//! `termanch-server --root-helper <update|requests>`: what the root-owned systemd units run (decisions 0076, 0077).
+//! `termenbox-server --root-helper <update|requests>`: what the root-owned systemd units run (decisions 0076, 0077).
 //! `update` runs the updater (daily timer). `requests` handles what the unprivileged server asked for.
 
 use std::path::{Path, PathBuf};
@@ -12,7 +12,7 @@ use crate::requests::{take_requests, Request};
 use crate::updater::{HttpFetch, Outcome, Systemd, Updater};
 
 pub const DEFAULT_RELEASE_URL: &str =
-    "https://github.com/sergemso/termanch/releases/latest/download";
+    "https://github.com/termenbox/termenbox/releases/latest/download";
 
 pub struct Setup {
     pub root_dir: PathBuf,
@@ -26,7 +26,7 @@ fn is_root() -> bool {
 /// Exit status: 0 fine (also "nothing to do"), 1 error, 2 an update was rolled back.
 pub async fn run(action: &str, setup: &Setup) -> Result<i32> {
     // The helper changes system files; only root may run it (tests set the override).
-    if !is_root() && std::env::var_os("TERMANCH_HELPER_ALLOW_NONROOT").is_none() {
+    if !is_root() && std::env::var_os("TERMENBOX_HELPER_ALLOW_NONROOT").is_none() {
         bail!("the root helper must run as root");
     }
     match action {
@@ -64,15 +64,15 @@ async fn update(setup: &Setup) -> Result<i32> {
     })?;
     let http = reqwest::Client::builder()
         .timeout(Duration::from_secs(60))
-        .user_agent("termanch-updater")
+        .user_agent("termenbox-updater")
         .build()?;
     let fetch = HttpFetch(http.clone());
     let service = Systemd {
-        unit: "termanch.service".into(),
+        unit: "termenbox.service".into(),
         health_url: format!("http://127.0.0.1:{}/health", port.trim()),
         http,
     };
-    let binary: PathBuf = std::env::var_os("TERMANCH_BINARY")
+    let binary: PathBuf = std::env::var_os("TERMENBOX_BINARY")
         .map(PathBuf::from)
         .map_or_else(std::env::current_exe, Ok)?;
     let updater = Updater {
@@ -81,7 +81,7 @@ async fn update(setup: &Setup) -> Result<i32> {
         keys: &keys,
         binary: strip_deleted(&binary),
         root_dir: setup.root_dir.clone(),
-        release_url: std::env::var("TERMANCH_RELEASE_URL")
+        release_url: std::env::var("TERMENBOX_RELEASE_URL")
             .ok()
             .filter(|v| !v.is_empty())
             .unwrap_or_else(|| DEFAULT_RELEASE_URL.into()),
@@ -119,12 +119,12 @@ mod tests {
     #[test]
     fn a_replaced_binary_path_is_cleaned() {
         assert_eq!(
-            strip_deleted(Path::new("/usr/local/bin/termanch-server (deleted)")),
-            PathBuf::from("/usr/local/bin/termanch-server")
+            strip_deleted(Path::new("/usr/local/bin/termenbox-server (deleted)")),
+            PathBuf::from("/usr/local/bin/termenbox-server")
         );
         assert_eq!(
-            strip_deleted(Path::new("/usr/local/bin/termanch-server")),
-            PathBuf::from("/usr/local/bin/termanch-server")
+            strip_deleted(Path::new("/usr/local/bin/termenbox-server")),
+            PathBuf::from("/usr/local/bin/termenbox-server")
         );
     }
 }

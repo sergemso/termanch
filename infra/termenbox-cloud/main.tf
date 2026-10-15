@@ -1,4 +1,4 @@
-# Termanch Cloud Infrastructure
+# Termenbox Cloud Infrastructure
 # Manages ONLY our hosted services: Cloudflare Pages (client) and DNS.
 # GitHub Actions secrets and variables are set by hand: the PAT cannot write them, and an apply with a missing
 # value would overwrite the real secret.
@@ -15,7 +15,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "termanch-terraform-state"
+    bucket         = "termenbox-terraform-state"
     key            = "cloud/terraform.tfstate"
     region         = "auto"
     skip_credentials_validation = true
@@ -30,7 +30,7 @@ provider "cloudflare" {
 }
 
 locals {
-  pages_project_name = coalesce(var.pages_project_name, "termanch")
+  pages_project_name = coalesce(var.pages_project_name, "termenbox")
   dns_prefix         = var.pages_project_name != null ? "${var.pages_project_name}." : ""
   dns_name_prefix    = var.pages_project_name != null ? ".${var.pages_project_name}" : ""
   pages_subdomain    = "${local.pages_project_name}.pages.dev"

@@ -31,12 +31,12 @@
 
 <dialog bind:this={dialog} aria-label="Menu" on:cancel|preventDefault={onclose} on:click={(e) => { if (e.target === dialog) onclose(); }}>
   <div class="menu">
-    <div class="row"><h2>Termanch</h2><button class="secondary" aria-label="Close menu" on:click={onclose}>×</button></div>
+    <div class="row"><h2>Termenbox</h2><button class="secondary" aria-label="Close menu" on:click={onclose}>×</button></div>
     <button class="secondary" on:click={() => choose(onservers)}>Servers</button>
     <button class="secondary" on:click={() => choose(oninbox)}>Inbox{#if unread > 0} ({unread} unread){/if}</button>
     {#if push}
       {#if !push.configured}
-        <p>Notifications for {push.serverName}: on the server run <code>termanch-server --setup-push</code>, restart it, then come back here. Needs the app added to the Home Screen on iPhone.</p>
+        <p>Notifications for {push.serverName}: on the server run <code>termenbox-server --setup-push</code>, restart it, then come back here. Needs the app added to the Home Screen on iPhone.</p>
       {:else if push.denied}
         <p>Notifications are blocked for this app in the browser settings.</p>
       {:else}
@@ -57,7 +57,7 @@
     {:else if isIosBrowser()}<p>Install: Share → Add to Home Screen.</p>
     {:else}<p>Install is available from your browser’s app menu.</p>{/if}
     <button class="secondary" disabled={!$updateAvailable} on:click={() => location.reload()}>{$updateAvailable ? 'Update available' : 'App is up to date'}</button>
-    <p class="ver">Termanch {APP_VERSION}{#if serverVersion} · server {serverVersion}{/if}</p>
+    <p class="ver">Termenbox {APP_VERSION}{#if serverVersion} · server {serverVersion}{/if}</p>
     <div class="account">{#if avatar && !broken}<img src={avatar} alt="" width="28" height="28" referrerpolicy="no-referrer" on:error={() => broken = true} />{/if}<span>@{user}</span></div>
     <button class="secondary" on:click={() => choose(onlogout)}>Log out</button>
   </div>

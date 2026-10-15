@@ -11,7 +11,7 @@ accepted-by: architect
 # Decision: Full Frame Deltas with Rope/Sequence CRDT for Screen Synchronization
 
 ## Context
-Termanch's core value proposition is Mosh-level session persistence. The screen synchronization protocol (SSP) must:
+Termenbox's core value proposition is Mosh-level session persistence. The screen synchronization protocol (SSP) must:
 - Keep client and server terminal state in sync over unreliable mobile networks
 - Handle reconnect without visible flicker or data loss
 - Efficiently encode terminal output (including large scrollback)

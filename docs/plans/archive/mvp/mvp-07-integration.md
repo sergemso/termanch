@@ -12,7 +12,7 @@ Verify full flow works: GitHub OAuth → Server registration (QR) → WebSocket 
    set -e
    
    # 1. Build Docker image
-   docker build -t termanch:mvp -f docker/Dockerfile ..
+   docker build -t termenbox:mvp -f docker/Dockerfile ..
    
    # 2. Start services (with TryCloudflare)
    docker compose up -d
@@ -23,7 +23,7 @@ Verify full flow works: GitHub OAuth → Server registration (QR) → WebSocket 
    echo "Tunnel URL: $TUNNEL_URL"
    
    # 4. Register server
-   REG_OUTPUT=$(docker compose exec termanch-server termanch-server --register)
+   REG_OUTPUT=$(docker compose exec termenbox-server termenbox-server --register)
    TOKEN=$(echo "$REG_OUTPUT" | grep "Registration Token:" | cut -d' ' -f3)
    echo "Registration token: $TOKEN"
    
@@ -49,7 +49,7 @@ Verify full flow works: GitHub OAuth → Server registration (QR) → WebSocket 
    
    test('full MVP flow', async ({ page }) => {
      // 1. Navigate to hosted client
-     await page.goto('https://app.termanch.dev');
+     await page.goto('https://app.termenbox.dev');
      
      // 2. Login with GitHub (use test account or mock)
      await page.click('text=Login with GitHub');
@@ -82,8 +82,8 @@ Verify full flow works: GitHub OAuth → Server registration (QR) → WebSocket 
 3. **Manual test checklist** (execute on test VPS):
    - [ ] Docker compose starts, all 3 services healthy
    - [ ] Cloudflared gets tunnel URL (trycloudflare or named)
-   - [ ] `termanch-server --register` prints token + QR
-   - [ ] Scan QR in `https://app.termanch.dev` → server appears
+   - [ ] `termenbox-server --register` prints token + QR
+   - [ ] Scan QR in `https://app.termenbox.dev` → server appears
    - [ ] GitHub OAuth completes, user logged in
    - [ ] Click server → session list shows tmux sessions
    - [ ] Click session → terminal renders prompt
@@ -126,4 +126,4 @@ Verify full flow works: GitHub OAuth → Server registration (QR) → WebSocket 
 - Cloudflare Tunnel connects successfully (both trycloudflare and named)
 - GitHub OAuth works for new users
 - No critical security issues (TLS, auth validation, rate limiting)
-- Cross-origin WebSocket works from app.termanch.dev
+- Cross-origin WebSocket works from app.termenbox.dev

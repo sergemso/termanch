@@ -12,10 +12,10 @@ date: 2026-10-09
 
 **Components**:
 
-1. **termanch-agent** (daemon):
+1. **termenbox-agent** (daemon):
    - Owns the PTY (spawns user's shell)
    - Reads PTY output → feeds to SSP buffer
-   - Listens on Unix socket (`~/.termanch/agent.sock`) for hook events
+   - Listens on Unix socket (`~/.termenbox/agent.sock`) for hook events
 
 2. **Shell hooks** (installed in `~/.bashrc`, `~/.zshrc`, `~/.config/fish/config.fish`):
    - `PROMPT_COMMAND` / `precmd` / `fish_prompt` emit OSC 1337 sequences for prompt markers

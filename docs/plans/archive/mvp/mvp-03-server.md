@@ -3,7 +3,7 @@
 **Owner**: Server Dev | **Duration**: 3 days | **Depends on**: mvp-02
 
 ## Goal
-WebSocket server on :443 with GitHub OAuth JWT validation, registration endpoint, PTY management, CORS for app.termanch.dev.
+WebSocket server on :443 with GitHub OAuth JWT validation, registration endpoint, PTY management, CORS for app.termenbox.dev.
 
 ## Do
 1. **`packages/server/Cargo.toml`**
@@ -13,7 +13,7 @@ WebSocket server on :443 with GitHub OAuth JWT validation, registration endpoint
    tokio-tungstenite = "0.21"
    rustls = "0.23"
    pem = "1.0"
-   termanch-core = { path = "../core" }
+   termenbox-core = { path = "../core" }
    tracing = "0.1"
    tracing-subscriber = "0.3"
    clap = { version = "4", features = ["derive"] }
@@ -37,7 +37,7 @@ WebSocket server on :443 with GitHub OAuth JWT validation, registration endpoint
        pub github_client_id: String,
        pub github_client_secret: String,
        pub registration_secret: String,   // 32-byte hex, generated on first run
-       pub allowed_origin: String,        // "https://app.termanch.dev"
+       pub allowed_origin: String,        // "https://app.termenbox.dev"
    }
    ```
 
@@ -57,7 +57,7 @@ WebSocket server on :443 with GitHub OAuth JWT validation, registration endpoint
    - Rate limit: 10 req/min/IP
 
 7. **`packages/server/src/cors.rs`** — CORS middleware:
-   - `Access-Control-Allow-Origin: https://app.termanch.dev`
+   - `Access-Control-Allow-Origin: https://app.termenbox.dev`
    - `Access-Control-Allow-Credentials: true`
    - `Access-Control-Allow-Headers: Content-Type, Authorization`
    - `Access-Control-Allow-Methods: GET, POST, OPTIONS`
@@ -75,7 +75,7 @@ WebSocket server on :443 with GitHub OAuth JWT validation, registration endpoint
    - Bridge PTY output → WebSocket `Output` messages (base64)
 
 10. **`packages/server/src/agent_socket.rs`** — Unix socket client to agent:
-    - Connect to `~/.termanch/agent.sock`
+    - Connect to `~/.termenbox/agent.sock`
     - Receive `AgentEvent` → broadcast to relevant WebSocket clients
 
 11. **`packages/server/src/metrics.rs`** — Prometheus on 127.0.0.1:9090
@@ -87,13 +87,13 @@ WebSocket server on :443 with GitHub OAuth JWT validation, registration endpoint
 
 ## Check
 ```bash
-cargo build --release -p termanch-server
-./target/release/termanch-server --help
-./target/release/termanch-server --register  # prints token + QR
+cargo build --release -p termenbox-server
+./target/release/termenbox-server --help
+./target/release/termenbox-server --register  # prints token + QR
 # Server starts, accepts WS, completes OAuth, handles /register, spawns PTY
 ```
 
 ## Integration Points
-- Agent connects via Unix socket at `~/.termanch/agent.sock`
-- Client connects via `wss://<tunnel-host>/ws` (cross-origin from app.termanch.dev)
+- Agent connects via Unix socket at `~/.termenbox/agent.sock`
+- Client connects via `wss://<tunnel-host>/ws` (cross-origin from app.termenbox.dev)
 - Registration via `POST https://<tunnel-host>/register`

@@ -3,7 +3,7 @@
 //! The browser builds the remote session description itself from the server's IP, port and DTLS
 //! fingerprint (from the signed directory record) and rewrites its own ICE ufrag/pwd to one random
 //! string. A peer is created when an unknown source sends a STUN binding request whose username is
-//! `termanch:<client ufrag>`. The client's certificate is not verified (identity comes from the
+//! `termenbox:<client ufrag>`. The client's certificate is not verified (identity comes from the
 //! GitHub login inside the channel); the client verifies ours against the pinned fingerprint.
 use std::collections::{HashMap, VecDeque};
 use std::net::{IpAddr, SocketAddr};
@@ -27,8 +27,8 @@ use crate::link::{self, Inbound, LinkEnd};
 use crate::AppState;
 
 /// Fixed by the protocol: the client puts these into the description it builds locally.
-pub const SERVER_UFRAG: &str = "termanch";
-pub const SERVER_PWD: &str = "termanch-direct-v1-0123456789";
+pub const SERVER_UFRAG: &str = "termenbox";
+pub const SERVER_PWD: &str = "termenbox-direct-v1-0123456789";
 /// Negotiated data channel id, the same on both sides (no in-band negotiation).
 pub const CHANNEL_ID: u16 = 0;
 /// The second negotiated channel, for terminal bytes (decision 0096); unused by a client that did not ask.
@@ -595,8 +595,8 @@ mod tests {
     #[test]
     fn reads_the_username_of_a_stun_binding_request() {
         assert_eq!(
-            stun_username(&stun("termanch:abcdefghijklmnop")),
-            Some("termanch:abcdefghijklmnop")
+            stun_username(&stun("termenbox:abcdefghijklmnop")),
+            Some("termenbox:abcdefghijklmnop")
         );
         assert_eq!(stun_username(&stun("x")), Some("x"));
     }
@@ -605,7 +605,7 @@ mod tests {
     fn ignores_everything_that_is_not_a_binding_request() {
         assert_eq!(stun_username(b"hello"), None);
         assert_eq!(stun_username(&[0u8; 40]), None);
-        let mut truncated = stun("termanch:abcdefghijklmnop");
+        let mut truncated = stun("termenbox:abcdefghijklmnop");
         truncated.truncate(30);
         assert_eq!(stun_username(&truncated), None);
     }
@@ -629,7 +629,7 @@ mod tests {
 
     #[test]
     fn certificate_and_fingerprint_survive_a_restart() {
-        let dir = std::env::temp_dir().join(format!("termanch-cert-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("termenbox-cert-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let a = load_or_create_cert(&dir).unwrap();
         let b = load_or_create_cert(&dir).unwrap();

@@ -44,7 +44,7 @@ const term = new Terminal({
 
 ## WASM Integration
 - xterm.js runs in main thread
-- WASM core (`termanch-core`) runs in dedicated Web Worker
+- WASM core (`termenbox-core`) runs in dedicated Web Worker
 - Communication: `postMessage` with `Transferable` ArrayBuffers
 - Delta frames: `{ version, ops: Uint32Array }` — zero-copy
 

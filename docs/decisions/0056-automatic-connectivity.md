@@ -28,7 +28,7 @@ Supersedes the "no control plane" part of 0013: the directory is a metadata-only
 
 ## Verified constraints (FACT-0018)
 
-- Quick tunnels are documented as testing/development with no uptime guarantee, so the tunnel provider stays pluggable (`TERMANCH_TUNNEL=off` plus an own URL, named tunnels) and the risk is accepted knowingly.
+- Quick tunnels are documented as testing/development with no uptime guarantee, so the tunnel provider stays pluggable (`TERMENBOX_TUNNEL=off` plus an own URL, named tunnels) and the risk is accepted knowingly.
 - Idle WebSockets die at about 125 s; heartbeats under 100 s are mandatory (server 20 s, client 15 s).
 - The server reads its URL from `cloudflared --metrics` (`/quicktunnel`), not from logs.
 - The free request budget (100k/day) bounds the hosted directory to about 10^4 users unless polling is cheap; plan 8.2 and 8.4 poll with backoff.

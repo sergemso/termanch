@@ -8,7 +8,7 @@ use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
-use termanch_core::events::{
+use termenbox_core::events::{
     Activity, AgentEvent, AgentState, Attention, AttentionKind, Confidence, EventKind, PlanItem,
     SessionActivity, SessionAgentState, Source, Task,
 };
@@ -323,7 +323,7 @@ impl EventHub {
 
     fn mac(&self, session: &str) -> Hmac<Sha256> {
         let mut m = Hmac::<Sha256>::new_from_slice(&*self.key).expect("any key length");
-        m.update(b"termanch-event-session\0");
+        m.update(b"termenbox-event-session\0");
         m.update(session.as_bytes());
         m
     }
@@ -805,7 +805,7 @@ pub fn socket_path(state_dir: &Path) -> std::path::PathBuf {
     if preferred.as_os_str().len() <= 100 {
         return preferred;
     }
-    let dir = std::env::temp_dir().join(format!("termanch-{}", unsafe { libc::geteuid() }));
+    let dir = std::env::temp_dir().join(format!("termenbox-{}", unsafe { libc::geteuid() }));
     let _ = std::fs::create_dir_all(&dir);
     {
         use std::os::unix::fs::PermissionsExt;
@@ -824,9 +824,9 @@ pub struct EventEnv {
 impl EventEnv {
     pub fn vars(&self, session: &str) -> Vec<String> {
         vec![
-            format!("TERMANCH_SESSION={session}"),
-            format!("TERMANCH_EVENT_TOKEN={}", self.hub.token(session)),
-            format!("TERMANCH_EVENT_SOCKET={}", self.socket.display()),
+            format!("TERMENBOX_SESSION={session}"),
+            format!("TERMENBOX_EVENT_TOKEN={}", self.hub.token(session)),
+            format!("TERMENBOX_EVENT_SOCKET={}", self.socket.display()),
         ]
     }
 }
@@ -835,7 +835,7 @@ impl EventEnv {
 // Ingest socket
 // ---------------------------------------------------------------------------------------------------
 
-/// One line a tool (via `termanch-server hook`) writes: which session, its token, which adapter, and the
+/// One line a tool (via `termenbox-server hook`) writes: which session, its token, which adapter, and the
 /// tool's own JSON, untouched.
 #[derive(serde::Deserialize)]
 struct Wire {
@@ -882,7 +882,7 @@ pub async fn serve_socket(hub: EventHub, path: std::path::PathBuf) -> Result<()>
 }
 
 // ---------------------------------------------------------------------------------------------------
-// The hook command a tool runs: `termanch-server --hook <adapter>`
+// The hook command a tool runs: `termenbox-server --hook <adapter>`
 // ---------------------------------------------------------------------------------------------------
 
 /// Copies the tool's JSON from stdin to the ingest socket. It never fails and never waits long: whatever
@@ -891,9 +891,9 @@ pub fn run_hook(adapter: &str) {
     let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
     run_hook_with(
         adapter,
-        env("TERMANCH_SESSION"),
-        env("TERMANCH_EVENT_TOKEN"),
-        env("TERMANCH_EVENT_SOCKET"),
+        env("TERMENBOX_SESSION"),
+        env("TERMENBOX_EVENT_TOKEN"),
+        env("TERMENBOX_EVENT_SOCKET"),
     );
 }
 
@@ -1226,8 +1226,8 @@ mod tests {
 
     #[test]
     fn a_long_state_directory_gets_a_socket_path_that_fits() {
-        let short = socket_path(Path::new("/var/lib/termanch"));
-        assert_eq!(short, Path::new("/var/lib/termanch/events.sock"));
+        let short = socket_path(Path::new("/var/lib/termenbox"));
+        assert_eq!(short, Path::new("/var/lib/termenbox/events.sock"));
         let long = socket_path(&Path::new("/tmp").join("x".repeat(120)));
         assert!(
             long.as_os_str().len() <= 100 && long.ends_with("events.sock"),
@@ -1550,7 +1550,7 @@ mod tests {
             for n in 0..20 {
                 for e in 0..20u64 {
                     let kind = if e % 2 == 0 {
-                        EventKind::Tool { name: "Bash".into(), summary: "cargo test --workspace -- --nocapture token=abcdefghijklmnopqrstuvwxyz0123456789".into(), phase: termanch_core::events::ToolPhase::Started }
+                        EventKind::Tool { name: "Bash".into(), summary: "cargo test --workspace -- --nocapture token=abcdefghijklmnopqrstuvwxyz0123456789".into(), phase: termenbox_core::events::ToolPhase::Started }
                     } else {
                         EventKind::Message {
                             summary: "working on the next step of the plan".into(),

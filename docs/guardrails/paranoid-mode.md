@@ -18,7 +18,7 @@ tags: [security, network, paranoid]
 - NTP (UDP 123) for time sync
 
 ## Configuration
-`/etc/termanch/paranoid.toml`:
+`/etc/termenbox/paranoid.toml`:
 ```toml
 [paranoid]
 enabled = true
@@ -29,7 +29,7 @@ allow_ntp = ["time.cloudflare.com"]
 ```
 
 ## Implementation
-- **nftables** rules applied by `termanch-server` on start (requires `CAP_NET_ADMIN`)
+- **nftables** rules applied by `termenbox-server` on start (requires `CAP_NET_ADMIN`)
 - Or: systemd `IPAddressDeny=any` + `IPAddressAllow=` in unit file
 - Or: User-managed (documented) — default for MVP
 

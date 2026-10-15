@@ -1,12 +1,12 @@
-# Termanch MVP — Orchestrator Plan
+# Termenbox MVP — Orchestrator Plan
 
 **Goal**: Deliver a minimal end-to-end working system in 2-3 weeks with 4 subagents working in parallel.
 
-**Architecture**: Hybrid — Termanch-hosted client (Cloudflare Pages) + User-hosted server (VPS + Docker)
+**Architecture**: Hybrid — Termenbox-hosted client (Cloudflare Pages) + User-hosted server (VPS + Docker)
 
 **MVP Scope** (only these features):
 - User deploys server to their VPS via Docker (+ Cloudflare Tunnel for TLS)
-- Hosted client at `https://app.termanch.dev` (Cloudflare Pages, our account)
+- Hosted client at `https://app.termenbox.dev` (Cloudflare Pages, our account)
 - GitHub OAuth login (our OAuth app, free tier)
 - Register server via QR code + HMAC token (no control plane)
 - Connect via WebSocket (cross-origin, CORS allowed)
@@ -101,15 +101,15 @@ POST /register { "token": "hmac_token" }
 ```
 
 ### GitHub OAuth Flow
-1. Client: Redirect to `https://github.com/login/oauth/authorize?client_id=...&redirect_uri=https://app.termanch.dev/callback&scope=read:user user:email`
-2. GitHub: User authorizes → redirects to `https://app.termanch.dev/callback?code=...`
+1. Client: Redirect to `https://github.com/login/oauth/authorize?client_id=...&redirect_uri=https://app.termenbox.dev/callback&scope=read:user user:email`
+2. GitHub: User authorizes → redirects to `https://app.termenbox.dev/callback?code=...`
 3. Client: Exchange code for access token (via GitHub API proxy or direct)
 4. Client: Store JWT in `localStorage`
 
 ### Server Registration Flow
 1. User clicks "Add Server" in client → generates registration token (HMAC)
 2. Shows QR code with token
-3. User runs `docker compose exec termanch-server termanch-server --register` on VPS
+3. User runs `docker compose exec termenbox-server termenbox-server --register` on VPS
 4. Server prints same token + QR → user scans
 5. Browser polls `/register?token=...` → gets `server_url`
 6. Server added to user's server list
@@ -119,7 +119,7 @@ POST /register { "token": "hmac_token" }
 ## Definition of Done (MVP)
 
 1. `docker compose up -d` starts server + agent + cloudflared on user's VPS
-2. Open `https://app.termanch.dev` → "Login with GitHub" → completes OAuth
+2. Open `https://app.termenbox.dev` → "Login with GitHub" → completes OAuth
 3. Click "Add Server" → scan QR → server appears in list
 4. Click server → terminal renders prompt, can type `ls`
 5. Run `codex` in another tmux pane → notification appears in UI

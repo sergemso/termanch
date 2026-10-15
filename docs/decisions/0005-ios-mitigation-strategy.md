@@ -19,7 +19,7 @@ iOS Safari aggressively manages resources:
 - Service workers evicted under memory pressure
 - No persistent background execution like native apps
 
-Termanch must survive: screen lock, app switch, Wi-Fi↔LTE handoff, tab eviction.
+Termenbox must survive: screen lock, app switch, Wi-Fi↔LTE handoff, tab eviction.
 
 ## Decision
 Implement a **three-layer persistence strategy**:
@@ -57,6 +57,6 @@ Implement a **three-layer persistence strategy**:
 ## Consequences
 - Client requires HTTPS + valid cert (Push API requirement)
 - Server implements VAPID for Web Push + APNs for iOS native push (optional enhancement)
-- `termanch-server` stores push subscriptions per session
+- `termenbox-server` stores push subscriptions per session
 - Service worker lifecycle managed via `workbox` or custom SW
 - Test matrix: iOS 16 (WS + BG Fetch), iOS 17+ (WT + Push)

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::RngCore;
-use termanch_core::protocol::{ClientMessage, ServerMessage};
+use termenbox_core::protocol::{ClientMessage, ServerMessage};
 
 use crate::link::{Inbound, Link};
 use crate::AppState;

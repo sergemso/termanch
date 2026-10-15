@@ -1,4 +1,4 @@
-//! The hook command an agent tool runs (`termanch-server --hook claude`), as a real process:
+//! The hook command an agent tool runs (`termenbox-server --hook claude`), as a real process:
 //! it must hand the event over when the server listens and must neither fail nor delay the caller when not.
 use std::io::{Read, Write};
 use std::os::unix::net::UnixListener;
@@ -7,11 +7,11 @@ use std::time::{Duration, Instant};
 
 fn hook(socket: &str, stdin: &str, keep_open: bool) -> (std::process::Output, Duration) {
     let t = Instant::now();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_termanch-server"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_termenbox-server"))
         .args(["--hook", "claude"])
-        .env("TERMANCH_SESSION", "work")
-        .env("TERMANCH_EVENT_TOKEN", "tok")
-        .env("TERMANCH_EVENT_SOCKET", socket)
+        .env("TERMENBOX_SESSION", "work")
+        .env("TERMENBOX_EVENT_TOKEN", "tok")
+        .env("TERMENBOX_EVENT_SOCKET", socket)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

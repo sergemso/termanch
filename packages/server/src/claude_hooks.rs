@@ -1,4 +1,4 @@
-//! "Connect Claude Code" (plan v6, P.3, decision 0079): adds Termanch's hook entries to the user's Claude
+//! "Connect Claude Code" (plan v6, P.3, decision 0079): adds Termenbox's hook entries to the user's Claude
 //! Code settings, only when asked, only ours, with a backup and a journal; "Disconnect" removes only ours.
 use std::path::{Path, PathBuf};
 
@@ -141,7 +141,7 @@ pub fn connect(settings: &Path, binary: &str, state_dir: &Path, apply: bool) -> 
     if let Some(parent) = settings.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let tmp = settings.with_extension("json.termanch-tmp");
+    let tmp = settings.with_extension("json.termenbox-tmp");
     std::fs::write(&tmp, &merged)?;
     std::fs::rename(&tmp, settings)?;
     let entry = prior.unwrap_or_else(|| {
@@ -186,7 +186,7 @@ pub fn disconnect(settings: &Path, state_dir: &Path) -> Result<Outcome> {
     std::fs::write(settings, cleaned)?;
     let _ = std::fs::remove_file(&jp);
     Ok(Outcome(
-        "Disconnected: removed only Termanch's hooks; your other changes stay.".into(),
+        "Disconnected: removed only Termenbox's hooks; your other changes stay.".into(),
     ))
 }
 
@@ -194,7 +194,7 @@ pub fn disconnect(settings: &Path, state_dir: &Path) -> Result<Outcome> {
 mod tests {
     use super::*;
 
-    const BIN: &str = "/usr/local/bin/termanch-server";
+    const BIN: &str = "/usr/local/bin/termenbox-server";
     const MINE: &str = r#"{
   "model": "opus",
   "hooks": {

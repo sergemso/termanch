@@ -10,7 +10,7 @@ variable "cloudflare_account_id" {
 }
 
 variable "cloudflare_zone_name" {
-  description = "Cloudflare zone (domain) for app.termanch.dev"
+  description = "Cloudflare zone (domain) for app.termenbox.dev"
   type        = string
 }
 

@@ -10,7 +10,7 @@ tags: [tiers, roadmap]
 
 ## Decision
 
-Tier design is recorded now (0089-0092, `docs/plans/termanch-roadmap.md`, steps R40-R48). No paid feature is built until the free gate passes: decision 0068 is accepted and shipped, the free Web Push and inbox path works, and the iPhone checks of the session-tabs work pass. Pro then starts with whichever of relay or history has real user demand. Enterprise starts only with a customer.
+Tier design is recorded now (0089-0092, `docs/plans/termenbox-roadmap.md`, steps R40-R48). No paid feature is built until the free gate passes: decision 0068 is accepted and shipped, the free Web Push and inbox path works, and the iPhone checks of the session-tabs work pass. Pro then starts with whichever of relay or history has real user demand. Enterprise starts only with a customer.
 
 ## Why
 

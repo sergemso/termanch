@@ -13,7 +13,7 @@ export function waitingList(sessions: { key: string; name: string }[], agents: A
     .sort((a, b) => a.since - b.since);
 }
 
-export const titleFor = (count: number) => count > 0 ? `(${count}) Termanch` : 'Termanch';
+export const titleFor = (count: number) => count > 0 ? `(${count}) Termenbox` : 'Termenbox';
 export const bannerText = (count: number) => count === 1 ? '1 needs you' : `${count} need you`;
 /** What the first item of the banner is about, when it is not a question. */
 export const bannerKind = (a: SessionAgent) => a.attention?.kind === 'finished_unseen' ? 'finished' : a.attention?.kind === 'failed' ? 'failed' : '';

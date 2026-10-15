@@ -36,7 +36,7 @@ Captured interactively (tmux): `Notification` fires when a permission prompt app
 
 - A hook that exits 1 or whose command does not exist does not fail the turn.
 - Per-hook `timeout` is in seconds. One measurement (n=1): a hook sleeping 6 s with `timeout: 1` still delayed the end of a one-line run from about 3.8 s to 8.6 s, so a slow hook costs real seconds; our hook must be a single fast write to a local socket and exit 0.
-- The session is learned from the environment: the server will export `TERMANCH_SESSION`, `TERMANCH_EVENT_SOCKET` and a per-session token into the pane; hooks read them. Claude's own `session_id` is not our session name.
+- The session is learned from the environment: the server will export `TERMENBOX_SESSION`, `TERMENBOX_EVENT_SOCKET` and a per-session token into the pane; hooks read them. Claude's own `session_id` is not our session name.
 
 
 ## Scan and screen notes (tmux 3.6)

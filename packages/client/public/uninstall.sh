@@ -1,10 +1,10 @@
 #!/bin/sh
-# Termanch uninstaller. Served by the client at /uninstall.sh.
+# Termenbox uninstaller. Served by the client at /uninstall.sh.
 #
-#   curl -fsSL https://app.termanch.vivantel.dev/uninstall.sh | sudo sh                 shows what would be removed, changes nothing
-#   curl -fsSL https://app.termanch.vivantel.dev/uninstall.sh | sudo sh -s -- --yes     removes it
+#   curl -fsSL https://app.termenbox.dev/uninstall.sh | sudo sh                 shows what would be removed, changes nothing
+#   curl -fsSL https://app.termenbox.dev/uninstall.sh | sudo sh -s -- --yes     removes it
 #
-# Options (after --yes): --delete-home  also delete the home of the `termanch` user, only if the installer created it
+# Options (after --yes): --delete-home  also delete the home of the `termenbox` user, only if the installer created it
 #                        --keep-state   keep the server's keys and owner (re-installing then keeps the same server)
 # Never touched: your repositories, the home of the user your sessions run as (unless --delete-home and we created it),
 # and tmux sessions already running (the service is built so that stopping it leaves them alive).
@@ -17,21 +17,21 @@ for a in "$@"; do
     --yes) YES=1 ;;
     --keep-state) KEEP_STATE=1 ;;
     --delete-home) DELETE_HOME=1 ;;
-    *) printf 'termanch: unknown option %s\n' "$a" >&2; exit 1 ;;
+    *) printf 'termenbox: unknown option %s\n' "$a" >&2; exit 1 ;;
   esac
 done
 
 say() { printf '%s\n' "$*"; }
-die() { printf 'termanch: %s\n' "$*" >&2; exit 1; }
+die() { printf 'termenbox: %s\n' "$*" >&2; exit 1; }
 [ "$(id -u)" -eq 0 ] || die "run this as root: curl -fsSL <client>/uninstall.sh | sudo sh"
 
-NAME="${TERMANCH_CONTAINER:-termanch}"
-ROOT="${TERMANCH_DATA:-/opt/termanch}"
+NAME="${TERMENBOX_CONTAINER:-termenbox}"
+ROOT="${TERMENBOX_DATA:-/opt/termenbox}"
 case "$ROOT" in /|/opt|/home|/root|/usr|/var|/etc|"") die "refusing to use $ROOT as the data directory" ;; esac
-BIN=/usr/local/bin/termanch-server
-STATE=/var/lib/termanch
-JOURNAL=/var/lib/termanch-root
-UNIT_NAME=termanch
+BIN=/usr/local/bin/termenbox-server
+STATE=/var/lib/termenbox
+JOURNAL=/var/lib/termenbox-root
+UNIT_NAME=termenbox
 
 found=""
 
@@ -56,7 +56,7 @@ if [ -x "$BIN" ] || [ -d "$JOURNAL" ]; then
   fi
   [ -n "$KEEP_STATE" ] || say "  - the server's state   $STATE (keys, owner)"
   if [ -n "$YES" ]; then
-    systemctl disable --now termanch-update.timer termanch-request.path "$UNIT_NAME" >/dev/null 2>&1 || true
+    systemctl disable --now termenbox-update.timer termenbox-request.path "$UNIT_NAME" >/dev/null 2>&1 || true
     if [ -x "$BIN" ] && [ -d "$JOURNAL" ]; then
       "$BIN" --journal-dir "$JOURNAL" --revert ${DELETE_HOME:+--delete-home} || die "some changes could not be undone; see the lines above. The server's state was kept."
     elif [ -d "$JOURNAL" ]; then
@@ -68,5 +68,5 @@ if [ -x "$BIN" ] || [ -d "$JOURNAL" ]; then
   fi
 fi
 
-[ -n "$found" ] || { say "Termanch is not installed on this machine."; exit 0; }
+[ -n "$found" ] || { say "Termenbox is not installed on this machine."; exit 0; }
 [ -n "$YES" ] || { say ""; say "Nothing was changed. Run again with --yes to remove it."; }

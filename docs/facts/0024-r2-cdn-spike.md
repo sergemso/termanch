@@ -13,7 +13,7 @@ Plan step C.1, run on 2026-10-12 against this project's Cloudflare account (free
 ## Verified
 
 - **R2 is enabled on the account and a bucket was created through the API with no prompt.** Whether the account has a payment method on file could not be read (the token gets "Authentication error" on billing endpoints), so the "R2 needs a card" question stays open and belongs to the account owner to check in the dashboard.
-- **A public custom domain works** (`termanch-spike.vivantel.dev` on the zone's free certificate; a single-label name under the zone). Objects were served with `server: cloudflare` and no Worker in the path.
+- **A public custom domain works** (`termenbox-spike.vivantel.dev` on the zone's free certificate; a single-label name under the zone). Objects were served with `server: cloudflare` and no Worker in the path.
 - **`Cache-Control: no-cache` objects are never cached at the edge**: three reads gave `cf-cache-status: DYNAMIC`, so every read reaches R2 (one Class B operation each). Latency from a German VPS: 120–190 ms.
 - **Cache-Control alone does not make `.json` cacheable.** With `max-age=3600` and no Cache Rule, a `.json` object stayed `DYNAMIC`. The token cannot edit zone Cache Rules ("Authentication error" on the rulesets API), so a rule was not tested.
 - **Default extension caching works with no rule:** objects named `.js` or `.csv` (content type `application/json`, `max-age=3600`) were `MISS` then `HIT` with `age`, about 70 ms. So cacheable public records can use such an extension, or a Cache Rule can be added once the token has that permission. Use `X-Content-Type-Options: nosniff` and a non-script extension such as `.csv` to avoid script confusion.

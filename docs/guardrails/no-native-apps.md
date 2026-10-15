@@ -26,8 +26,8 @@ tags: [product, distribution, platform]
 - **User friction**: Zero-install, works from any browser, shareable via URL
 
 ## Exceptions
-- `termanch-hook` CLI installer (run once on server) is a native binary — acceptable as dev tool
-- Server binaries (`termanch-server`, `termanch-agent`) are native — not user-facing apps
+- `termenbox-hook` CLI installer (run once on server) is a native binary — acceptable as dev tool
+- Server binaries (`termenbox-server`, `termenbox-agent`) are native — not user-facing apps
 
 ## Enforcement
 - CI check: `grep -r "capacitor\|tauri\|electron\|react-native\|flutter" packages/client/` → fail

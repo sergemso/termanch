@@ -5,8 +5,8 @@ import type { DirRecord } from './directory';
 import type { Transport } from './transport';
 
 /** Fixed by the protocol; must match packages/server/src/rtc.rs. */
-export const SERVER_UFRAG = 'termanch';
-export const SERVER_PWD = 'termanch-direct-v1-0123456789';
+export const SERVER_UFRAG = 'termenbox';
+export const SERVER_PWD = 'termenbox-direct-v1-0123456789';
 export const CHANNEL_ID = 0;
 /** The channel for terminal bytes; an older server never creates it, and nothing is sent on it unless `auth_ok` lists it. */
 export const TERM_CHANNEL_ID = 1;

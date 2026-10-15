@@ -1,6 +1,6 @@
-> Archived 2026-10-14. Every open step was moved into `docs/plans/termanch-roadmap.md` (see the `[>]` markers); this file is history.
+> Archived 2026-10-14. Every open step was moved into `docs/plans/termenbox-roadmap.md` (see the `[>]` markers); this file is history.
 
-# Termanch Plan: paid tiers (design now, build after the free gate)
+# Termenbox Plan: paid tiers (design now, build after the free gate)
 
 Step letters are P. Written 2026-10-14 for a cold session: read this file, then the decisions below. **Nothing in P.2-P.9 may start until P.1 is done** (decision 0093). Never build a feature into a paid tier that the classifier in `docs/skills/classify-a-feature-into-a-tier.md` puts in free. Guardrails: `free-features-are-never-capped-for-a-tier`, `paid-data-is-ciphertext-only`, `usage-stays-on-device`, `no-paid-services`, `security-secrets-handling`. Plans are tracked in GitHub issues (0049); writes to the tracker follow `tracker-writes-follow-the-answer`, so ask the owner before creating issues. One squashed PR per step from its own branch off master, green CI, merge only on the owner's "merge".
 
@@ -28,7 +28,7 @@ Decisions 0089-0093, fact 0035, guardrails `free-features-are-never-capped-for-a
 **Done when:** the files exist and their `INDEX.md` rows are present.
 
 ### P.1 The free gate — pending
-Why: free users come first (0093). Check, do not build: (a) decision 0068 is `active` in `docs/decisions/` and its write path ships (see `termanch-v7-output-connectors.md` and fact 0025); (b) the free Web Push and inbox path from `docs/plans/termanch-v7-output-connectors.md` works end to end; (c) the iPhone checks listed under "Still open" in `docs/plans/termanch-session-tabs.md` and skill `mobile-ui-device-check` pass on a real iPhone; (d) v9 G.8 and G.10 are done or consciously dropped.
+Why: free users come first (0093). Check, do not build: (a) decision 0068 is `active` in `docs/decisions/` and its write path ships (see `termenbox-v7-output-connectors.md` and fact 0025); (b) the free Web Push and inbox path from `docs/plans/termenbox-v7-output-connectors.md` works end to end; (c) the iPhone checks listed under "Still open" in `docs/plans/termenbox-session-tabs.md` and skill `mobile-ui-device-check` pass on a real iPhone; (d) v9 G.8 and G.10 are done or consciously dropped.
 **Done when:** the owner writes "gate passed" and each item above is verified against the repository, not memory.
 
 ### P.2 Entitlement record and Sponsors webhook — blocked (P.1)

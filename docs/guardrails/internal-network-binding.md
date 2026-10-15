@@ -16,10 +16,10 @@ tags: [security, network, deployment]
 ## Binding Matrix
 | Service | Port/Socket | Bind Address | Exposure |
 |---|---|---|---|
-| `termanch-server` (WebTransport/WSS) | 443 (configurable) | `0.0.0.0:443` | **Public** (user's VPS firewall controls access) |
-| `termanch-agent` (PTY proxy) | N/A (stdio) | N/A | Internal only |
-| `termanch-agent` (event socket) | `~/.termanch/agent.sock` | Unix socket | `127.0.0.1` equivalent |
-| `termanch-hook` (installer) | N/A | N/A | CLI only |
+| `termenbox-server` (WebTransport/WSS) | 443 (configurable) | `0.0.0.0:443` | **Public** (user's VPS firewall controls access) |
+| `termenbox-agent` (PTY proxy) | N/A (stdio) | N/A | Internal only |
+| `termenbox-agent` (event socket) | `~/.termenbox/agent.sock` | Unix socket | `127.0.0.1` equivalent |
+| `termenbox-hook` (installer) | N/A | N/A | CLI only |
 | Metrics (Prometheus) | 9090 | `127.0.0.1:9090` | **Internal** (scraped by local Prometheus or SSH tunnel) |
 | Health check | 8080 | `127.0.0.1:8080` | **Internal** (systemd watchdog) |
 
@@ -35,5 +35,5 @@ tags: [security, network, deployment]
 
 ## Enforcement
 - CI: `grep -r "0.0.0.0\|\[::\]" --include="*.rs" packages/server/ packages/agent/ | grep -v test → fail`
-- systemd unit review: `systemd-analyze verify termanch-server.service`
+- systemd unit review: `systemd-analyze verify termenbox-server.service`
 - Runtime: `ss -ltnp | grep -E ":9090|:8080" | grep -v "127.0.0.1" → alert`

@@ -97,7 +97,7 @@ export const onRequestPost = async ({ request, env }: Context): Promise<Response
     headers: {
       Authorization: `Bearer ${granted.access_token}`,
       Accept: 'application/vnd.github+json',
-      'User-Agent': 'termanch',
+      'User-Agent': 'termenbox',
     },
   });
   if (!userRes.ok) return json({ error: 'exchange failed' }, 401);

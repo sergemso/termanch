@@ -10,7 +10,7 @@ import { join, extname, resolve } from 'node:path';
 import { randomBytes, generateKeyPairSync, sign, createPrivateKey, createPublicKey } from 'node:crypto';
 
 const here = import.meta.dirname;
-const BIN = process.env.TERMANCH_BIN ?? resolve(here, '../../../target/release/termanch-server');
+const BIN = process.env.TERMENBOX_BIN ?? resolve(here, '../../../target/release/termenbox-server');
 const SHOTS = process.env.SHOTS ?? '';
 const fail = (m) => { console.error(`FAIL: ${m}`); process.exitCode = 1; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -38,16 +38,16 @@ async function waitFor(fn, what, ms = 15000) {
 }
 
 const webPort = await listen(statics);
-const home = mkdtempSync(join(tmpdir(), 'termanch-touch-'));
+const home = mkdtempSync(join(tmpdir(), 'termenbox-touch-'));
 const httpPort = 30000 + Math.floor(Math.random() * 30000);
 const udpPort = 30000 + Math.floor(Math.random() * 30000);
 const claim = randomBytes(32).toString('base64url');
 const cleanEnv = { ...process.env, HOME: home, XDG_CONFIG_HOME: join(home, 'xdg'), TMUX_TMPDIR: home };
 for (const k of Object.keys(cleanEnv)) if (k === 'TERM_PROGRAM') delete cleanEnv[k];
 const server = spawn(BIN, [], {
-  env: { ...cleanEnv, TERMANCH_BACKEND: 'tmux', TERMANCH_CONFIG_DIR: join(home, 'config'), TERMANCH_HOST: '127.0.0.1', TERMANCH_PORT: String(httpPort),
-    TERMANCH_UDP_PORT: String(udpPort), TERMANCH_PUBLIC_IP: '127.0.0.1', TERMANCH_DIRECTORY_URL: '', TERMANCH_DEV_INFO: 'on',
-    TERMANCH_CERT_KEYS: `e2e=${signerPublic}`, TERMANCH_CLAIM_SECRET: claim },
+  env: { ...cleanEnv, TERMENBOX_BACKEND: 'tmux', TERMENBOX_CONFIG_DIR: join(home, 'config'), TERMENBOX_HOST: '127.0.0.1', TERMENBOX_PORT: String(httpPort),
+    TERMENBOX_UDP_PORT: String(udpPort), TERMENBOX_PUBLIC_IP: '127.0.0.1', TERMENBOX_DIRECTORY_URL: '', TERMENBOX_DEV_INFO: 'on',
+    TERMENBOX_CERT_KEYS: `e2e=${signerPublic}`, TERMENBOX_CLAIM_SECRET: claim },
   stdio: ['ignore', 'inherit', 'inherit'],
 });
 let browser;

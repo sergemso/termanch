@@ -41,7 +41,7 @@ Use **`vte` crate** (same parser as Alacritty, WezTerm, Contour).
 - **Mosh port**: Mosh's terminal emulation is tightly coupled to its protocol
 
 ## Consequences
-- `termanch-core` depends on `vte` with `default-features = false`, `features = ["perform"]`
+- `termenbox-core` depends on `vte` with `default-features = false`, `features = ["perform"]`
 - WASM target: `wasm32-unknown-unknown` with `panic = "abort"`
 - `wasm-pack build --target web` produces ~800KB WASM (including Rope + CRDT + crypto)
 - Parser tested against `vte` test suite + `termbench` escape sequence corpus

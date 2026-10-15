@@ -2,7 +2,7 @@
 //! tool's own data, so they are covered by recorded samples (`testdata/events/`). Text is not cleaned
 //! here; the hub does that for every source.
 use serde_json::Value;
-use termanch_core::events::{AgentState, Confidence, EventKind, Source, ToolPhase};
+use termenbox_core::events::{AgentState, Confidence, EventKind, Source, ToolPhase};
 
 pub type Adapted = (Source, Confidence, Vec<EventKind>);
 

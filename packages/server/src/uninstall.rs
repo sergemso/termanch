@@ -81,7 +81,8 @@ mod tests {
 
     #[test]
     fn wipe_removes_everything_but_leaves_the_marker() {
-        let dir = std::env::temp_dir().join(format!("termanch-uninstall-{}", uuid::Uuid::new_v4()));
+        let dir =
+            std::env::temp_dir().join(format!("termenbox-uninstall-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(dir.join("sub")).unwrap();
         std::fs::write(dir.join("server_key"), b"k").unwrap();
         std::fs::write(dir.join("sub/x"), b"x").unwrap();

@@ -5,7 +5,7 @@ import { writable } from 'svelte/store';
 import type { Attention, AttentionKind } from './protocol';
 
 export const INBOX_MAX = 200;
-const KEY = 'termanch_inbox';
+const KEY = 'termenbox_inbox';
 
 export interface InboxItem {
   /** Unique across servers and server restarts. */

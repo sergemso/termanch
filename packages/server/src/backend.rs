@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use termanch_core::protocol::SessionInfo;
+use termenbox_core::protocol::SessionInfo;
 use tokio::process::Command;
 
 use crate::control::WindowState;
@@ -295,18 +295,20 @@ impl RunMode {
     pub fn parse(run: &str, user: &str) -> Result<Self> {
         match run {
             "container" => Ok(Self::Container),
-            "host" if user.is_empty() => Err(anyhow!("TERMANCH_RUN_USER must name a user or root")),
+            "host" if user.is_empty() => {
+                Err(anyhow!("TERMENBOX_RUN_USER must name a user or root"))
+            }
             "host" => Ok(Self::Host {
                 user: user.to_string(),
             }),
             "native" if user.is_empty() => {
-                Err(anyhow!("TERMANCH_RUN_USER must name a user or root"))
+                Err(anyhow!("TERMENBOX_RUN_USER must name a user or root"))
             }
             "native" => Ok(Self::Native {
                 user: user.to_string(),
             }),
             other => Err(anyhow!(
-                "unknown TERMANCH_RUN `{other}` (container, host or native)"
+                "unknown TERMENBOX_RUN `{other}` (container, host or native)"
             )),
         }
     }
@@ -912,8 +914,8 @@ mod tests {
 
     #[test]
     fn the_native_mode_runs_commands_as_they_are_and_shows_the_host_badge() {
-        let native = RunMode::parse("native", "termanch").unwrap();
-        assert_eq!(native.label(), "host:termanch");
+        let native = RunMode::parse("native", "termenbox").unwrap();
+        assert_eq!(native.label(), "host:termenbox");
         assert!(native.is_host());
         let (prog, argv) = native
             .runner()
@@ -929,7 +931,7 @@ mod tests {
     #[test]
     fn run_modes_parse_and_default_to_the_container() {
         assert_eq!(
-            RunMode::parse("container", "termanch").unwrap(),
+            RunMode::parse("container", "termenbox").unwrap(),
             RunMode::Container
         );
         let host = RunMode::parse("host", "root").unwrap();
@@ -945,10 +947,10 @@ mod tests {
         let (prog, argv) = Runner::host("root").wrap(false, "tmux", &args);
         assert_eq!(prog, "nsenter");
         assert_eq!(argv.join(" "), "-t 1 -m -u -i -n -p tmux -V");
-        let (_, argv) = Runner::host("termanch").wrap(false, "tmux", &args);
+        let (_, argv) = Runner::host("termenbox").wrap(false, "tmux", &args);
         assert_eq!(
             argv.join(" "),
-            "-t 1 -m -u -i -n -p runuser -u termanch -- tmux -V"
+            "-t 1 -m -u -i -n -p runuser -u termenbox -- tmux -V"
         );
         let (prog, argv) = Runner::default().wrap(true, "tmux", &args);
         assert_eq!((prog.as_str(), argv), ("tmux", args.to_vec()));
@@ -957,16 +959,16 @@ mod tests {
     #[test]
     fn a_server_start_leaves_the_container_cgroup_before_dropping_privileges() {
         let args = ["new-session".to_string()];
-        let (_, argv) = Runner::host("termanch").wrap(true, "tmux", &args);
+        let (_, argv) = Runner::host("termenbox").wrap(true, "tmux", &args);
         let line = argv.join(" ");
         let scope = line.find("systemd-run --scope").expect("scope");
-        let user = line.find("runuser -u termanch").expect("user");
+        let user = line.find("runuser -u termenbox").expect("user");
         assert!(
             scope < user,
             "systemd-run runs as root, then runuser: {line}"
         );
         assert!(
-            line.ends_with("sh runuser -u termanch -- tmux new-session"),
+            line.ends_with("sh runuser -u termenbox -- tmux new-session"),
             "{line}"
         );
     }

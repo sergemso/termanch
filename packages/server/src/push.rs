@@ -16,7 +16,7 @@ use p256::ecdsa::{signature::Signer, Signature, SigningKey};
 use p256::{ecdh::EphemeralSecret, EncodedPoint, PublicKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use termanch_core::events::{Attention, AttentionKind};
+use termenbox_core::events::{Attention, AttentionKind};
 use tracing::{info, warn};
 
 use crate::events::{now_ms, EventHub, StatusChange};
@@ -26,7 +26,7 @@ const TTL_SECS: u32 = 4 * 60 * 60;
 /// Subscriptions kept (one per device); the oldest go first.
 pub const MAX_SUBSCRIPTIONS: usize = 20;
 pub const DEFAULT_GRACE: Duration = Duration::from_secs(5);
-const DEFAULT_SUBJECT: &str = "https://app.termanch.vivantel.dev";
+const DEFAULT_SUBJECT: &str = "https://app.termenbox.dev";
 /// Hosts a browser's push service can have. A subscription from the client names where this server will POST, so
 /// anything else would turn the server into a request forger for the local network.
 const PUSH_HOSTS: [&str; 5] = [
@@ -92,7 +92,7 @@ pub fn new_key_line() -> (String, String) {
     let key = SigningKey::random(&mut rand::thread_rng());
     let public = B64.encode(key.verifying_key().to_encoded_point(false).as_bytes());
     (
-        format!("TERMANCH_VAPID_PRIVATE_KEY={}", B64.encode(key.to_bytes())),
+        format!("TERMENBOX_VAPID_PRIVATE_KEY={}", B64.encode(key.to_bytes())),
         public,
     )
 }
@@ -120,13 +120,13 @@ pub fn load_connectors(dir: &Path) -> HashMap<String, String> {
         .collect()
 }
 
-/// `termanch-server --setup-push`: writes a new VAPID key into `connectors.env` (0600) unless one is there.
+/// `termenbox-server --setup-push`: writes a new VAPID key into `connectors.env` (0600) unless one is there.
 /// The private key goes from this process into that file and nowhere else; only the public key is printed.
 pub fn setup(dir: &Path) -> Result<String> {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
     let path = dir.join("connectors.env");
-    if let Some(k) = load_connectors(dir).get("TERMANCH_VAPID_PRIVATE_KEY") {
+    if let Some(k) = load_connectors(dir).get("TERMENBOX_VAPID_PRIVATE_KEY") {
         let v = Vapid::from_private(k, "")?;
         return Ok(format!(
             "Web Push is already set up. Public key: {}",
@@ -148,7 +148,7 @@ pub fn setup(dir: &Path) -> Result<String> {
         .open(&path)?;
     writeln!(f, "{line}")?;
     Ok(format!(
-        "Web Push key written to {}.\nPublic key: {public}\nRestart termanch-server, then turn on notifications in the app.",
+        "Web Push key written to {}.\nPublic key: {public}\nRestart termenbox-server, then turn on notifications in the app.",
         path.display()
     ))
 }
@@ -286,14 +286,14 @@ pub struct Push {
 impl Push {
     pub fn load(dir: &Path) -> Arc<Self> {
         let cfg = load_connectors(dir);
-        let vapid = cfg.get("TERMANCH_VAPID_PRIVATE_KEY").and_then(|k| {
+        let vapid = cfg.get("TERMENBOX_VAPID_PRIVATE_KEY").and_then(|k| {
             Vapid::from_private(
                 k,
-                cfg.get("TERMANCH_VAPID_SUBJECT")
+                cfg.get("TERMENBOX_VAPID_SUBJECT")
                     .map(String::as_str)
                     .unwrap_or(""),
             )
-            .map_err(|e| warn!("TERMANCH_VAPID_PRIVATE_KEY is not usable: {e}"))
+            .map_err(|e| warn!("TERMENBOX_VAPID_PRIVATE_KEY is not usable: {e}"))
             .ok()
         });
         let path = dir.join("push_subscriptions.json");
@@ -616,7 +616,7 @@ mod tests {
     fn a_vapid_header_carries_a_signature_the_public_key_verifies() {
         use p256::ecdsa::{signature::Verifier, VerifyingKey};
         let (line, public) = new_key_line();
-        let key = line.strip_prefix("TERMANCH_VAPID_PRIVATE_KEY=").unwrap();
+        let key = line.strip_prefix("TERMENBOX_VAPID_PRIVATE_KEY=").unwrap();
         let v = Vapid::from_private(key, "mailto:o@example.org").unwrap();
         assert_eq!(v.public_key(), public);
         let h = v
@@ -641,14 +641,14 @@ mod tests {
     #[test]
     fn setup_writes_a_private_key_file_once_and_prints_only_the_public_key() {
         use std::os::unix::fs::PermissionsExt;
-        let dir = std::env::temp_dir().join(format!("termanch-push-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("termenbox-push-{}", uuid::Uuid::new_v4()));
         let msg = setup(&dir).unwrap();
         let mode = std::fs::metadata(dir.join("connectors.env"))
             .unwrap()
             .permissions()
             .mode();
         assert_eq!(mode & 0o777, 0o600);
-        let key = &load_connectors(&dir)["TERMANCH_VAPID_PRIVATE_KEY"];
+        let key = &load_connectors(&dir)["TERMENBOX_VAPID_PRIVATE_KEY"];
         assert!(
             !msg.contains(key.as_str()),
             "the private key is never printed"
@@ -662,19 +662,19 @@ mod tests {
     #[test]
     fn the_connectors_file_is_ignored_unless_only_its_owner_can_read_it() {
         use std::os::unix::fs::PermissionsExt;
-        let dir = std::env::temp_dir().join(format!("termanch-push-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("termenbox-push-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let f = dir.join("connectors.env");
         std::fs::write(
             &f,
-            "# note\nTERMANCH_VAPID_PRIVATE_KEY=abc\nOTHER = \"x y\"\n",
+            "# note\nTERMENBOX_VAPID_PRIVATE_KEY=abc\nOTHER = \"x y\"\n",
         )
         .unwrap();
         std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o644)).unwrap();
         assert!(load_connectors(&dir).is_empty());
         std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o600)).unwrap();
         let c = load_connectors(&dir);
-        assert_eq!(c["TERMANCH_VAPID_PRIVATE_KEY"], "abc");
+        assert_eq!(c["TERMENBOX_VAPID_PRIVATE_KEY"], "abc");
         assert_eq!(c["OTHER"], "x y");
     }
 
@@ -714,11 +714,11 @@ mod tests {
     fn push_for(endpoint: &str, sub_keys: &Subscription) -> Push {
         let (line, _) = new_key_line();
         let v = Vapid::from_private(
-            line.strip_prefix("TERMANCH_VAPID_PRIVATE_KEY=").unwrap(),
+            line.strip_prefix("TERMENBOX_VAPID_PRIVATE_KEY=").unwrap(),
             "",
         )
         .unwrap();
-        let dir = std::env::temp_dir().join(format!("termanch-push-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("termenbox-push-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let mut p = Push::new(Some(v), vec![], dir.join("subs.json"));
         p.allow_any_endpoint = true;
@@ -733,7 +733,7 @@ mod tests {
     #[tokio::test]
     async fn a_push_carries_no_marker_text_from_the_title_or_prompt() {
         // The guardrail's test: an event whose title and prompt hold a marker, then the bytes the service received.
-        use termanch_core::events::{Confidence, EventKind, Source};
+        use termenbox_core::events::{Confidence, EventKind, Source};
         let (ua, auth, keys) = device();
         let (url, mut rx) = fake_service(Arc::new(Mutex::new(StatusCode::CREATED))).await;
         let push = Arc::new(push_for(&url, &keys));
@@ -754,7 +754,7 @@ mod tests {
             Source::Hook,
             Confidence::High,
             EventKind::State {
-                state: termanch_core::events::AgentState::NeedsInput,
+                state: termenbox_core::events::AgentState::NeedsInput,
             },
             1_001,
         );
@@ -793,7 +793,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_device_showing_the_session_suppresses_the_push_and_so_does_a_quick_ack() {
-        use termanch_core::events::{AgentState, Confidence, EventKind, Source};
+        use termenbox_core::events::{AgentState, Confidence, EventKind, Source};
         let (_, _, keys) = device();
         let (url, mut rx) = fake_service(Arc::new(Mutex::new(StatusCode::CREATED))).await;
         let push = Arc::new(push_for(&url, &keys));
@@ -852,7 +852,7 @@ mod tests {
 
     #[tokio::test]
     async fn an_expired_subscription_is_removed_and_a_hint_pushes_nothing() {
-        use termanch_core::events::{AgentState, Confidence, EventKind, Source};
+        use termenbox_core::events::{AgentState, Confidence, EventKind, Source};
         let (_, _, keys) = device();
         let (url, mut rx) = fake_service(Arc::new(Mutex::new(StatusCode::GONE))).await;
         let push = Arc::new(push_for(&url, &keys));
@@ -903,13 +903,13 @@ mod tests {
     #[test]
     fn subscribing_needs_a_key_a_push_host_and_well_formed_keys() {
         let (_, _, keys) = device();
-        let dir = std::env::temp_dir().join(format!("termanch-push-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("termenbox-push-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let off = Push::new(None, vec![], dir.join("push_subscriptions.json"));
         assert!(off.subscribe(keys.clone()).is_err(), "not set up");
         let (line, _) = new_key_line();
         let v = Vapid::from_private(
-            line.strip_prefix("TERMANCH_VAPID_PRIVATE_KEY=").unwrap(),
+            line.strip_prefix("TERMENBOX_VAPID_PRIVATE_KEY=").unwrap(),
             "",
         )
         .unwrap();

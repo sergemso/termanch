@@ -9,7 +9,7 @@ Web app hosted on Cloudflare Pages: GitHub OAuth login → Add Server via QR →
 1. **`packages/client/package.json`**
    ```json
    {
-     "name": "termanch-client",
+     "name": "termenbox-client",
      "version": "0.1.0",
      "type": "module",
      "scripts": {
@@ -58,7 +58,7 @@ Web app hosted on Cloudflare Pages: GitHub OAuth login → Add Server via QR →
    - Connect to user-provided `server_url` (from registration)
 
 5. **`packages/client/src/lib/auth.ts`** — GitHub OAuth flow:
-   - `login()` → redirect to `https://github.com/login/oauth/authorize?client_id=${VITE_GITHUB_CLIENT_ID}&redirect_uri=https://app.termanch.dev/callback&scope=read:user user:email`
+   - `login()` → redirect to `https://github.com/login/oauth/authorize?client_id=${VITE_GITHUB_CLIENT_ID}&redirect_uri=https://app.termenbox.dev/callback&scope=read:user user:email`
    - Callback page (`/callback`) exchanges code for access token via GitHub API
    - Store JWT in `localStorage`
    - `logout()` → clear storage, redirect to login
@@ -76,7 +76,7 @@ Web app hosted on Cloudflare Pages: GitHub OAuth login → Add Server via QR →
    - **`Login.svelte`**: "Login with GitHub" button, handles OAuth redirect
    - **`Callback.svelte`**: Handles `?code=...` from GitHub, exchanges for token
    - **`ServerList.svelte`**: Cards showing server name, status, session count; "Add Server" button
-   - **`AddServerModal.svelte`**: QR code display + instructions ("Run `docker compose exec termanch-server termanch-server --register` and scan")
+   - **`AddServerModal.svelte`**: QR code display + instructions ("Run `docker compose exec termenbox-server termenbox-server --register` and scan")
    - **`SessionList.svelte`**: Table of sessions (id, name, agent badge), click to attach
    - **`Terminal.svelte`**: xterm.js + WebGL + FitAddon
      - On mount: create terminal, fit to container
@@ -100,13 +100,13 @@ Web app hosted on Cloudflare Pages: GitHub OAuth login → Add Server via QR →
 
 11. **Build config for Cloudflare Pages**:
     - Output: `packages/client/dist`
-    - Build command: `pnpm --filter termanch-client build`
+    - Build command: `pnpm --filter termenbox-client build`
     - Env vars: `VITE_GITHUB_CLIENT_ID`
 
 ## Check
 ```bash
-pnpm --filter termanch-client build
-pnpm --filter termanch-client preview
+pnpm --filter termenbox-client build
+pnpm --filter termenbox-client preview
 # Loads, OAuth works, QR registration works, terminal renders, types ls
 ```
 
