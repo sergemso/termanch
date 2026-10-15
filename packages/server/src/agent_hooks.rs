@@ -2,21 +2,13 @@
 //! Each agent has a different config mechanism; we abstract them behind a trait.
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Result};
-use serde_json::{json, Value};
+use anyhow::Result;
 
 pub mod claude;
 pub mod codex;
 pub mod copilot;
 pub mod kilo;
 pub mod opencode;
-
-// Re-export the trait and types
-pub use self::claude::ClaudeHooks;
-pub use self::codex::CodexHooks;
-pub use self::copilot::CopilotHooks;
-pub use self::kilo::KiloHooks;
-pub use self::opencode::OpencodeHooks;
 
 use crate::backend::Runner;
 
@@ -31,17 +23,6 @@ pub enum AgentKind {
 }
 
 impl AgentKind {
-    pub fn from_scan_name(name: &str) -> Option<Self> {
-        match name.to_ascii_lowercase().as_str() {
-            "claude" => Some(Self::Claude),
-            "codex" => Some(Self::Codex),
-            "copilot" => Some(Self::Copilot),
-            "kilo" => Some(Self::Kilo),
-            "opencode" => Some(Self::Opencode),
-            _ => None,
-        }
-    }
-
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Claude => "claude",
@@ -68,8 +49,6 @@ pub struct HookConfig {
     pub token: String,
     /// Path to the agent's settings file (or directory).
     pub settings_path: PathBuf,
-    /// Runner for executing commands (for hooks that need shell env).
-    pub runner: Runner,
 }
 
 impl HookConfig {
@@ -83,7 +62,8 @@ impl HookConfig {
         runner: Runner,
     ) -> Self {
         let settings_path = kind.default_settings_path(home);
-        Self { kind, binary, session_name, token, settings_path, runner }
+        let _ = runner; // unused but kept for API compatibility
+        Self { kind, binary, session_name, token, settings_path }
     }
 
     /// The hook command the agent will run.
@@ -125,38 +105,6 @@ pub fn get_hooks(kind: AgentKind) -> Box<dyn AgentHooks> {
     }
 }
 
-/// Auto-hook on session attach: detect the agent and install hooks if not present.
-/// Returns true if hooks were installed (or already present), false if no supported agent found.
-pub async fn auto_hook_on_attach(
-    hub: &crate::events::EventHub,
-    runner: &Runner,
-    binary: &str,
-    session: &str,
-    token: &str,
-    home: &Path,
-) -> Result<bool> {
-    // Get the agent name from the hub's scan detection
-    let agent = hub.snapshot().into_iter().find(|s| s.session == session).and_then(|s| s.agent);
-    let Some(agent_name) = agent else {
-        return Ok(false);
-    };
-
-    let Some(kind) = AgentKind::from_scan_name(&agent_name) else {
-        return Ok(false); // agent not in our supported list
-    };
-
-    let hooks = get_hooks(kind);
-    let config = HookConfig::new(kind, binary.to_string(), session.to_string(), token.to_string(), home, runner.clone());
-
-    if hooks.is_connected(&config) {
-        return Ok(true);
-    }
-
-    // Install silently (apply=true). The user can disconnect later via CLI.
-    hooks.connect(&config, true)?;
-    Ok(true)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,14 +112,12 @@ mod tests {
 
     #[test]
     fn agent_kind_from_scan_name() {
-        assert_eq!(AgentKind::from_scan_name("claude"), Some(AgentKind::Claude));
-        assert_eq!(AgentKind::from_scan_name("CLAUDE"), Some(AgentKind::Claude));
-        assert_eq!(AgentKind::from_scan_name("codex"), Some(AgentKind::Codex));
-        assert_eq!(AgentKind::from_scan_name("copilot"), Some(AgentKind::Copilot));
-        assert_eq!(AgentKind::from_scan_name("kilo"), Some(AgentKind::Kilo));
-        assert_eq!(AgentKind::from_scan_name("opencode"), Some(AgentKind::Opencode));
-        assert_eq!(AgentKind::from_scan_name("bash"), None);
-        assert_eq!(AgentKind::from_scan_name("unknown"), None);
+        // This test will be updated when from_scan_name is needed
+        assert_eq!(AgentKind::Claude.as_str(), "claude");
+        assert_eq!(AgentKind::Codex.as_str(), "codex");
+        assert_eq!(AgentKind::Copilot.as_str(), "copilot");
+        assert_eq!(AgentKind::Kilo.as_str(), "kilo");
+        assert_eq!(AgentKind::Opencode.as_str(), "opencode");
     }
 
     #[test]

@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
-use dirs;
 use tracing::{debug, info, warn};
 
 use termenbox_core::protocol::{ClientMessage, ServerMessage};
