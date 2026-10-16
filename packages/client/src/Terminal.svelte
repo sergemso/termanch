@@ -491,7 +491,19 @@
     cleanups.push(() => window.removeEventListener('termenbox-debug', syncDebug));
 
     // Ctrl+V and Ctrl+Shift+V would reach the program as ^V; let the browser paste instead (xterm handles the paste event).
-    term.attachCustomKeyEventHandler((ev) => !(ev.type === 'keydown' && ev.ctrlKey && !ev.altKey && !ev.metaKey && ev.key.toLowerCase() === 'v'));
+    // Ctrl+Shift+C copies the selection to this machine's clipboard (plain Ctrl+C stays an interrupt for the program).
+    term.attachCustomKeyEventHandler((ev) => {
+      if (ev.type !== 'keydown' || !ev.ctrlKey || ev.altKey || ev.metaKey) return true;
+      const key = ev.key.toLowerCase();
+      if (key === 'v') return false;
+      if (key === 'c' && ev.shiftKey) {
+        ev.preventDefault(); // the browser's own Ctrl+Shift+C opens its inspector
+        const text = term?.getSelection();
+        if (text) void copyText(text);
+        return false;
+      }
+      return true;
+    });
     // Shift+right-click pastes, also while a program has the mouse (where the plain click belongs to it).
     const onContextMenu = (ev: MouseEvent) => {
       if (!ev.shiftKey) return;
