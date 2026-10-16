@@ -1,4 +1,4 @@
-// Audits the phone design against DESIGN-PRINCIPLES.md. Usage: CHROME_PATH=... node audit.mjs [dir]   (default f-final)
+// Audits the phone design against DESIGN-PRINCIPLES.md (rules DR1 to DR15). Usage: CHROME_PATH=... node audit.mjs [dir]   (default f-final)
 import { createRequire } from 'node:module'; import { pathToFileURL } from 'node:url'; import path from 'node:path';
 const require = createRequire(path.resolve('../../../../packages/client/package.json'));
 const { chromium } = require('playwright-core');
@@ -52,20 +52,20 @@ for (const skin of skins) for (const mode of modes) for (const s of screens) {
   await p.goto(pathToFileURL(path.resolve(dir, 'index.html')).href + `?skin=${skin}&theme=${mode}#${s}`);
   await p.evaluate(() => document.fonts.ready); await p.waitForTimeout(100);
   const r = await p.evaluate(probe); const tag = `${s} [${skin}/${mode}]`;
-  r.small.forEach((m) => add('R1 target < 44 pt', `${s}: ${m}`));
-  r.gaps.forEach((m) => add('R2 gap < 8 pt', `${s}: ${m}`));
-  r.wide.forEach((m) => add('R4 > 7 controls in a row', `${s}: ${m}`));
-  r.contrast.forEach((m) => add('R8 text contrast', `${tag} ${m}`));
-  if (r.sizes.length > 7) add('R5 more than 7 font sizes', `${s}: ${r.sizes.join(',')}`);
-  if (r.inputs) add('R5 input under 16 px', s);
-  if (r.overflow > 0) add('R15 horizontal overflow', `${s} ${r.overflow}px`);
-  if (s === 'terminal') { if (r.chrome / 844 > 0.2) add('R12 chrome over 20%', `${(100 * r.chrome / 844).toFixed(1)}%`); }
-  if (s === 'terminal-kbd') { const share = r.term / (844 - 291); if (share < 0.5) add('R12 terminal under 50% above keyboard', `${(100 * share).toFixed(0)}%`); }
-  if (['terminal', 'terminal-kbd', 'home'].includes(s) && r.lineTop != null && r.lineTop < 844 / 3 && s !== 'home') add('R13 input not in lower two thirds', `${s} ${Math.round(r.lineTop)}`);
+  r.small.forEach((m) => add('DR1 target < 44 pt', `${s}: ${m}`));
+  r.gaps.forEach((m) => add('DR2 gap < 8 pt', `${s}: ${m}`));
+  r.wide.forEach((m) => add('DR4 > 7 controls in a row', `${s}: ${m}`));
+  r.contrast.forEach((m) => add('DR8 text contrast', `${tag} ${m}`));
+  if (r.sizes.length > 7) add('DR5 more than 7 font sizes', `${s}: ${r.sizes.join(',')}`);
+  if (r.inputs) add('DR5 input under 16 px', s);
+  if (r.overflow > 0) add('DR15 horizontal overflow', `${s} ${r.overflow}px`);
+  if (s === 'terminal') { if (r.chrome / 844 > 0.2) add('DR12 chrome over 20%', `${(100 * r.chrome / 844).toFixed(1)}%`); }
+  if (s === 'terminal-kbd') { const share = r.term / (844 - 291); if (share < 0.5) add('DR12 terminal under 50% above keyboard', `${(100 * share).toFixed(0)}%`); }
+  if (['terminal', 'terminal-kbd', 'home'].includes(s) && r.lineTop != null && r.lineTop < 844 / 3 && s !== 'home') add('DR13 input not in lower two thirds', `${s} ${Math.round(r.lineTop)}`);
   (boxes[s] ||= {})[`${skin}/${mode}`] = r.targets.join('|');
   if (skin === 'navy' && mode === 'dark') console.log(`${s.padEnd(14)} sizes ${r.sizes.join('/')}  chrome ${r.chrome ? Math.round(100 * r.chrome / 844) + '%' : '-'}  terminal ${r.term ? Math.round(r.term) + 'px' : '-'}`);
 }
-for (const s of screens) { const v = Object.values(boxes[s]); if (new Set(v).size > 1) add('R11 layout differs between skins', s); }
+for (const s of screens) { const v = Object.values(boxes[s]); if (new Set(v).size > 1) add('DR11 layout differs between skins', s); }
 console.log('\n=== AUDIT ' + dir + ' ===');
 const keys = Object.keys(fails);
 if (!keys.length) console.log('PASS: every rule held on 9 screens x 3 skins x 2 modes');

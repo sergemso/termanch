@@ -7,7 +7,7 @@
 - **Kept from the others:** B's decision-first Home and numbered options; C's fleet state counts and board view; A's session strip and Terminal tab.
 - **Screenshots** for the chosen designs: `f-final/screens/` (phone, dark and light, every screen) and `a-command/screens/` (desktop). Screenshots of the superseded options were removed to keep the repository small; the prototype sources remain and run.
 
-- **Amendment (owner, 2026-10-16, after acceptance): the key row.** Keep today's 16-key row as the default and make it configurable (which keys, which order, presets, reset). The six-key bar shown earlier in `f-final` is dropped. The same phone layout on iPhone and Android; no key row on desktop. The dense row is a documented exception to the 44 pt width rule (`DESIGN-PRINCIPLES.md`); height stays at least 44 pt.
+- **Amendment (owner, 2026-10-16, after acceptance): the key row.** Keep today's 16-key row as the default and make it configurable (which keys, which order, presets, reset). The six-key bar shown earlier in `f-final` is dropped. The same phone layout on iPhone and Android; no key row on desktop. The dense row is a documented exception to the 44 pt width rule (DR1) (`DESIGN-PRINCIPLES.md`); height stays at least 44 pt.
 
 Original recommendation text follows.
 

@@ -1,29 +1,37 @@
 #!/usr/bin/env python3
 """Regenerate the Order table in docs/plans/termenbox-roadmap.md from the step files in this directory.
 
-Edit a step by changing its `Status:` or `Score:` line, then run `python3 docs/plans/roadmap/rank.py`.
-Step file header (one per step, R01.md ...):  # Rnn Title / Status: pending|blocked (why)|done (PR) /
-Score: V=5 T=3 R=4 S=2 / Preds: R01,R02 or none / Lane: free|paid / Pin: after Rnn (optional) / Was: ...
-WSJF = (V+T+R)/S. A step takes the best bundle score of any chain it unlocks. Paid-lane steps follow free ones.
+Step file header (one per step, R01.md, U04.md ...), in this order, directly under the title line:
+  Status: pending | blocked (why) | done (PR #n)      [done, superseded and folded steps live in archive/]
+  Score:  V=5 T=3 R=4 S=2                              value, time criticality, risk or opportunity (1-10), size (1,2,3,5,8,13)
+  Preds:  R02, U04 | none                              open predecessors only (done ones are dropped)
+  Lane:   free | paid
+  Pin:    after Rnn                                    (optional) keeps a step where the owner put it
+  Tier:   P0 | P1 | P2 | P3 | Paid                     priority class; the table sorts by tier first, then WSJF, always after predecessors
+  Area:   ux | terminal | agents | server | security | cloud | release | ci | docs | connectors | paid
+  Platform: mobile | desktop | both | n/a              which client the step serves (n/a: no client surface)
+  Was:    where the step came from
+WSJF = (V+T+R)/S. A step takes the best bundle score of any chain it unlocks.
+Run `python3 docs/plans/roadmap/check.py` first (header and reference checks), then this script.
 """
-import re, sys, pathlib
+import re, pathlib
 D = pathlib.Path(__file__).parent
 INDEX = D.parent / 'termenbox-roadmap.md'
+TIER = {'P0': 0, 'P1': 1, 'P2': 2, 'P3': 3, 'Paid': 4}
 steps = {}
-for f in sorted(D.glob('R*.md')):
+for f in sorted(list(D.glob('R*.md')) + list(D.glob('U*.md'))):
     t = f.read_text().split('\n')
-    s = {'id': f.stem, 'title': re.sub(r'^# R\d+ ', '', t[0]), 'file': f.name}
-    for l in t[1:14]:
-        m = re.match(r'(Status|Score|Preds|Lane|Pin|Was): ?(.*)', l)
-        if m: s[m.group(1).lower()] = m.group(2).strip()
+    s = {'id': f.stem, 'title': re.sub(r'^# [RU]\d+[a-z]? ', '', t[0]), 'file': f.name}
+    for l in t[1:16]:
+        m = re.match(r'(Status|Score|Preds|Lane|Pin|Tier|Area|Platform|Was): ?(.*)', l)
+        if m and m.group(1).lower() not in s: s[m.group(1).lower()] = m.group(2).strip()
     sc = dict(re.findall(r'([VTRS])=(\d+)', s.get('score', '')))
     s['v'], s['t'], s['r'], s['size'] = (int(sc.get(k, 0)) for k in 'VTRS')
     s['preds'] = [] if s.get('preds', 'none') == 'none' else [p.strip() for p in s['preds'].split(',')]
-    s['lane'] = s.get('lane', 'free')
-    s['open'] = not s.get('status', 'pending').startswith('done')
+    s['tier'] = s.get('tier', 'P3')
     s['own'] = (s['v'] + s['t'] + s['r']) / max(s['size'], 1)
     steps[s['id']] = s
-act = {k: v for k, v in steps.items() if v['open']}
+act = steps
 def anc(k, seen=None):
     seen = seen if seen is not None else set()
     for p in act[k]['preds']:
@@ -34,23 +42,44 @@ def bundle(d):
     c = anc(d) | {d}; return sum(cod(x) for x in c) / sum(max(act[x]['size'], 1) for x in c)
 desc = {k: [d for d in act if k in anc(d)] for k in act}
 eff = {k: max([act[k]['own']] + [bundle(d) for d in desc[k]]) for k in act}
-order, done = [], set()
-while len(done) < len(act):
-    ready = [k for k in act if k not in done and all(p in done or p not in act for p in act[k]['preds'])]
-    free = [k for k in ready if act[k]['lane'] == 'free']
-    pool = free or ready
-    k = max(pool, key=lambda x: (eff[x], act[x]['own'])); order.append(k); done.add(k)
-for k in list(order):
-    m = re.match(r'after (R\d+)', act[k].get('pin', ''))
-    if m and m.group(1) in order:
-        order.remove(k); order.insert(order.index(m.group(1)) + 1, k)
-rows = ['| # | Step | Title | Status | WSJF | Preds |', '|---|---|---|---|---|---|']
+keyf = lambda x: (TIER[act[x]['tier']], -eff[x], -act[x]['own'], x)
+order, placed = [], set()
+def place(k):
+    if k in placed: return
+    placed.add(k)
+    for p in sorted([p for p in act[k]['preds'] if p in act], key=keyf): place(p)
+    order.append(k)
+for k in sorted(act, key=keyf): place(k)
+# Pins keep a sequenced programme in plan order: a pinned step moves to directly after its target.
+for _ in range(len(act)):
+    moved = False
+    for k in list(order):
+        m = re.match(r'after ([RU]\d+[a-z]?)', act[k].get('pin', ''))
+        if m and m.group(1) in order and order.index(k) != order.index(m.group(1)) + 1:
+            order.remove(k); order.insert(order.index(m.group(1)) + 1, k); moved = True
+    if not moved: break
+# A predecessor that a pin left behind is pulled to directly before the step that needs it.
+for _ in range(len(act) * 2):
+    pos = {k: i for i, k in enumerate(order)}; fixed = True
+    for k in list(order):
+        for p in act[k]['preds']:
+            if p in pos and pos[p] > pos[k]:
+                order.remove(p); order.insert(order.index(k), p); fixed = False; break
+        if not fixed: break
+    if fixed: break
+pos = {k: i for i, k in enumerate(order)}
+for k in order:
+    for p in act[k]['preds']:
+        if p in pos and pos[p] > pos[k]: raise SystemExit(f'order puts {k} before its predecessor {p}; fix a Pin or Preds')
+rows = ['| # | Step | Title | Tier | Area | Platform | Status | WSJF | Preds |', '|---|---|---|---|---|---|---|---|---|']
 for i, k in enumerate(order, 1):
     s = act[k]
-    rows.append(f"| {i} | [{k}](roadmap/{s['file']}) | {s['title']} | {s.get('status', 'pending')} | {s['own']:.1f} | {', '.join(s['preds']) or '-'} |")
-ndone = len(steps) - len(act)
-table = '\n'.join(rows) + f"\n\n{ndone} step(s) done (their files stay in `roadmap/`; `grep -l '^Status: done' roadmap/R*.md`).\n"
+    rows.append(f"| {i} | [{k}](roadmap/{s['file']}) | {s['title']} | {s['tier']} | {s.get('area', '-')} | {s.get('platform', '-')} | {s.get('status', 'pending')} | {s['own']:.1f} | {', '.join(s['preds']) or '-'} |")
+arch = sorted((D / 'archive').glob('*.md'))
+nd = sum(1 for f in arch if f.read_text().split('\n')[1].startswith('Status: done'))
+ns = len(arch) - nd
+table = '\n'.join(rows) + f"\n\n{len(order)} open steps. {nd} done and {ns} superseded or folded steps are in `roadmap/archive/` (their text is kept; `grep -h '^Status' roadmap/archive/*.md`).\n"
 txt = INDEX.read_text()
 new = re.sub(r'(<!-- order:start -->\n).*?(<!-- order:end -->)', lambda m: m.group(1) + table + m.group(2), txt, flags=re.S)
 INDEX.write_text(new)
-print(f'{len(order)} open, {ndone} done; next: ' + ', '.join(order[:3]))
+print(f'{len(order)} open, {nd} done, {ns} superseded/folded; next: ' + ', '.join(order[:4]))
