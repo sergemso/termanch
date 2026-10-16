@@ -45,7 +45,7 @@
 0039-verification-unit-command,"The verification unit command is """"","practice-packs, verification, harness",active
 0040-verification-integration-command,"The verification integration command is """"","practice-packs, verification, harness",active
 0041-verification-e2e-command,"The verification e2e command is """"","practice-packs, verification, harness",active
-0042-verification-machine-profile,"Cheap checks run locally, slow checks only in CI (thin machine profile)","practice-packs, verification, harness, ci",active
+0042-verification-machine-profile,"Cheap checks run locally, slow checks only in CI (thin machine profile)","practice-packs, verification, harness, ci",superseded
 0043-verification-review-bar,"Review steps pass a reviewer-agent verdict","practice-packs, verification, harness",active
 0044-verification-gate,"""Done"" is blocked while the verification checks fail","practice-packs, verification, harness",active
 0045-branch-names,"Branches are named ^(feat|fix|docs|chore|ci|test|refactor|perf|build|style|revert)/[a-z0-9][a-z0-9._-]*$","practice-packs, git-hooks, guardrail",active
@@ -90,7 +90,7 @@
 0085-tabs-speak-for-one-window-and-detach-differs-from-close,"A tab speaks for one tmux window, Detach differs from Close, and windows come from tmux control mode","client, mobile, agents, tmux, protocol",active
 0086-a-problem-report-says-what-the-app-did-and-how-the-page-was-viewed,"A problem report says what the app did and how the page was viewed","client, privacy, mobile, ios",active
 0087-the-terminal-is-built-once-and-never-answers-the-page,"The terminal is built once per connection, takes input at 16px and answers no colour queries","client, ios, rendering, terminal, mobile",active
-0088-the-start-screen-resumes-the-last-session,"The start screen resumes the last session","client, mobile",active
+0088-the-start-screen-resumes-the-last-session,"The start screen resumes the last session","client, mobile",superseded
 0089-paid-tiers-sell-only-what-costs-us-to-run,"Paid tiers sell only what costs us to run; the free product is never capped","tiers, billing, roadmap",active
 0090-pro-is-managed-relay-history-push-and-fleet-view,"Pro is managed relay, cloud history, reliable push with inbox, and fleet view, all client-encrypted","tiers, privacy, crypto, roadmap",active
 0091-team-and-enterprise-are-a-hosted-control-plane-over-mit-code,"Team and Enterprise sell a hosted control plane; the code stays MIT","tiers, license, security, roadmap",active
@@ -100,3 +100,14 @@
 0095-agent-status-is-activity-plus-attention,"Agent status is Activity plus Attention, with the current task, and notifications fire on Attention","agents, notifications, pwa, protocol, roadmap",active
 0096-terminal-and-status-use-two-data-channels,"Terminal data and agent status travel on two data channels of one connection","transport, protocol, agents, roadmap",active
 0097-herdr-is-removed,"herdr is removed as a session manager and as a status source","agents, sessions, architecture, roadmap",active
+0098-verification-coverage-command,"The verification coverage command is """"","practice-packs, verification, harness",draft
+0099-verification-coverage-bar,"Coverage must meet what the coverage command enforces","practice-packs, verification, harness",draft
+0100-home-is-a-decision-first-board,"Home is a decision-first board: what needs the user first, the fleet below","client, mobile, agents, roadmap",active
+0101-navigation-bottom-bar-on-phone-workspace-on-desktop,"Phone navigation is a four-destination bottom bar; desktop is a three-pane workspace with a command palette","client, mobile, desktop, roadmap",active
+0102-act-in-place-the-terminal-is-the-expert-path,"Users act in place; the full-screen terminal is the expert path and the fallback","client, mobile, agents, roadmap",active
+0103-session-view-uses-capability-tiers-and-agent-profiles,"The in-place session view uses three capability tiers and per-agent screen profiles, for every detected agent","agents, client, protocol, roadmap",active
+0104-decision-cards-carry-context-and-escalate,"Decision cards carry context, and unanswered decisions escalate by a ladder with a deep-link push","agents, notifications, client, roadmap",active
+0105-reports-are-fleet-board-timeline-usage-and-health,"Reporting is a live fleet board, an activity timeline with a daily digest, usage and cost, and server health; on-server views are free","client, tiers, agents, roadmap",active
+0106-hook-offer-is-contextual-and-not-a-nag,"Hooks are offered once, inline, in context, and never nagged","agents, hooks, client, roadmap",active
+0107-design-spike-precedes-the-build,"A design spike picks the visual direction before screens are built; Android is first-class and honestly labelled","client, mobile, design, roadmap",active
+0108-verification-machine-profile,"Verification checks run only in CI (ci-only machine profile)","practice-packs, verification, harness, ci",active

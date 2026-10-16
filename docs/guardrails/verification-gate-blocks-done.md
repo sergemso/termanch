@@ -2,7 +2,7 @@
 id: verification-gate-blocks-done
 title: A step is not done while its verification checks fail
 status: active
-date: 2026-10-11
+date: 2026-10-16
 tags: [practice-packs, verification, guardrail]
 governed-by: 0044-verification-gate
 grounded-in: [0044-verification-gate]
@@ -14,7 +14,7 @@ go-getter:
     - tier: 2
       check: Stop hook keeps the agent working while the checks fail, bounded by the escalation limit
       run: builtin:verify-gate
-  generated-by: verification-gate@0.3.0
+  generated-by: verification-gate@0.4.0
   pack-answer: gate
   pack-option: block
 ---

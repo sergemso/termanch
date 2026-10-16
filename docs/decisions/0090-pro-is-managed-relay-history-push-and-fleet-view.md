@@ -18,6 +18,10 @@ tags: [tiers, privacy, crypto, roadmap]
 - All Pro data is client-encrypted, as in 0068: we store ciphertext, derive nothing readable, and cannot search or index it. Search and reports are computed on the device after decryption. A recovery key is offered because a lost key means lost data.
 - Pro is opt-in per feature. Nothing readable about usage or terminal content reaches us.
 
+## Amended 2026-10-16
+
+On-server history, the fleet board, usage and cost, and server health are free; "fleet view and usage reports" here means the cross-server, cloud-retained version: see [[0105-reports-are-fleet-board-timeline-usage-and-health]].
+
 ## Why
 
 Zero-knowledge keeps the privacy promise and the threat model (fact 0023) while still funding the paid infrastructure. Terminal output can contain secrets, so we do not become its custodian. This decision supplies the new decision that [[usage-stays-on-device]] requires; it also needs the privacy-notice update tracked in the plan. See [[paid-data-is-ciphertext-only]].

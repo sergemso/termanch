@@ -1,13 +1,13 @@
 {
   "schema": 1,
-  "version": "0.3.1",
+  "version": "0.3.5",
   "packs": {
-    "context": "0.3.0",
+    "context": "0.3.1",
     "cost-routing": "0.2.0",
     "git-workflow": "0.1.1",
-    "orchestration": "0.1.0",
+    "orchestration": "0.1.1",
     "tracker": "0.3.0",
-    "verification-gate": "0.3.0"
+    "verification-gate": "0.4.0"
   },
   "files": {
     ".claude/agents/explorer.md": {
@@ -30,10 +30,10 @@
       "mode": "755"
     },
     ".github/workflows/go-getter-checks.yml": {
-      "hash": "sha256:16972e970b4807ce1e75638eb2822f5b9d64d66ba878fd84d0acea4efc19de5a"
+      "hash": "sha256:33e1f9cb9f0e352cfe62380e860ea7097de77b078111d6acb14383d0fd647cd2"
     },
     ".go-getter/bin/go-getter": {
-      "hash": "sha256:548abd68738bc196ae0856fd53a4d7208915827c4e8083648ea3302f1afce41e",
+      "hash": "sha256:dd5f0d63b4c7e45c8e4172b7d6f63a4628fa6a12d7cf62c33a6dd2d7ae9b4267",
       "mode": "755"
     },
     ".go-getter/cli/compiler/adapters/claude-code.mjs": {
@@ -58,40 +58,40 @@
       "hash": "sha256:d8e9f25c8faf562b046a82509b12c4b61278d9ebc1b1eee49cd7bf968094aade"
     },
     ".go-getter/cli/compiler/bin/go-getter.mjs": {
-      "hash": "sha256:16dea1a5b9012d9b90600b250e255a8b6bc1cdf5ca33fef23304e8c21886f506"
+      "hash": "sha256:180aedf7df59b8fb58c460ea2985a0509fdfd450973a3554bb2d212f342b3db9"
     },
     ".go-getter/cli/compiler/capabilities/claude-code.json": {
-      "hash": "sha256:25c1c6726efacb75ca56048ec4d9617f452a3e6e3384f3307d092d3012e32f29"
+      "hash": "sha256:101e5e688637d06b881d99644ddda75f20c092d2a88571577d2d72cf8b96fbf0"
     },
     ".go-getter/cli/compiler/capabilities/codex.json": {
-      "hash": "sha256:f46c230accd7abfffd5c3790e061a3aa3ad8a006942b3da9983918702e6ebd79"
+      "hash": "sha256:cbb60347b0b8a9bfedb495ab17eb9e0f3eac58dec108154d70958f7c0b1f020c"
     },
     ".go-getter/cli/compiler/capabilities/copilot.json": {
-      "hash": "sha256:4bd8ba0295527238baef36992862dead62dfed8d3da8df4df84ccd16dc703e49"
+      "hash": "sha256:6bc69eb5feaaf5e3075e70656ab88b8e88c70e9a7793ca8740d164372a175544"
     },
     ".go-getter/cli/compiler/capabilities/cursor.json": {
-      "hash": "sha256:8f5254926120e777dd6d653ac9e81131ded5ae0091355ecf104f601db253599c"
+      "hash": "sha256:94902e693b9fecba8011825adb680c0b4dacab1c125ef484fc49b052db29a2c2"
     },
     ".go-getter/cli/compiler/capabilities/gemini-cli.json": {
-      "hash": "sha256:9bdf4e84cd24d18f89038953251756620426b79fc45879633f5d4a780bf98999"
+      "hash": "sha256:a5ddce57ebbe738a5530e3d7b2b299e5b02264a9ab29cff1ca61c2e4d007cc02"
     },
     ".go-getter/cli/compiler/capabilities/kilo.json": {
-      "hash": "sha256:dc4d15449e67542d420b39c5c51442266ad17951e02801f2d9e021f06d924148"
+      "hash": "sha256:bc444fa7132fead92306155f8371cfb591a836ea30d6cb03149347ba4c428397"
     },
     ".go-getter/cli/compiler/capabilities/opencode.json": {
-      "hash": "sha256:0d51d70a67528a520932f28ad32314962a88ff0560bdacafdd8fcd8322d3c5b1"
+      "hash": "sha256:db0ec6e82a56892ca3a85bff46e78b433a9bfa65ec70e2733bc9d8436c2e7e16"
     },
     ".go-getter/cli/compiler/schemas/capabilities.schema.json": {
-      "hash": "sha256:af861a7315a12bbf3e95af7e1037e233b3687cc9800bcaad67be212678089cd0"
+      "hash": "sha256:b52b3187eb9e13681ff97c44c529e687e8c96989399ce8310864e2a8bf15b426"
     },
     ".go-getter/cli/compiler/schemas/pack.schema.json": {
-      "hash": "sha256:fb0a219c150f2da7de5c702ff9e0318a670b91443ac0a3ee6d5c3c20dfba4cc2"
+      "hash": "sha256:262d50de461592f4d8a30b5992a2cdabece92afb492a3660e148776c39fdeaf0"
     },
     ".go-getter/cli/compiler/src/agents.mjs": {
       "hash": "sha256:b001f69f1fb289f1ec06038f066a83c4cfa2da7a548f6355317f0d03ff2aaa81"
     },
     ".go-getter/cli/compiler/src/apply.mjs": {
-      "hash": "sha256:8fd4a29610625d250eef4dd290b277f134421d3137cf16127af5ca117a0c20a5"
+      "hash": "sha256:cf6ef5e426387ed772145ea10e9b4108c1719003239f4f598212bca73d3e512f"
     },
     ".go-getter/cli/compiler/src/artifacts.mjs": {
       "hash": "sha256:fb18929f1a2540890dd9560a24d9e157392adf3ddbef70eda1adf70b0dd118fc"
@@ -103,7 +103,7 @@
       "hash": "sha256:c854035f7fa764d49ee2f675d9a36833c0ee9b1f5c8689685028f716de6e478b"
     },
     ".go-getter/cli/compiler/src/checkpoint-trigger.mjs": {
-      "hash": "sha256:50d1f7119382d0eaea3fc43545a0a5c7b2f08b86bdd2e58a6522fc5f4de6e0a3"
+      "hash": "sha256:0508321eddd292d1932df50e351dcf6ada9e2f6e1e9b9ca01e1d8cb7ec328e34"
     },
     ".go-getter/cli/compiler/src/checkpoint.mjs": {
       "hash": "sha256:365ce2f06ceb6962ac5d71dd169cb6fcf348e1a16987ce770d4b7bf07ad3abf6"
@@ -131,6 +131,12 @@
     },
     ".go-getter/cli/compiler/src/checks/builtin/gitignore-includes.mjs": {
       "hash": "sha256:b9bc5c21bfd07c149da156a80fabb6e44c82c64c033cca5b715ed333cd39285c"
+    },
+    ".go-getter/cli/compiler/src/checks/builtin/mcp-allow.mjs": {
+      "hash": "sha256:fc12217d80f6fe8d829f105cf0cb80ede017ad73296c1c97dacd21f699e0ad8a"
+    },
+    ".go-getter/cli/compiler/src/checks/builtin/mcp-scan.mjs": {
+      "hash": "sha256:4995035a3a37ee718322ac93e1b6f5fa7121c3bfcf464bd0ec671f34e7d09884"
     },
     ".go-getter/cli/compiler/src/checks/builtin/not-on-default-branch.mjs": {
       "hash": "sha256:c5d84b4b575cb95439e14de9337309d20421d5ba4d5876761d22a278c5dfcba3"
@@ -190,7 +196,7 @@
       "hash": "sha256:2cc254638e41b9980b747eebf775bc3d1832afebb3e8fc36e7a785a705181953"
     },
     ".go-getter/cli/compiler/src/commands/approvals.mjs": {
-      "hash": "sha256:38801ba8e4d99a4e6ecbc5bc92de3b84b5660c36e73fe54af55e986d8d6ac1d7"
+      "hash": "sha256:cae36806c3ee39ed84f42dd8cacdb21e61f0dc7c29f16be47893afe60f602023"
     },
     ".go-getter/cli/compiler/src/commands/build.mjs": {
       "hash": "sha256:dcd24e4a1fac7e11c36b0d9d9c9dff2cdf61ab46046cccaffe8e4a182f209086"
@@ -214,7 +220,7 @@
       "hash": "sha256:3ff411d297ba50d158a42d2efbf253aa3e5322bcd3efd2ec12328c21eab122e7"
     },
     ".go-getter/cli/compiler/src/commands/hook.mjs": {
-      "hash": "sha256:8289a5ca6937c0cdb7d9bbfbf0ff4b40f5bda18419d5739413251a1e919d38c5"
+      "hash": "sha256:f60cdee4af3094a01b775da66a7f3f86c5fd05f76c4b8c7de00a40a91cf2dfc1"
     },
     ".go-getter/cli/compiler/src/commands/pack.mjs": {
       "hash": "sha256:995d39623595bd6471676c5c9c423fc014fde62d8f387f57b06ba90aa39064c8"
@@ -226,19 +232,22 @@
       "hash": "sha256:e2b2a5283b57c784ffd312e16c78c6e8063c92d3bbf3ee02138845283c402fd3"
     },
     ".go-getter/cli/compiler/src/commands/reconfigure.mjs": {
-      "hash": "sha256:5f9efcdaa005f35eddaff858305a552bd3d90d7376208e9f51731e1f33e7223e"
+      "hash": "sha256:34f427fe3dfae945056b4cf7846c13933e599a3c2ea491a26c2b590f80842ae0"
     },
     ".go-getter/cli/compiler/src/commands/refs.mjs": {
       "hash": "sha256:2cbd697b23d709149d91506cd5ca1b784744f92f08ef3973f991c30d85dffe44"
     },
     ".go-getter/cli/compiler/src/commands/render-pack.mjs": {
-      "hash": "sha256:62dc9b2cfdcd2d9c7d3f1986707671b2e721750bee5a5321da1e86325dd23f95"
+      "hash": "sha256:879ebf6d80c96bcd3c429d6f5a99a366d057deabc97c2b9166de16c8c1828b93"
     },
     ".go-getter/cli/compiler/src/commands/route.mjs": {
       "hash": "sha256:c33c5cb7dd93658b5b104f11a76f6948a03b0d191a8cb012c69afe6ad9155b79"
     },
     ".go-getter/cli/compiler/src/commands/routing.mjs": {
       "hash": "sha256:28bee7e634fa01c724f68e9dabb1439d03ae2435de821529aed625d6f7cdb319"
+    },
+    ".go-getter/cli/compiler/src/commands/run.mjs": {
+      "hash": "sha256:edf2a1e6ed446f9bd4731a64681c04a9c33f153e02822616a689174c22b955cf"
     },
     ".go-getter/cli/compiler/src/commands/sandbox.mjs": {
       "hash": "sha256:8911a0bfeb1f6efc5c16b85dbae7c8ed222782e83e063b9b233fac05a83833fd"
@@ -262,10 +271,10 @@
       "hash": "sha256:d46b08679c3da1c26ea1fdd2f15ad4e2a77ff1b068863c07535b3201ac3f83eb"
     },
     ".go-getter/cli/compiler/src/coverage.mjs": {
-      "hash": "sha256:580f98da538298e8f9c793f0245da49390ad22ee2c1129367e9474671fe9a3e7"
+      "hash": "sha256:c21294b91ad21ee1fb7342ea015229befa038a4cfa17e7228f141196b7df1874"
     },
     ".go-getter/cli/compiler/src/detect.mjs": {
-      "hash": "sha256:99c8b5cf8e67e4ebcb7b13db72a9c48ca2d28ae59ac0a182f0333b121ac7f722"
+      "hash": "sha256:4c9bfeba5a775687e84183ec3addcd0a1379606d53962579db47ebe20fbc66b7"
     },
     ".go-getter/cli/compiler/src/emit.mjs": {
       "hash": "sha256:469a5c807810ce76c1de38ab9c4a5760866e3e1bce07e280169bdaa738828d93"
@@ -277,7 +286,7 @@
       "hash": "sha256:68357582817826838cc1f9f72ca7336f680a9178dd2ab7823afade3528f2afca"
     },
     ".go-getter/cli/compiler/src/gate.mjs": {
-      "hash": "sha256:fb49ae7e7d5d3027f7cd1b1f9fb9c7662252c653cc82769654912b584c01c357"
+      "hash": "sha256:441f25b49a1308e5ceffa1dbc0f0ea02ce7376b606b32126c9a7500691bd8b29"
     },
     ".go-getter/cli/compiler/src/git-env.mjs": {
       "hash": "sha256:afdb7b2f807bd80e992306f419fd021482e1ecee254fecce9e25b93a5d222709"
@@ -289,7 +298,7 @@
       "hash": "sha256:69ec9fd1a8ce8147fca0e576c7651be9f62b6337ce9a121e4eefff8c1798e99f"
     },
     ".go-getter/cli/compiler/src/hook.mjs": {
-      "hash": "sha256:6780d33a75102be1de58ea5c309dd59c9bf811a28823e98f40ae6857f858f34d"
+      "hash": "sha256:4046e9728cdd371ea13a91683abb7840821f7ace253f26fc3e7a0da3a5942c99"
     },
     ".go-getter/cli/compiler/src/invocation.mjs": {
       "hash": "sha256:ecdbd81ea0337a7872f88a23eacf2937806627ed430527ac7974053f2f595d7c"
@@ -297,17 +306,20 @@
     ".go-getter/cli/compiler/src/manifest.mjs": {
       "hash": "sha256:185ec4dc4783e104cf42050f8f3d01922f343635c21f994f37ad6c1e22415c62"
     },
+    ".go-getter/cli/compiler/src/mcp.mjs": {
+      "hash": "sha256:3773604f639300ba5f880f85d064abcfac67f89f4bbaf78759f1b7e4e0939200"
+    },
     ".go-getter/cli/compiler/src/packs.mjs": {
-      "hash": "sha256:5108969c22d484f31b9d152def9efefa9e90dd5063aac63b84930399eac38cf6"
+      "hash": "sha256:eb5663340feb40e491a8c06bd097c008fef2c263e20383fec4060d1fad611bed"
     },
     ".go-getter/cli/compiler/src/plan.mjs": {
-      "hash": "sha256:ef5287ac7586ecb9c1ce4895a72b40aeb7688c3c75cbbed35e6f48c1b3c85a89"
+      "hash": "sha256:904477c7cd8c9096f2074f0bd6a226fa6a514f5cda9be2b140d37493925dca21"
     },
     ".go-getter/cli/compiler/src/reconcile.mjs": {
       "hash": "sha256:9dcf074c6f13a0b2cc56d72989758b588d8844b8dff1100bea9cac3dff342b14"
     },
     ".go-getter/cli/compiler/src/reconfigure.mjs": {
-      "hash": "sha256:2b75c77a99cb9a113450b6cc954afa44de12e807bb3562a4d1a2fc785fdd2a75"
+      "hash": "sha256:60d8a1b67f23148da885f41415693e730617eb04acfab76bd06073c61c029b51"
     },
     ".go-getter/cli/compiler/src/refs.mjs": {
       "hash": "sha256:63a4e780e2c27362a634dd5e550b0f819e08339327727285c495368195855c56"
@@ -336,6 +348,24 @@
     ".go-getter/cli/compiler/src/routing/registry.mjs": {
       "hash": "sha256:744fb9b472aad864c67e0059b2f365c3085a46c6bdd287925d4780f13e948d96"
     },
+    ".go-getter/cli/compiler/src/runs/next.mjs": {
+      "hash": "sha256:0f8c643b4c84d7989e3d2b14e0de7eb849e8a6202530fd511293a3ff91899d4e"
+    },
+    ".go-getter/cli/compiler/src/runs/preconditions.mjs": {
+      "hash": "sha256:401ff54f305935daa6009702e7695650ac878c65fb853646202c08db0f8401c6"
+    },
+    ".go-getter/cli/compiler/src/runs/record.mjs": {
+      "hash": "sha256:53a05a0da595b7716842556ae6c1c29ef8916aea25d5ec43c4c357b551cd6efd"
+    },
+    ".go-getter/cli/compiler/src/runs/report.mjs": {
+      "hash": "sha256:579f0ea5cae63ada1d6b0d093c8036cc736ef62d441f057bb1f6017e9d52cf6c"
+    },
+    ".go-getter/cli/compiler/src/runs/shapes.mjs": {
+      "hash": "sha256:1791c9ab395977bc2dc9c41146a6494175179bf3e27b2d77c4bd0065e6d2f99d"
+    },
+    ".go-getter/cli/compiler/src/runs/spend.mjs": {
+      "hash": "sha256:6f11f2ca9854adb83d66caa0049ceccf168642ccc7806cca57c186919fd407be"
+    },
     ".go-getter/cli/compiler/src/sandbox.mjs": {
       "hash": "sha256:9133b8455369a44e9008e43a6321575874b08210e64814b0d88dd61cf728d293"
     },
@@ -343,7 +373,7 @@
       "hash": "sha256:ec1070f8f446b366d22adc789716f69653bb1c817c20d1670c3edccb486387ee"
     },
     ".go-getter/cli/compiler/src/secrets/approvals.mjs": {
-      "hash": "sha256:5fa2143d1409fd9170c1db22357f7f1d3480c26a10dfea140e75c45ef144c940"
+      "hash": "sha256:fb215c3766d70ee1da2153078bb886300d9df1d74af511e89cf34e923361c453"
     },
     ".go-getter/cli/compiler/src/secrets/fileset.mjs": {
       "hash": "sha256:662df045e0717d424d863d7bbeb973c628d49f923a6c262d445837581f77b5f5"
@@ -374,6 +404,21 @@
     },
     ".go-getter/cli/compiler/src/spec-tools.mjs": {
       "hash": "sha256:24d588258d5007c4cca1eadd9fcb0caabd499215bced4650fc5604c4ebf7727b"
+    },
+    ".go-getter/cli/compiler/src/spend/emit.mjs": {
+      "hash": "sha256:80cab74d6f594b3df4eb15dae9df4e73f6de2af61d9c8e86c95cacbd969e7648"
+    },
+    ".go-getter/cli/compiler/src/spend/index.mjs": {
+      "hash": "sha256:461220b4cc50d84fa830720b3535299297294d8056dc87abed774a558dfe7d1a"
+    },
+    ".go-getter/cli/compiler/src/spend/price.mjs": {
+      "hash": "sha256:35a482348c5a430d3ae351f7a8e43eeb762aa49f879cc0692549318659329786"
+    },
+    ".go-getter/cli/compiler/src/spend/sessions.mjs": {
+      "hash": "sha256:b50d7565ad5aa611e17b60bf1a00a7621f88bb7e21a3f36bc3b698fb5c8a997b"
+    },
+    ".go-getter/cli/compiler/src/spend/transcript.mjs": {
+      "hash": "sha256:e5bda2d30badfe37c19685bfb9a12bba11d8f967fdba932989f93dc8bd2ea008"
     },
     ".go-getter/cli/compiler/src/telemetry/otel.mjs": {
       "hash": "sha256:cef13dec80540eff23e63f4d8196e20b1bc08aa4433f619888e8d848d3922140"
@@ -412,10 +457,10 @@
       "hash": "sha256:fd56eebf3483f640b5fc040762afc9f72a6eeafd8edbf41f783e1331c5175c25"
     },
     ".go-getter/cli/compiler/src/update.mjs": {
-      "hash": "sha256:c331ab5cb82bc16d9e923f9318b68ed6eab52b4deafbdbc5bccfbc94b19569ab"
+      "hash": "sha256:224e0853299946ba12c09e3fb8ebaaf5e57ececb170baa17597e074535d23e2d"
     },
     ".go-getter/cli/compiler/src/verify.mjs": {
-      "hash": "sha256:463e0ab61b67a2773f4ac44b19a202984f7832039c387a26751dbee4c8d3b8ab"
+      "hash": "sha256:780c4270cde69a54b63bd1955b3e7a6e051d54fee4bb90c0081d93357579fd47"
     },
     ".go-getter/cli/compiler/src/watch.mjs": {
       "hash": "sha256:60fd211b5cb7ded7cab526889ea23b55de99e0c74afcc2bf7d344ca3fba7a4e4"
@@ -424,7 +469,7 @@
       "hash": "sha256:b0c8c97530083660fb6b8ddcb227972b4abcb2d6a1a051025ab72541b1c17f1f"
     },
     ".go-getter/cli/package.json": {
-      "hash": "sha256:630f1e92911adfb4d2aead15a6a43f43b6cf1c4cca462b15baf387b30199e07a"
+      "hash": "sha256:536b87a0dc3d349626f45e8c17809fbafa58ef134ac8dd4362a78e769fc3bae5"
     },
     ".go-getter/cli/src/hooks/capture-nudge.sh": {
       "hash": "sha256:e5819585bae61559db66d4a5171dbe1508d6e34c64e397174b332a135e15568e"
@@ -436,22 +481,28 @@
       "hash": "sha256:1384758efc99c8e0a246b51c765e7fab423f0d999ea68e5c6ac9ff7e04b3f3e0"
     },
     ".go-getter/cli/src/packs/context/pack.json": {
-      "hash": "sha256:32fe87b7496cc784e9901078661a4aaa564363b1d1d2f45f41de1fc1a293d772"
+      "hash": "sha256:c8d60d6d23dfdcf967ead221a4c577e942ae45d81860d545595cb852723e710d"
     },
     ".go-getter/cli/src/packs/cost-routing/pack.json": {
       "hash": "sha256:8f2516ab6ef9f3e6b20187aea8143dd04c177935bd715285712fb21236da86af"
     },
+    ".go-getter/cli/src/packs/data-policy/pack.json": {
+      "hash": "sha256:d27010eff975cc661fdf9b9d37e324fe59460068ccbe4278d5e17f240a1aebda"
+    },
     ".go-getter/cli/src/packs/git-workflow/pack.json": {
       "hash": "sha256:add02ddcb044b7e0e27e09f4d14faabd35632eb4d98c9b4fa27e32c66f2a78b8"
     },
-    ".go-getter/cli/src/packs/governance/pack.json": {
-      "hash": "sha256:e3f6e53c68ee387f9f2fc9f6ac11f44a71f1b005e00f9cf9721531839dc275d4"
-    },
     ".go-getter/cli/src/packs/hitl/pack.json": {
-      "hash": "sha256:d9a31077773e3b6a245d58a2deb03be851ceb36e41e2f9935d444813bc842b6d"
+      "hash": "sha256:524ed2e0c7f4a36d9f787568c9bf60b2fa5b74f1f910b8dc55c35684ec24bc59"
     },
     ".go-getter/cli/src/packs/orchestration/pack.json": {
-      "hash": "sha256:b96c582ac61f9bf9a5e7ef209e760ec3f7e12677c0e2fe895c026fea8651441b"
+      "hash": "sha256:6f9a8306946757acda67dfbbb1a702facd1c9913c822bad84a0106dfa7eaa378"
+    },
+    ".go-getter/cli/src/packs/restricted-data/pack.json": {
+      "hash": "sha256:63f7ab89aca9a7abee7b617e8a5c5358415169aab46252a81b782eaa79c52dfe"
+    },
+    ".go-getter/cli/src/packs/sanitization/pack.json": {
+      "hash": "sha256:996fc975eed13b15b2dd4bb8c57ee8114fad7b017076dbb611ce59946fbc0b02"
     },
     ".go-getter/cli/src/packs/telemetry/pack.json": {
       "hash": "sha256:0e9d43cc6136fcdc376f57059c9b0aeb2c7b0712a8769899950cc9dfb5536209"
@@ -460,10 +511,7 @@
       "hash": "sha256:92acd96698536d756d2e5cad494e90375f77b7fe932f3f35df9dfaa4aa2db2c0"
     },
     ".go-getter/cli/src/packs/verification-gate/pack.json": {
-      "hash": "sha256:6864abc23a673ae772dc74db37a840112dc6d2ff4ce9b19f2bf59dad8b19a1fc"
-    },
-    "CLAUDE.md": {
-      "symlink": "AGENTS.md"
+      "hash": "sha256:1b2dc1ea0a6383b83c73278b8c3d0ca8d048fcab4199b1e15d5a678c99fef30a"
     }
   },
   "shared": {
