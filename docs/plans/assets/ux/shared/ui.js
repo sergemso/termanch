@@ -70,7 +70,45 @@ window.UI = (function () {
       <button class="icon-btn send" type="submit" aria-label="Send">${icon('send', 18)}</button>
     </form>${keys ? keyRow() : ''}`;
 
-  const keyRow = () => `<div class="keyrow">${['Esc', 'Tab', 'Ctrl', '↑', '↓', '⌘'].map((k) => `<button>${k}</button>`).join('')}<button class="wide">${icon('kbd', 16)}<span>Keyboard</span></button><button>${icon('more', 16)}</button></div>`;
+  // Redesigned phone keys. Words not glyphs, 44px targets, sticky modifiers that read as sticky,
+  // agent-aware action chips, a swipeable arrow pad, and everything else in a More sheet.
+  const chipsFor = (agent) => ({
+    claude: [['Interrupt', 'Esc', 'danger'], ['Accept edits', '⇧ Tab'], ['/ commands', '/'], ['Newline', '⌥ ↵'], ['Paste', ''], ['Select', '']],
+    codex: [['Interrupt', '⌃C', 'danger'], ['Approve', 'y'], ['/ commands', '/'], ['Paste', ''], ['Select', '']],
+  }[agent] || [['Interrupt', '⌃C', 'danger'], ['Yes', 'y'], ['No', 'n'], ['Paste', ''], ['Select', '']]);
+  const actionChips = (agent = 'claude') => `<div class="achips" role="toolbar" aria-label="Agent actions">${chipsFor(agent).map(([l, k, c]) =>
+    `<button class="achip ${c || ''}"><b>${l}</b>${k ? `<kbd>${k}</kbd>` : ''}</button>`).join('')}</div>`;
+  const keyBar = (opts = {}) => `<div class="kbar" role="toolbar" aria-label="Terminal keys">
+    <button class="kk">Esc</button><button class="kk">Tab</button>
+    <button class="kk mod ${opts.ctrl ? 'on' : ''}" aria-pressed="${!!opts.ctrl}"><span>Ctrl</span><i>${opts.ctrl ? 'next key' : 'tap'}</i></button>
+    <button class="kk mod"><span>Alt</span><i>tap</i></button>
+    <span class="pad" role="group" aria-label="Arrow keys, swipe to move"><b class="u">▲</b><b class="l">◀</b><b class="r">▶</b><b class="d">▼</b></span>
+    <button class="kk more" aria-label="More keys">${icon('more', 18)}<span>More</span></button></div>`;
+  const lineInput = (ph = 'Send a line to the agent') => `<form class="lineinput" onsubmit="return false">
+    <button class="icon-btn" type="button" aria-label="Show the system keyboard">${icon('kbd', 20)}</button>
+    <input type="text" placeholder="${esc(ph)}" aria-label="${esc(ph)}" />
+    <button class="icon-btn" type="button" aria-label="Dictate">${icon('mic', 20)}</button>
+    <button class="icon-btn send" type="submit" aria-label="Send line and press Enter">${icon('send', 18)}</button></form>`;
+  const moreSheet = () => `<div class="scrim"></div><section class="msheet" role="dialog" aria-label="More keys">
+    <header><b>More keys</b><span class="muted">Tap to send</span></header>
+    ${[
+      ['Navigate', ['Home', 'End', 'PgUp', 'PgDn', '⌃A', '⌃E', '⌃W', '⌃U']],
+      ['Symbols', ['|', '~', '`', '\\', '{', '}', '[', ']', '<', '>', '-', '_', '=', '*']],
+      ['Function', ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12']],
+      ['tmux', ['Prefix', 'New window', 'Next', 'Previous', 'Detach', 'Scroll mode']],
+    ].map(([t, ks]) => `<div class="mgroup"><h4>${t}</h4><div class="mkeys">${ks.map((k) => `<button>${esc(k)}</button>`).join('')}</div></div>`).join('')}
+    <div class="mrow"><button>${icon('file', 16)}Paste</button><button>Copy</button><button>Select text</button><button>A−</button><button>A+</button><button>Dictation: Auto</button></div></section>`;
+  const keyRow = () => ''; // desktop uses the physical keyboard; phone uses keyBar
+  const tabStrip = (cur) => {
+    const order = [...sessions].sort((a, b) => STATE[a.state].rank - STATE[b.state].rank).slice(0, 8);
+    return `<div class="tabstrip" role="tablist" aria-label="Sessions across servers">${order.map((s) => `<a role="tab" aria-selected="${s.id === cur}" class="tab st-${s.state} ${s.id === cur ? 'on' : ''}" href="#${s.id === cur ? 'terminal' : 'terminal'}">
+      <i class="dot"></i><span>${esc(s.name)}</span></a>`).join('')}<a class="tab add" aria-label="New session">${icon('plus', 16)}</a></div>`;
+  };
+  const seg = (labels, hrefs, on) => `<div class="switch">${labels.map((t, i) => `<a href="#${hrefs[i]}" class="${on === i ? 'on' : ''}">${t}</a>`).join('')}</div>`;
+  // Decision peek: the structured layer sits above the keys and never covers the input line.
+  const dock = (open) => `<div class="dock ${open ? 'open' : ''}"><div class="dock-h">${icon('info', 16)}<b>Needs you</b><span class="muted">${esc(decision.question)}</span><span class="dock-n">1 of 5</span></div>
+    <div class="dock-o">${decision.options.map((o, i) => `<button class="pill ${i === 0 ? 'primary' : ''}"><kbd>${o.key}</kbd>${esc(o.label)}</button>`).join('')}</div></div>`;
+  const phoneTerm = (id) => `<pre class="term full" aria-label="Terminal output">${termText(id)}\n<span class="caret">▍</span></pre>`;
 
   const stepsCard = (id) => {
     const s = ses(id);
@@ -108,7 +146,7 @@ window.UI = (function () {
         <span class="grow"></span><button class="btn ghost sm">${icon('search', 15)}<span>Search</span></button>
         <label class="toggle"><input type="checkbox" checked><i></i><span>Follow</span></label>${iconBtn('expand', 'Fullscreen', 'sm')}</header>`}
       <pre class="term" aria-label="Terminal output">${termText(id)}</pre>
-      ${opts.input === false ? '' : composer('Send input to agent…', true)}
+      ${opts.input === false ? '' : composer('Send input to agent…') + '<p class="hints">⌃C interrupt · Esc · Tab · ⇧Tab accept edits · / commands</p>'}
     </section>`;
 
   const transcriptView = () => `<div class="transcript">${transcript.map((t) =>
@@ -174,6 +212,6 @@ window.UI = (function () {
       <li><span class="act">${icon('plus', 16)}</span><span>New session on home-lab</span><small>action</small></li>
       <li><span class="act">${icon('server', 16)}</span><span>Open server work-vps</span><small>server</small></li></ul></div>`;
 
-  return { esc, srv, ses, needs, count, icon, logo, chip, avatar, btn, iconBtn, progress, waitingCard, composer, keyRow, genericPrompt, stepsCard, activityCard,
+  return { esc, srv, ses, needs, count, icon, logo, chip, avatar, btn, iconBtn, progress, waitingCard, composer, keyRow, actionChips, keyBar, lineInput, moreSheet, tabStrip, seg, dock, phoneTerm, genericPrompt, stepsCard, activityCard,
     termPane, transcriptView, sessionHeader, statChips, listRow, hrefFor, emptyQuiet, emptyServers, report, palette, sessions, servers, STATE, AGENT, decision };
 })();

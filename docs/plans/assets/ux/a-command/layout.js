@@ -14,7 +14,7 @@
     `<a href="#${h}" class="${cur === h ? 'on' : ''}">${icon(ic, 22)}<span>${l}</span></a>`).join('')}</nav>`;
   const curTab = (s) => (['home', 'empty', 'empty-servers'].includes(s) ? 'home' : s === 'report' ? 'report' : s === 'settings' ? 'settings' : 'session-t1');
 
-  const sheet = (head, body, foot = '') => `<div class="a-sheet">${head}<div class="a-sbody">${body}</div>${foot ? `<footer class="a-sfoot">${foot}</footer>` : ''}</div>`;
+  const sheet = (head, body, foot = '') => `<div class="a-sheet"><div>${head}</div><div class="a-sbody">${body}</div>${foot ? `<footer class="a-sfoot">${foot}</footer>` : ''}</div>`;
   const sheetHead = (s, back = 'home') => `<header class="a-shead"><a class="icon-btn" href="#${back}" aria-label="Back">${icon('back', 22)}</a>
     ${U.avatar(s.agent, s.state, 36)}<div class="a-shead-t"><b>${U.esc(s.name)}</b><small>${U.esc(U.srv(s.server).name)} · ${s.branch}</small></div>${U.chip(s.state)}</header>`;
   const segs = (on) => `<div class="a-seg">${['Overview', 'Transcript', 'Terminal'].map((t, i) => `<a href="#${['decision', 'session-t1', 'terminal'][i]}" class="${on === i ? 'on' : ''}">${t}</a>`).join('')}</div>`;
@@ -24,7 +24,7 @@
     if (screen === 'decision') { const s = ses('s1'); return sheet(sheetHead(s) + segs(0), U.waitingCard({ composer: false }) + U.stepsCard('s1') + U.activityCard(), U.composer('Or answer in your own words')); }
     if (screen === 'session-t1') { const s = ses('s1'); return sheet(sheetHead(s) + segs(1), U.transcriptView() + U.waitingCard({ hints: false, composer: false }), U.composer('Reply to Claude')); }
     if (screen === 'session-t3') { const s = ses('s3'); return sheet(sheetHead(s) + segs(0), `<p class="a-tier">${icon('info', 14)} Generic view · screen read from the terminal</p>` + U.genericPrompt() + U.stepsCard('s3') + U.activityCard(), U.composer('Type to the agent')); }
-    if (screen === 'terminal') { const s = ses('s3'); return sheet(sheetHead(s) + segs(2), U.termPane('s3', { bare: true, input: false }), U.composer('Send input to agent…', true)); }
+    if (screen === 'terminal' || screen === 'terminal-more') { const s = ses('s1'); return `<div class="a-sheet term-sheet"><div>${sheetHead(s)}${U.tabStrip('s1')}${segs(2)}</div><div class="a-tbody">${U.phoneTerm('s1')}</div><footer>${U.dock()}${U.actionChips('claude')}${U.lineInput()}${U.keyBar()}</footer>${screen === 'terminal-more' ? U.moreSheet() : ''}</div>`; }
     const body = {
       report: () => `<div class="a-page report">${U.report()}</div>`,
       settings: () => `<div class="a-page"><header class="page-h"><h1>Settings</h1></header><p class="muted">Out of scope for the spike.</p></div>`,

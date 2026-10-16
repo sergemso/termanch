@@ -23,22 +23,22 @@
       <h2 class="b-q-title">${U.esc(d.question)}</h2>
       <div class="b-opts">${d.options.map((o, i) => `<button class="b-opt ${i === 0 ? 'primary' : ''}"><kbd>${o.key}</kbd><span><b>${U.esc(o.label)}</b><small>${U.esc(o.hint)}</small></span>${U.icon('arrow', 18)}</button>`).join('')}</div>
       ${U.composer('Or answer in your own words')}
-      <div class="b-foot"><button class="btn ghost sm">${icon('skip', 15)}<span>Skip to next</span><kbd>J</kbd></button><button class="btn ghost sm">${icon('terminal', 15)}<span>Open terminal</span><kbd>T</kbd></button></div>
+      <div class="b-foot"><button class="btn ghost sm">${icon('skip', 15)}<span>Skip to next</span><kbd>J</kbd></button><a class="btn ghost sm" href="#terminal">${icon('terminal', 15)}<span>Open terminal</span><kbd>T</kbd></a></div>
     </article>`;
   };
 
-  const sheet = (head, body, foot = '') => `<div class="b-sheet">${head}<div class="b-sbody">${body}</div>${foot ? `<footer class="b-sfoot">${foot}</footer>` : ''}</div>`;
+  const sheet = (head, body, foot = '') => `<div class="b-sheet"><div>${head}</div><div class="b-sbody">${body}</div>${foot ? `<footer class="b-sfoot">${foot}</footer>` : ''}</div>`;
   const sheetHead = (s) => `<header class="b-shead"><a class="icon-btn" href="#home" aria-label="Back">${icon('back', 22)}</a>${U.avatar(s.agent, null, 32)}
     <div class="b-shead-t"><b>${U.esc(s.name)}</b><small>${U.esc(U.srv(s.server).name)}</small></div>${U.chip(s.state)}</header>`;
 
   function mobile(screen) {
     const s1 = ses('s1');
-    if (screen === 'decision') return sheet(sheetHead(s1), `${pager(1, queue().length)}${decisionStage()}`);
+    if (screen === 'decision') return sheet(sheetHead(s1) + U.seg(['Decision', 'Terminal'], ['decision', 'terminal'], 0), `${pager(1, queue().length)}${decisionStage()}`);
     if (screen === 'session-t1') return sheet(sheetHead(s1) + '<div class="b-tier">T1 · hooks and transcript<a href="#terminal">' + icon('terminal', 14) + ' Full terminal</a></div>',
       U.transcriptView(), `<div class="b-dock"><b>${U.esc(U.decision.question)}</b><div class="b-pills">${U.decision.options.map((o, i) => `<button class="pill ${i === 0 ? 'primary' : ''}">${U.esc(o.label)}</button>`).join('')}</div></div>${U.composer('Reply to Claude')}`);
     if (screen === 'session-t3') { const s = ses('s3'); return sheet(sheetHead(s) + '<div class="b-tier">T3 · generic view, read from the terminal<a href="#terminal">' + icon('terminal', 14) + ' Full terminal</a></div>',
       U.genericPrompt() + U.termPane('s3', { bare: true, input: false }), U.composer('Type to the agent')); }
-    if (screen === 'terminal') { const s = ses('s3'); return sheet(sheetHead(s), U.termPane('s3', { bare: true, input: false }), U.composer('Send input to agent…', true)); }
+    if (screen === 'terminal' || screen === 'terminal-more') { const s = ses('s1'); return `<div class="b-sheet term-sheet"><div>${sheetHead(s)}${U.tabStrip('s1')}${U.seg(['Decision', 'Terminal'], ['decision', 'terminal'], 1)}</div><div class="b-tbody">${U.phoneTerm('s1')}</div><footer>${U.dock()}${U.actionChips('claude')}${U.lineInput()}${U.keyBar()}</footer>${screen === 'terminal-more' ? U.moreSheet() : ''}</div>`; }
     const page = {
       report: () => `<div class="b-page report">${U.report()}</div>`,
       settings: () => `<div class="b-page"><header class="page-h"><h1>Settings</h1></header><p class="muted">Out of scope for the spike.</p></div>`,

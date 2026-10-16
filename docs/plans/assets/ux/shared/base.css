@@ -144,3 +144,46 @@ kbd{font-size:11px;border:1px solid var(--line);border-radius:5px;padding:1px 6p
 .keyrow .wide{flex:1}.keyrow .wide span{display:none}
 @media (min-width:1024px){.keyrow .wide{flex:2.4}.keyrow .wide span{display:inline}}
 @media (max-width:1023px){.srv{flex-direction:column;align-items:flex-start;gap:10px}.meters{width:100%}.meters span{flex:1;width:auto}}
+
+/* real mobile terminal parts */
+.keyrow.real{gap:3px;margin:0;padding:4px;background:var(--panel);border-top:1px solid var(--line)}
+.keyrow.real button{height:40px;border-radius:8px;font:500 14px "JetBrains Mono",monospace;background:var(--panel-2);border:1px solid var(--line);padding:0;min-width:0;flex:1}
+.keyrow.real .mod{color:var(--accent)}.keyrow.real .small{font-size:11px;color:var(--muted);flex:.9}.keyrow.real .mic{color:var(--text-2)}
+.keyrow.real .i{margin:auto}
+.tabstrip{display:flex;gap:6px;overflow-x:auto;padding:8px 12px;scrollbar-width:none;border-bottom:1px solid var(--line)}
+.tab{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 12px;border-radius:99px;font-size:13px;font-weight:500;white-space:nowrap;color:var(--text-2);border:1px solid var(--line);background:var(--panel)}
+.tab.on{color:var(--text);border-color:rgb(var(--accent-rgb)/.8);background:var(--panel-2)}.tab.st-needs_input:not(.on){border-color:rgb(var(--warn-rgb)/.6)}
+.tab.add{padding:0 10px;color:var(--muted)}
+.switch{display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.switch a{flex:1;text-align:center;padding:9px 0;border-radius:var(--r-sm);color:var(--muted);font-weight:600;font-size:13.5px}.switch a.on{background:var(--panel-2);color:var(--text)}
+.dock{margin:0 8px 8px;padding:10px 12px;border:1px solid rgb(var(--warn-rgb)/.6);background:rgb(var(--warn-rgb)/.1);border-radius:var(--r-sm);display:flex;flex-direction:column;gap:8px}
+.dock-h{display:flex;align-items:center;gap:8px;color:var(--warn);font-size:13px;min-width:0}.dock-h .muted{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-2)}
+.dock-n{font-size:12px;color:var(--muted)}.dock-o{display:flex;gap:6px;flex-wrap:wrap}
+.dock-o .pill{min-height:38px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--panel);font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:8px}
+.dock-o .pill kbd{font-size:11px;padding:0 5px}.dock-o .pill.primary{background:var(--warn);border-color:var(--warn);color:#1a1202}.dock-o .pill.primary kbd{background:rgb(0 0 0/.14);color:inherit;border-color:transparent}
+.term.full{flex:1;margin:0;border:0;border-radius:0;min-height:0}.caret{color:var(--accent);animation:blink 1.1s steps(2) infinite}
+@keyframes blink{to{visibility:hidden}}
+@media (prefers-reduced-motion:reduce){.caret{animation:none}}
+.thead-wrap>*{flex-shrink:0}
+.term.full{display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;white-space:pre-wrap}
+.dock-o{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.dock-o .pill{flex:none}
+.keyrow.real button{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+
+/* redesigned phone terminal input */
+.achips{display:flex;gap:8px;overflow-x:auto;padding:8px 8px 4px;scrollbar-width:none}
+.achip{flex:none;display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--panel-2);font-size:13px}
+.achip b{font-weight:600}.achip kbd{font-size:11px;padding:0 6px}.achip.danger{border-color:rgb(var(--bad-rgb)/.55);color:var(--bad)}.achip.danger kbd{color:inherit}
+.lineinput{display:flex;align-items:center;gap:2px;margin:4px 8px;padding:2px 4px;background:var(--bg-2);border:1px solid var(--line);border-radius:14px}
+.lineinput input{flex:1;min-width:0;height:44px;background:none;border:0;outline:0;font-size:16px}.lineinput input::placeholder{color:var(--muted)}
+.kbar{display:grid;grid-template-columns:1fr 1fr 1.25fr 1.25fr 1.9fr 1.2fr;gap:6px;padding:4px 8px calc(8px + env(safe-area-inset-bottom))}
+.kk{height:48px;border-radius:12px;background:var(--panel-2);border:1px solid var(--line);font-weight:600;font-size:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;line-height:1.1}
+.kk i{font-style:normal;font-size:10px;font-weight:500;color:var(--muted)}.kk.mod.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}.kk.mod.on i{color:inherit}
+.kk.more{flex-direction:row;gap:6px;font-size:13px;color:var(--text-2)}.kk.more span{display:none}
+.pad{position:relative;height:48px;border-radius:12px;background:var(--panel-2);border:1px solid var(--line);display:grid;grid-template:1fr 1fr/1fr 1fr 1fr;place-items:center;font-size:10px;color:var(--text-2)}
+.pad b{font-weight:400}.pad .u{grid-area:1/2}.pad .l{grid-area:1/1/3/2}.pad .r{grid-area:1/3/3/4}.pad .d{grid-area:2/2}
+.msheet{position:fixed;left:0;right:0;bottom:0;z-index:31;background:var(--panel);border-top:1px solid var(--line);border-radius:20px 20px 0 0;padding:14px 12px calc(14px + env(safe-area-inset-bottom));max-height:72dvh;overflow:auto;box-shadow:0 -20px 60px rgb(0 0 0/.5)}
+.msheet header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}.msheet h4{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin:12px 0 6px}
+.mkeys{display:flex;flex-wrap:wrap;gap:6px}.mkeys button,.mrow button{min-width:44px;height:44px;padding:0 12px;border-radius:10px;background:var(--panel-2);border:1px solid var(--line);font:500 14px "JetBrains Mono",monospace;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.mrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}.mrow button{font-family:inherit;font-size:13px}
+.hints{color:var(--muted);font-size:12px;margin-top:8px}
+.term-sheet footer{background:var(--bg)}

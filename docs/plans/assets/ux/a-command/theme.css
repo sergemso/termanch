@@ -22,7 +22,8 @@
 :root[data-theme=light] .a-bottom{background:rgb(255 255 255/.92)}
 .a-bottom a{display:flex;flex-direction:column;align-items:center;gap:3px;min-height:48px;justify-content:center;font-size:11px;font-weight:500;color:var(--muted)}
 .a-bottom a.on{color:var(--accent)}
-.a-sheet{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto 1fr auto;height:100dvh;background:var(--bg)}
+.a-sheet{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr auto;height:100dvh;background:var(--bg)}
+.a-tbody{display:flex;flex-direction:column;min-height:0;background:var(--term)}.term-sheet footer{background:var(--bg);padding-bottom:env(safe-area-inset-bottom)}
 .a-shead{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}
 .a-shead-t{flex:1;min-width:0;display:flex;flex-direction:column}.a-shead-t b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.a-shead-t small{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .a-sheet .a-shead+.a-seg{display:flex}

@@ -18,6 +18,7 @@
 :root[data-theme=light] .c-bottom{background:rgb(255 255 255/.92)}
 .c-bottom a{display:flex;flex-direction:column;align-items:center;gap:3px;min-height:48px;justify-content:center;font-size:11px;font-weight:500;color:var(--muted)}.c-bottom a.on{color:var(--accent)}
 .c-sheet{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr auto;height:100dvh}
+.c-tbody{display:flex;flex-direction:column;min-height:0;background:var(--term)}.term-sheet footer{padding-bottom:env(safe-area-inset-bottom)}
 .c-shead{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}.c-shead-t{flex:1;min-width:0;display:flex;flex-direction:column}.c-shead-t small{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .c-sbody{overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:12px;min-height:0}.c-sbody>*{flex-shrink:0}
 .c-sfoot{padding:10px 12px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
