@@ -18,7 +18,7 @@ Extends fact 0038 (which agents have ACP and their `initialize` capabilities). M
 | Agent | Measured with | Verdict |
 |---|---|---|
 | claude | `@agentclientprotocol/claude-agent-acp` 0.93.0 (agent SDK 0.2.x inside) | measured. `@zed-industries/claude-code-acp` 0.16.2 is deprecated (renamed) and **failed at `session/new`** when started inside a Claude Code session ("cannot be launched inside another Claude Code session"); unset `CLAUDECODE` in the child env. |
-| codex | `@agentclientprotocol/codex-acp` 2.2.2 (bundles its own `codex`) | `initialize` and `session/new` work with the ChatGPT login, so the old blocker (`@zed-industries/codex-acp` 0.16.0 failing on every model) is fixed by the rename. Prompts: see Codex section. |
+| codex | `@agentclientprotocol/codex-acp` 2.2.2 (bundles its own `codex`), model `gpt-6.1-sol` | measured with the owner's ChatGPT login. The old blocker (`@zed-industries/codex-acp` 0.16.0 failing on every model) is fixed by the rename. An earlier attempt the same day got `-32603` with `codexErrorInfo: "usageLimitExceeded"` (a message with the reset time) until the limit reset. |
 | opencode | 2.0.31 | measured |
 | kilo | 7.6.2 | measured (config via `KILO_CONFIG_CONTENT`, not `OPENCODE_CONFIG_CONTENT`) |
 | qwen | 0.25.2 | measured |
@@ -40,7 +40,7 @@ Extends fact 0038 (which agents have ACP and their `initialize` capabilities). M
 | copilot | **The only agent that sent `plan`, and it was always `{"entries": []}`** (after a SQL tool call that inserted todos, and after plan mode). Todos live in a SQL `todos` table written by a `kind: other` tool call whose `rawInput.query` is SQL text. Plan mode saves `plan.md` and the answer says so. Entries are not usable; parse nothing from `plan`. |
 | gemini | No `plan` (source and live). The model made no `write_todos` call when asked, so todo surfacing is unmeasured; tool calls are `tool_call` with ids like `write_file__call_1732289`. |
 | cursor-agent | Source: sends `plan` (`entries`), plus extension requests `cursor/update_todos`, `cursor/create_plan`, `cursor/task`, and `subagent_spawned` / `subagent_state_update` updates. Unmeasured live. |
-| codex | See Codex section. |
+| codex | No `plan`: the model reported `update_plan` "isn't available". No todo surface seen. |
 
 Gap: no agent was seen sending a non-empty `plan`. Plan progress for T1 comes from hooks/transcript (Claude Code) or, for kilo, from `todowrite` tool calls.
 
@@ -111,7 +111,7 @@ Gap: no agent was seen sending a non-empty `plan`. Plan progress for T1 comes fr
 | copilot | Asked "Red or blue?" as plain `agent_message_chunk` text; no request. |
 | cursor-agent | Source: extension request `cursor/ask_question`; if the client answers `-32601` it falls back to one `session/request_permission` per single-choice question with options `{optionId: <option id>, kind: allow_once}` plus `__ask_question_skip__`. Multi-select and free text are not offered in the fallback. |
 | gemini | Asked "red or blue" as plain text (no ask tool offered); no request. |
-| codex | see below. |
+| codex | Asked "Red or blue?" as plain text; the `request_user_input` tool is not offered. No request. |
 
 ## Modes and configuration
 
@@ -161,8 +161,18 @@ Web search 2026-10-16 found no statement about ACP adapters themselves. For Clau
 | Compaction / reset | opencode `compaction_update`; others none | screen |
 | Resume after crash | new process, `initialize`, `session/load` (replays) or `session/resume` where advertised (no replay; goose has no resume) | n/a |
 
-Gaps that remain for the screen/process scan: kilo questions, claude and copilot questions, compaction in every agent but opencode, plan progress for everything but kilo, and every cell marked unmeasured (cursor-agent needs a login; codex see below).
+Gaps that remain for the screen/process scan: kilo questions, claude and copilot questions, compaction in every agent but opencode, plan progress for everything but kilo, and every cell marked unmeasured (cursor-agent needs a login; codex is in its own section).
 
 ## Codex
 
-(filled in after the usage-limit window; see below)
+Measured 2026-10-16 with codex-acp 2.2.2 (fixtures in `testdata/acp/codex/`).
+
+- **Capabilities:** `loadSession`; `resume`, `list`, `close`, `delete`, `fork`, `additionalDirectories`, `subagents`. Auth methods `api-key` and `chat-gpt`; the session works with the existing login without calling `authenticate`.
+- **Usage:** `usage_update {used, size: 475000}` (no cost) several times per turn; the prompt response has `usage {totalTokens, inputTokens, cachedReadTokens, cachedWriteTokens, outputTokens, thoughtTokens}` and `_meta.quota`. After `/compact`, `used` fell from 16972 to 6571 and the response `usage` is `null`.
+- **Turn state:** `session_info_update._meta.codex.threadStatus` is `{type: "active", activeFlags: []}`, `{type: "active", activeFlags: ["waitingOnApproval"]}` or `{type: "idle"}`: a ready-made working/blocked/idle signal. `session_info_update.title` arrives after the first turn (set from the prompt, then rewritten by the model, e.g. "Ask user to choose red or blue").
+- **Tool calls:** `tool_call` with ids `exec-<uuid>`, kinds `read` (a file read shown as "Read file '...'"), `execute` (with `content: [{type:"terminal", terminalId}]` and `rawInput {command, cwd}`) and `think` ("Compact conversation"). Command output arrives in `tool_call_update._meta.terminal_output_delta.data` and `_meta.terminal_exit`, even though we advertised no terminal capability.
+- **Permission** (mode `read-only`, edit via shell): options `allow_once` "Yes, proceed", `accept_execpolicy_amendment` "Yes, and don't ask again for commands that start with `...`" (allow_always), `cancel` "No, and tell Codex what to do differently" (reject_once). `toolCall.rawInput.command` is a JSON-quoted string. Rejecting ended the turn `cancelled`. In `read-only` a read-only `ls /etc` ran without asking.
+- **Compaction:** `/compact` is a normal prompt; it shows as the `think` tool call above and the usage drop; no dedicated event.
+- **Lifecycle:** `list` (newest first), `load` replays `user_message_chunk` and completed `tool_call`s, `resume` and `close` return state / `{}`.
+- **Modes:** `mode` = `agent` (Auto review, default), `read-only`, `workspace-write`, `agent-full-access`; `collaboration_mode` `default` / `plan`; `reasoning_effort` `low`..`ultra`; `fast-mode`; a `models` list with effort baked into ids like `gpt-6.1-sol[low]`. `_auth/status_update` (like claude) reports the account plan.
+- **Not measured:** a cancel while a command runs (the one tried finished first), and `max_tokens`/`refusal`.
