@@ -1,12 +1,4 @@
 /* C · Fleet board. Deep teal-slate. Everything visible at once; answer on the card. */
-:root{
-  --bg:#0a1114;--bg-2:#070c0e;--panel:#101a1e;--panel-2:#16232a;--line:#213038;--text:#e9f1f3;--text-2:#b4c4ca;--muted:#7d9199;--muted-rgb:125 145 153;
-  --accent:#22c1b0;--accent-rgb:34 193 176;--on-accent:#04201c;
-  --warn:#f6b83d;--warn-rgb:246 184 61;--ok:#4ad08a;--ok-rgb:74 208 138;--bad:#ff6b66;--bad-rgb:255 107 102;--info:#5ab4ff;--info-rgb:90 180 255;
-  --term:#060a0c;--term-fg:#cfdde1;--r:14px;--r-sm:10px}
-:root[data-theme=light]{
-  --bg:#f1f6f7;--bg-2:#e6eef0;--panel:#fff;--panel-2:#eef4f5;--line:#d6e1e4;--text:#0d1c21;--text-2:#3b5058;--muted:#64797f;--muted-rgb:100 121 127;
-  --accent:#0a8f81;--accent-rgb:10 143 129;--on-accent:#fff;--warn:#b86e00;--warn-rgb:184 110 0;--ok:#16844c;--ok-rgb:22 132 76;--bad:#c9322d;--bad-rgb:201 50 45;--info:#1f6fd1;--info-rgb:31 111 209;--term:#0d171b;--term-fg:#d5e2e6}
 :root[data-theme=light] .btn.warn,:root[data-theme=light] .opt.primary{color:#fff}
 .only-d{display:none}
 .c-top{display:flex;align-items:center;gap:10px;height:56px;padding:0 16px;border-bottom:1px solid var(--line)}.c-brand{font-size:18px}

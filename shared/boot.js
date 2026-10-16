@@ -1,7 +1,10 @@
 // Hash router for the prototypes. Each direction supplies {mobile(screen), desktop(screen)}.
 window.boot = function (dir) {
   const params = new URLSearchParams(location.search);
-  if (params.get('theme')) document.documentElement.dataset.theme = params.get('theme');
+  const pick = (k) => { let v = params.get(k); try { if (v) localStorage.setItem('tb-' + k, v); else v = localStorage.getItem('tb-' + k); } catch (e) {} return v; };
+  const skin = pick('skin'), theme = pick('theme');
+  if (skin) document.documentElement.dataset.skin = skin;
+  if (theme) document.documentElement.dataset.theme = theme;
   const known = ['home', 'empty', 'empty-servers', 'decision', 'session-t1', 'session-t3', 'terminal', 'report', 'settings'];
   function render() {
     const h = (location.hash || '#home').slice(1);
