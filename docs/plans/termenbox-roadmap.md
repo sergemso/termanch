@@ -39,7 +39,6 @@ Scoring procedure: `docs/skills/prioritise-the-roadmap-by-wsjf.md`. Lane `paid` 
 | 1 | [R02](roadmap/R02.md) | Triage bugs #107 (focus lost on tab tap) and #99 (canvas shifts on Sessions tab) | P0 | ux | mobile | blocked (owner's iPhone confirmation of #107 and #99) | 9.5 | - |
 | 2 | [R03](roadmap/R03.md) | Real-iPhone checklist and two-real-server e2e (G.10, H.11) | P0 | ux | mobile | blocked (owner's iPhone checklist, docs/skills/mobile-ui-device-check.md) | 8.0 | R02 |
 | 3 | [U02](roadmap/U02.md) | Codify the design system | P0 | ux | both | pending | 2.6 | - |
-| 4 | [U03](roadmap/U03.md) | Measure which agents expose what; set the T2 priority list | P0 | agents | n/a | pending | 3.8 | - |
 | 5 | [U04](roadmap/U04.md) | App shell: bottom bar, sidebar, palette, four destinations | P0 | ux | both | pending | 1.8 | U02 |
 | 6 | [U05](roadmap/U05.md) | Home: Needs you queue, fleet summary, Continue | P0 | ux | both | pending | 2.8 | U04 |
 | 7 | [U06](roadmap/U06.md) | Session-view framework: T3 view, composer, profile engine | P0 | agents | both | pending | 1.6 | U02 |
