@@ -3,6 +3,7 @@
   import { Terminal as XTermTerminal } from 'xterm';
   import { FitAddon } from 'xterm-addon-fit';
   import { WebglAddon } from 'xterm-addon-webgl';
+  import { SerializeAddon } from 'xterm-addon-serialize';
   import 'xterm/css/xterm.css';
 
   import type { HubConnection, ServerState } from './lib/hub';
@@ -147,9 +148,61 @@
     sendInput(prefixBytes(prefix) + key);
   }
 
+  /**
+   * The last screen of each session visited, serialized with its colours. Coming back draws it in the same write that
+   * clears the terminal (no blank frame between), and tmux's repaint on attach then lands on an identical screen, so
+   * only the cells that really changed are repainted. Memory only, like the peeked screens (decision 0084).
+   */
+  const SCREEN_CAP = 8;
+  const screens = new Map<string, string>();
+  let serializer: SerializeAddon | null = null;
+  let shownId: string | null = null;
+  let restored = false;
+  function switchScreen(id: string | null) {
+    if (!term || !serializer || id === shownId) return;
+    if (shownId) {
+      screens.delete(shownId);
+      screens.set(shownId, serializer.serialize());
+      while (screens.size > SCREEN_CAP) screens.delete(screens.keys().next().value as string);
+    }
+    shownId = id;
+    const saved = id ? screens.get(id) : undefined;
+    restored = !!saved;
+    if (saved) term.write('\x1b[3J\x1b[2J\x1b[H' + saved);
+  }
+  $: if (term) switchScreen(activeSessionId);
+
+  /**
+   * tmux's repaint on attach arrives in several chunks, the first of which clears the screen. Written as they come,
+   * a frame can render between the clear and the content. While a screen is already showing, the chunks of the first
+   * moments are joined into one write instead.
+   */
+  const REPAINT_HOLD_MS = 40;
+  let held: Uint8Array[] | null = null;
+  let holdTimer: ReturnType<typeof setTimeout> | undefined;
+  function holdRepaint() {
+    held = [];
+    clearTimeout(holdTimer);
+    holdTimer = setTimeout(releaseRepaint, REPAINT_HOLD_MS);
+  }
+  function receive(bytes: Uint8Array) {
+    if (held) held.push(bytes);
+    else term?.write(bytes);
+  }
+  function releaseRepaint() {
+    clearTimeout(holdTimer);
+    const chunks = held;
+    held = null;
+    if (!chunks?.length || !term) return;
+    const all = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+    let at = 0;
+    for (const c of chunks) (all.set(c, at), (at += c.length));
+    term.write(all);
+  }
+
   /** Draws a peeked screen at once, dimmed; the repaint after attach clears it (decision 0084). */
   function paintPreview(text: string) {
-    if (!term || previewing) return;
+    if (!term || previewing || restored) return;
     previewing = true;
     term.reset();
     term.write(text.replace(/\r?\n/g, '\r\n'));
@@ -324,7 +377,11 @@
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
 
+  /** The size the server last got. tmux repaints the whole screen on every resize, so an unchanged size is not sent again. */
+  let sentSize = '';
   function sendResize(cols: number, rows: number) {
+    if (`${cols}x${rows}` === sentSize) return;
+    sentSize = `${cols}x${rows}`;
     crumb(`resize ${cols}x${rows}`);
     batch.flush(); // typed text goes out before the new size, as it was typed
     if (activeSessionId) connection.send({ type: 'resize', cols, rows });
@@ -385,6 +442,8 @@
     term = new XTermTerminal({ cursorBlink: true, fontSize, fontFamily: FONT_FAMILY, theme: terminalTheme(document.documentElement.dataset.theme === 'light') });
     fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
+    serializer = new SerializeAddon();
+    term.loadAddon(serializer);
     term.open(terminalContainer);
     // WebGL is the fast renderer; where it is missing or its context is lost, xterm's DOM renderer takes over
     // instead of leaving a blank screen.
@@ -410,7 +469,7 @@
     refit();
 
     cleanups.push(installAudioUnlock());
-    cleanups.push(() => (clearInterval(tick), clearTimeout(refusedTimer)));
+    cleanups.push(() => (clearInterval(tick), clearTimeout(refusedTimer), clearTimeout(holdTimer)));
     if (term.textarea) {
       cleanups.push(attachInputLogger(term.textarea));
       cleanups.push(attachSwipeSupport(term.textarea, sendInput, words)); // fact 0027
@@ -479,16 +538,19 @@
     cleanups.push(
       connection.subscribe((msg) => {
         if (msg.type === 'output') {
-          term?.write(b64ToBytes(msg.data));
+          receive(b64ToBytes(msg.data));
         } else if (msg.type === 'term') {
-          term?.write(msg.bytes);
+          receive(msg.bytes);
         } else if (msg.type === 'session_attached') {
           // tmux repaints the screen on attach; start clean so a re-attach never doubles the content.
           // If we just painted a preview, it already reset the terminal; skip the second reset to avoid a flash.
           const wasPreviewing = previewing;
           previewing = false;
           crumb('attached');
-          if (!wasPreviewing) term?.reset();
+          if (restored || wasPreviewing) holdRepaint();
+          sentSize = ''; // the new attachment has not been told the size yet
+          if (!wasPreviewing && !restored) term?.reset();
+          restored = false;
           refit();
           // Connecting lands in a live terminal. The page must not scroll to the field to do it.
           if (term?.textarea) term.textarea.focus({ preventScroll: true });
