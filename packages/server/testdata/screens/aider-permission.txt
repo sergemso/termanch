@@ -1,0 +1,40 @@
+ • Final line: closing ```
+
+Content should be just "hi" (probably with or without newline? Usually just the word hi. I'll put
+"hi" without extra text, maybe with a trailing newline is fine but to be safe just "hi").
+
+Let me construct:
+
+hello.txt
+
+
+hi
+
+
+Wait, the closing ``` should be on its own line. So:
+
+hello.txt
+
+
+hi
+
+
+That's it. No extra explanation needed? The user said reply in English, but the format is strict. I
+should probably just output the file listing. Maybe a brief sentence is okay but the instructions
+emphasize the format. I'll just output the file listing to be safe.
+
+----------------------------------------------------------------------------------------------------
+
+► ANSWER
+
+hello.txt
+
+
+hi
+
+
+
+Tokens: 598 sent, 253 received.
+
+hello.txt
+Create new file? (Y)es/(N)o [Yes]:
