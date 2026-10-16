@@ -20,6 +20,13 @@ a.card b{display:block;font-size:17px}a.card span{color:var(--muted);font-size:1
 <a class="card" href="a-command/"><b>A · Command center</b><span>List of every agent, session detail with task steps and approval, live terminal beside it. The model your reference shows.</span><small>Phone: list first, detail with Overview / Transcript / Terminal tabs</small></a>
 <a class="card" href="b-inbox/"><b>B · Decision inbox</b><span>The queue is the product. Home is the oldest waiting decision, answered right there. Terminal is secondary.</span><small>Phone: answer without opening anything</small></a>
 <a class="card" href="c-board/"><b>C · Fleet board</b><span>Every session's state at a glance, in columns. Answer on the card itself; details in a drawer.</span><small>Phone: stacked states, inline answer buttons</small></a>
+<h1 style="font-size:20px;margin-top:28px">Mobile, round 2 (with terminal)</h1>
+<p>Phone-sized, any skin. On a computer you see a phone frame. Each has home, decision, terminal, terminal with the iOS keyboard open, and more keys.</p>
+<a class="card" href="m1-decision/"><b>M1 · Decision first</b><span>Home is the oldest waiting decision. Terminal one tap away on every session.</span><small>Recommended</small></a>
+<a class="card" href="m2-terminal/"><b>M2 · Terminal first</b><span>Opens in the terminal. A strip of all sessions with state rings; the decision docked above the input.</span><small>Alternative: reverses decision 0100</small></a>
+<a class="card" href="m3-split/"><b>M3 · Split view</b><span>List home. A session is structured above, terminal below, with snap points.</span><small>Weaker terminal space</small></a>
+<div class="row"><a href="m1-decision/#terminal-kbd">M1 keyboard open</a><a href="m2-terminal/#terminal-kbd">M2 keyboard open</a><a href="m3-split/#terminal-kbd">M3 keyboard open</a><a href="m1-decision/#terminal-more">M1 more keys</a><a href="m2-terminal/#fleet">M2 fleet</a></div>
+<h1 style="font-size:20px;margin-top:28px">Desktop and round 1</h1>
 <div class="row"><a href="a-command/#decision">A decision</a><a href="b-inbox/#decision">B decision</a><a href="c-board/#decision">C decision</a>
 <a href="a-command/#session-t3">A session T3</a><a href="b-inbox/#session-t1">B session T1</a><a href="c-board/#report">C activity</a></div>
 </main>
@@ -31,7 +38,7 @@ a.card b{display:block;font-size:17px}a.card span{color:var(--muted);font-size:1
     document.querySelectorAll('#pick button').forEach(function(b){b.classList.toggle('on',st[b.dataset.k]===b.dataset.v);});
     document.querySelectorAll('a[href]').forEach(function(a){
       var h=a.getAttribute('href').split('#'),p=h[0].split('?')[0];
-      if(!/^(a-command|b-inbox|c-board)\//.test(p))return;
+      if(!/^(a-command|b-inbox|c-board|m1-decision|m2-terminal|m3-split)\//.test(p))return;
       a.setAttribute('href',p+'?skin='+st.skin+'&theme='+st.theme+(h[1]?'#'+h[1]:''));
     });
   }
