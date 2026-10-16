@@ -69,9 +69,9 @@ Gap: no agent was seen sending a non-empty `plan`. Plan progress for T1 comes fr
 | `session/resume` | returns state, **no replay** | no replay | no replay | no replay | **`-32601 Method not found`** (not advertised) | not advertised |
 | `session/close` | `{}` | `{}` | `{}` | **`-32601`** | `{}` and the session is gone: later prompts fail `-32002 "Session not found"` | `{}`; later prompts `-32602 "Session not found"` |
 | `session/list` | `{sessions[{sessionId,cwd,title,updatedAt}]}` newest first | same, plus `nextCursor` (non-null even for one result) | same | same plus `_meta` | same plus `_meta{messageCount,...}` | same |
-| `session/fork` | new `sessionId` | advertised | advertised | no | no | no |
+| `session/fork` | new `sessionId` | new `sessionId` plus `configOptions` | same | no | no | no |
 
-- **Cancel** (`session/cancel` notification): every measured agent answers the pending `session/prompt` with `stopReason: "cancelled"` (claude, opencode, kilo, qwen, goose, copilot did so when a tool or request was pending; copilot's command had already finished). The same session accepts the next prompt. An unanswered permission or question request is dropped by the cancel.
+- **Cancel** (`session/cancel` notification): every measured agent answers the pending `session/prompt` with `stopReason: "cancelled"` (claude, opencode, kilo, qwen, goose, copilot did so when a tool or request was pending; copilot's command had already finished). The same session accepts the next prompt. An unanswered permission or question request is dropped by the cancel. **Gemini is the exception**: cancelling while a permission request is open returns `cancelled`, but the next `session/prompt` on that session then hangs (40 s and 100 s waits), even when the client answers the open request with `outcome: cancelled`; cancelling mid-generation is fine. Treat a gemini session as lost after such a cancel (restart the process and `session/load`; recovery not verified). Copilot's cancel of a running `sleep 40` shell command returned `cancelled` with usage.
 - **`stopReason` seen**: `end_turn`, `cancelled`. Not seen: `max_tokens`, `refusal`. A refused permission ends the turn as `cancelled` in opencode and in claude's `ExitPlanMode` reject, but as `end_turn` in goose, copilot, qwen and in claude's `Write` reject (the agent then says it was declined).
 - **Prompt errors** are JSON-RPC errors on the `session/prompt` id: kilo `-32603 "You need to sign in to use this model."`; codex `-32603` with `data.codexErrorInfo: "usageLimitExceeded"` and a message containing the reset time.
 - **Crash**: `SIGKILL` of the adapter during a pending permission leaves the `session/prompt` unanswered (the transport just closes); in-flight turn and pending request are lost. A fresh process plus `initialize` plus `session/load` restored the session in opencode and claude (state is on disk), and a following prompt worked.
@@ -94,6 +94,8 @@ Gap: no agent was seen sending a non-empty `plan`. Plan progress for T1 comes fr
 | copilot | `allow_once`, `allow_always`, `reject_once` | `rawInput` = `{fileName, diff, ...}` for edits; safe shell commands (`ls`) did not ask. |
 | gemini | `proceed_always` "Allow for this session" (allow_always), `proceed_once` "Allow", `cancel` "Reject" (reject_once) | asks in mode `default` for `write_file` (with a `{type:"diff", path, oldText, newText}`) and `run_shell_command` (even `ls`); the source has more ids for MCP/tool-scoped approvals. Rejecting ended the turn `end_turn`. |
 | cursor-agent | Source: `allow-once`, `allow-always`, `reject-once` | unmeasured live |
+
+`reject_always` in goose is remembered: the same tool call later in the session was declined without a second request.
 
 **No answer ever**: the prompt blocks without timeout (opencode, kilo, qwen, goose, claude waited 30 s or more) until `session/cancel` or the process dies.
 
@@ -119,21 +121,22 @@ Modes are the prompting policy. All of these reported them in `session/new` as `
 |---|---|
 | claude | `default` (Manual), `acceptEdits`, `plan`, `auto`, `bypassPermissions` |
 | codex | `agent` (Auto review, default), `read-only`, `workspace-write`, `agent-full-access`; plus `collaboration_mode` `default`/`plan` |
-| opencode, kilo | `build` (default), `plan` |
+| opencode | `build` (default), `plan` |
+| kilo | `code` (default), `ask`, `debug`, `orchestrator`, `plan` |
 | qwen | `auto` (default), `plan`, `default`, `auto-edit`, `yolo` |
 | goose | `auto` (default; never asks), `approve`, `smart_approve`, `chat` |
 | copilot | URIs `https://agentclientprotocol.com/protocol/session-modes#agent` / `#plan` / `#autopilot`, plus config `allow_all` on/off |
 | gemini | `default` (prompts), `autoEdit`, `yolo`, `plan` |
 
 - `session/set_mode {sessionId, modeId}` works in claude, opencode, qwen, goose, copilot, gemini and answers `{}`; goose, copilot and qwen announce it back (`current_mode_update` for goose and copilot; `config_option_update` for claude and for qwen's `config` form). Unknown id: opencode, qwen, goose `-32602`; claude and gemini `-32603` ("Invalid Mode" / "Invalid or unavailable mode").
-- `session/set_config_option {sessionId, configId, value}` returns the full `configOptions`; unknown id or value `-32602` (opencode, kilo) or `-32603` (claude). Config ids seen: `mode`, `model`, `effort`/`reasoning_effort`, `fast-mode`, `allow_all`, `provider` (goose).
+- `session/set_config_option {sessionId, configId, value}` returns the full `configOptions`; unknown id or value `-32602` (opencode, kilo, copilot; copilot lists the supported values in the message) or `-32603` (claude). Kilo and opencode mode ids are not interchangeable (`build` is `-32602` in kilo). Config ids seen: `mode`, `model`, `effort`/`reasoning_effort`, `fast-mode`, `allow_all`, `provider` (goose).
 - `session/set_model` exists in qwen (`-32602` for an unknown model) and gemini (**accepts any id**; the next prompt then fails with JSON-RPC code `500` "models/bogus is not found") and is `-32601` in opencode; use `set_config_option` with `configId: "model"` elsewhere.
 - Entering plan mode in claude switched the model from haiku to sonnet (`config_option_update` showed `model: sonnet`): re-read `configOptions` after a mode change.
 - Unknown methods answer `-32601` (opencode `"Method not found": session/bogus`).
 
 ## Operations contract: client capabilities
 
-- We advertised `fs.readTextFile/writeTextFile` and `terminal` to claude and opencode: **neither ever called `fs/*` or `terminal/*`**. The agents run their own tools, so terminal output reaches us only as `tool_call_update.content` / `rawOutput`. Do not rely on being asked for them. Not tried for the others.
+- We advertised `fs.readTextFile/writeTextFile` and `terminal` to claude, opencode, kilo, copilot, gemini, goose and qwen. **Only qwen used them**: it sends `fs/write_text_file {sessionId, path, content, _meta}` and `fs/read_text_file {sessionId, path, limit: 1000}` (also for its own memory file under `~/.qwen/`), and expects `null` / `{content}` back. No agent sent `terminal/*`, so command output reaches us only as `tool_call_update.content` / `rawOutput`. A client that advertises `fs` must implement it for qwen or its edits fail; one that does not advertise it is simply not asked.
 - Capabilities that change behaviour: opencode honours `elicitation.form`, `session.compaction`, `session.configOptions`, `session.notices`; others ignored what we sent.
 - `authenticate`: opencode `opencode-login` (terminal `opencode auth login`), qwen `openai` (reads `OPENAI_API_KEY`), goose `goose-provider`, copilot `copilot-login` (terminal `copilot login`), cursor `cursor_login`, gemini `oauth-personal` / `gemini-api-key` (works with `GEMINI_API_KEY`) / `vertex-ai`, codex `api-key` / `chat-gpt`, claude none (the adapter reuses the Claude Code login and has `auth.logout`). All the ones tried returned `{}` on success, or failed at `session/new` or the prompt.
 
@@ -158,7 +161,7 @@ Web search 2026-10-16 found no statement about ACP adapters themselves. For Clau
 | Compaction / reset | opencode `compaction_update`; others none | screen |
 | Resume after crash | new process, `initialize`, `session/load` (replays) or `session/resume` where advertised (no replay; goose has no resume) | n/a |
 
-Gaps that remain for the screen/process scan: kilo questions, claude and copilot questions, compaction in every agent but opencode, plan progress for everything but kilo, and every cell marked unmeasured (cursor-agent needs a login; codex see below; gemini cancel was not captured).
+Gaps that remain for the screen/process scan: kilo questions, claude and copilot questions, compaction in every agent but opencode, plan progress for everything but kilo, and every cell marked unmeasured (cursor-agent needs a login; codex see below).
 
 ## Codex
 

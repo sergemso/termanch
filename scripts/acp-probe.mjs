@@ -12,6 +12,7 @@
 //   prompt:<text>             session/prompt, waits for the response
 //   promptbg:<text>           session/prompt without waiting (pair with cancel / wait)
 //   cancel                    session/cancel notification
+//   cancel-open               reply outcome=cancelled to permission requests left open by --perm none
 //   wait:<ms>                 sleep, keeping the log open
 //   mode:<id>                 session/set_mode
 //   config:<id>=<value>       session/set_config_option
@@ -81,6 +82,7 @@ const kinds = {}; // update kind -> count
 const t0 = Date.now();
 const log = (dir, msg) => appendFileSync(wire, redact(JSON.stringify({ t: Date.now() - t0, dir, msg })) + '\n');
 
+const unanswered = []; // permission requests left open by --perm none
 let child, buf = '', nextId = 1;
 const pending = new Map();
 let sessionId = opt('session', null), caps = null;
@@ -137,7 +139,7 @@ async function onAgentRequest(m) {
   const reply = (result) => send({ jsonrpc: '2.0', id: m.id, result });
   const fail = (code, message) => send({ jsonrpc: '2.0', id: m.id, error: { code, message } });
   if (m.method === 'session/request_permission') {
-    if (perm === 'none') return;
+    if (perm === 'none') { unanswered.push(m.id); return; }
     if (permDelay) await new Promise((r) => setTimeout(r, permDelay));
     const opts = m.params.options || [];
     if (opt('perm-pick')) { const o = opts.find((x) => x.optionId === opt('perm-pick')); if (o) return reply({ outcome: { outcome: 'selected', optionId: o.optionId }, ...JSON.parse(opt('perm-extra', '{}')) }); }
@@ -181,6 +183,9 @@ async function step(s) {
     case 'prompt': r = await request('session/prompt', { sessionId, prompt: [{ type: 'text', text: a }] }, Number(opt('timeout', 180000))); break;
     case 'promptbg': request('session/prompt', { sessionId, prompt: [{ type: 'text', text: a }] }, 600000).then((x) => { log('bg-result', x); results.push({ step: 'promptbg-done', ok: !x.error, error: x.error, result: x.result }); }); r = { result: 'started' }; break;
     case 'cancel': send({ jsonrpc: '2.0', method: 'session/cancel', params: { sessionId } }); r = { result: 'sent' }; break;
+    case 'cancel-open': // answer open permission requests with outcome cancelled, as the spec asks after session/cancel
+      while (unanswered.length) send({ jsonrpc: '2.0', id: unanswered.shift(), result: { outcome: { outcome: 'cancelled' } } });
+      r = { result: 'answered cancelled' }; break;
     case 'wait': await sleep(Number(a)); r = { result: 'waited' }; break;
     case 'mode': r = await request('session/set_mode', { sessionId, modeId: a }); break;
     case 'config': { const [id, v] = a.split('='); r = await request('session/set_config_option', { sessionId, configId: id, value: v }); break; }
