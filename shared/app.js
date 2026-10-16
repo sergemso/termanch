@@ -10,9 +10,16 @@
   const dir = document.body.dataset.dir;
   if (params.get('theme')) document.documentElement.dataset.theme = params.get('theme');
 
-  const chip = (state) =>
-    `<span class="chip st-${state}"><i aria-hidden="true">${STATE[state].glyph}</i>${STATE[state].label}</span>`;
-  const badge = (agent) => `<span class="agent" title="${AGENT[agent].name}" aria-label="${AGENT[agent].name}">${AGENT[agent].mark}</span>`;
+  const G = {
+    needs_input: '<path d="M8 1.8 14.2 8 8 14.2 1.8 8z" fill="currentColor"/>',
+    failed: '<path d="M8 2 14.6 13.5H1.4z" fill="currentColor"/>',
+    finished_unseen: '<path d="M3 8.4 6.4 11.6 13 4.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+    working: '<circle cx="8" cy="8" r="5.2" fill="none" stroke="currentColor" stroke-opacity=".3" stroke-width="2.2"/><path d="M8 2.8a5.2 5.2 0 0 1 5.2 5.2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" class="spin"/>',
+    idle: '<circle cx="8" cy="8" r="4.6" fill="none" stroke="currentColor" stroke-width="2"/>',
+  };
+  const glyph = (state) => `<svg class="gl" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">${G[state]}</svg>`;
+  const chip = (state) => `<span class="chip st-${state}">${glyph(state)}${STATE[state].label}</span>`;
+  const badge = (agent) => `<span class="agent" data-a="${agent}" title="${AGENT[agent].name}" aria-label="${AGENT[agent].name}">${AGENT[agent].mark}</span>`;
   const icon = {
     mic: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
     send: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
@@ -99,7 +106,7 @@
     const s = ses(decision.session);
     return `
       <header class="sheet-head"><a class="back" href="#home" aria-label="Back">${icon.back}</a>
-        <div class="sheet-title">${badge(s.agent)}<span><b>${AGENT[s.agent].name}</b><small>${esc(srv(s.server).name)} · waiting ${s.wait}</small></span></div>
+        <div class="sheet-title">${badge(s.agent)}<span><b>${AGENT[s.agent].name}</b><small>waiting ${s.wait} · ${esc(srv(s.server).name)}</small></span></div>
         <a class="btn ghost small" href="#session-t1">${icon.term}<span>Session</span></a></header>
       <article class="decision">
         <p class="task">${esc(s.title)}</p>
@@ -117,7 +124,7 @@
   const sessionHead = (s) => `
     <header class="sheet-head"><a class="back" href="#home" aria-label="Back">${icon.back}</a>
       <div class="sheet-title">${badge(s.agent)}<span><b>${esc(s.title.length > 46 ? s.title.slice(0, 44) + '…' : s.title)}</b>
-        <small>${AGENT[s.agent].name} · ${esc(srv(s.server).name)} · ${s.wait}</small></span></div>
+        <small>${AGENT[s.agent].name} · ${esc(srv(s.server).name)}</small></span></div>
       ${chip(s.state)}</header>`;
 
   screens['session-t1'] = () => {
@@ -160,7 +167,7 @@
       </div>
       <section class="chart" aria-label="Timeline"><h2 class="sec">Timeline</h2>
         <div class="axis"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>${rows}
-        <ul class="legend">${['working', 'needs_input', 'failed', 'idle'].map((st) => `<li class="st-${st}"><i class="seg st-${st}"></i>${STATE[st].glyph} ${STATE[st].label}</li>`).join('')}</ul>
+        <ul class="legend">${['working', 'needs_input', 'failed', 'idle'].map((st) => `<li class="st-${st}"><i class="seg st-${st}"></i>${glyph(st)} ${STATE[st].label}</li>`).join('')}</ul>
       </section>
       <section><h2 class="sec">Servers</h2>${servers.map((sv) => `
         <div class="srv-health"><b>${esc(sv.name)}</b><small>${esc(sv.host)} · up ${sv.up}</small>
@@ -178,7 +185,7 @@
       <div class="brand">termenbox</div>
       <nav>${nav.map(([id, l, ic]) => `<a href="#${id === 'sessions' ? 'session-t1' : id}" class="${cur === id ? 'on' : ''}">${ic}<span>${l}</span>${id === 'home' ? `<em>${needsYou().length}</em>` : ''}</a>`).join('')}</nav>
       ${servers.map((sv) => `<div class="side-srv"><h4>${esc(sv.name)}</h4>${sessions.filter((s) => s.server === sv.id).map((s) =>
-        `<a class="side-ses st-${s.state}" href="#${s.state === 'needs_input' ? 'decision' : 'session-' + (s.tier === 'T1' ? 't1' : 't3')}"><i aria-hidden="true">${STATE[s.state].glyph}</i><span>${esc(s.title)}</span></a>`).join('')}</div>`).join('')}
+        `<a class="side-ses st-${s.state}" href="#${s.state === 'needs_input' ? 'decision' : 'session-' + (s.tier === 'T1' ? 't1' : 't3')}">${glyph(s.state)}<span>${esc(s.title)}</span></a>`).join('')}</div>`).join('')}
       <div class="kbd">Search or jump <kbd>Ctrl K</kbd></div>
     </aside>`;
 
@@ -211,6 +218,13 @@
         ${rightPane()}
         ${bottomBar(cur)}
       </div>${params.has('palette') ? palette() : ''}`;
+    if (sheet) {
+      const m = $('#main');
+      const body = document.createElement('div');
+      body.className = 'sheet-body';
+      [...m.children].forEach((c) => { if (!c.matches('.sheet-head,.composer,.keyrow')) body.appendChild(c); });
+      m.insertBefore(body, m.querySelector('.composer,.keyrow'));
+    }
     window.scrollTo(0, 0);
   }
   window.addEventListener('hashchange', render);

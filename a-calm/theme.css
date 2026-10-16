@@ -5,3 +5,11 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101016;--fg:#ececf4;--muted:#a0a2b4;--surface:#1a1a23;--surface-2:#252531;--line:#30303e;--bar:#16161dee;--accent:#948bff;--accent-soft:#25214a;--on-accent:#12102e;--warn:#f2b052;--warn-soft:#2c2112;--on-warn:#1a1100;--bad:#ff7b80;--ok:#5fd68c;--info:#7aa7ff;--term-bg:#0a0a0f;--term-fg:#e4e4ef;--shadow:0 12px 40px #0008;color-scheme:dark}}
 :root[data-theme="dark"]{--bg:#101016;--fg:#ececf4;--muted:#a0a2b4;--surface:#1a1a23;--surface-2:#252531;--line:#30303e;--bar:#16161dee;--accent:#948bff;--accent-soft:#25214a;--on-accent:#12102e;--warn:#f2b052;--warn-soft:#2c2112;--on-warn:#1a1100;--bad:#ff7b80;--ok:#5fd68c;--info:#7aa7ff;--term-bg:#0a0a0f;--term-fg:#e4e4ef;--shadow:0 12px 40px #0008;color-scheme:dark}
 
+/* A: soft cards, round avatars, gentle depth */
+body{background:linear-gradient(180deg,var(--surface-2),var(--bg) 220px) no-repeat,var(--bg)}
+.agent{border-radius:50%}
+.q-item,.stat,.chart,.srv-health,.continue,.opt,.decision-strip{box-shadow:0 1px 2px #1b1b2410,0 6px 18px #1b1b240a}
+.q-item{border-radius:20px;border-color:transparent}
+.q-item.st-needs_input{box-shadow:inset 4px 0 0 var(--warn),0 6px 18px #1b1b240a}
+.screen-head h1{letter-spacing:-.02em}
+.screen-head .sub{background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:3px 12px}

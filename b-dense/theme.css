@@ -7,3 +7,13 @@
 .q-item{padding:8px 10px;min-height:48px;border-left:3px solid var(--c)}.q-title{font-weight:500;-webkit-line-clamp:1}.agent{width:24px;height:24px;font-size:11px}
 .row{min-height:34px;padding:5px 10px}.chip{padding:0 6px;border-radius:2px;font-size:11px;text-transform:uppercase;letter-spacing:.04em}.opt{min-height:56px}.opt b{font-size:14px}
 .fleet-srv ul{background:var(--surface)}.screen-head h1::before{content:"$ ";color:var(--accent)}.tier{text-transform:uppercase;letter-spacing:.05em;font-size:11px}
+/* B: table rows, hairlines, square tags; title first, facts underneath on one line */
+.agent{border-radius:3px;width:22px;height:22px;font-size:11px}
+.queue{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden;padding:0 0 2px}
+.queue .sec{margin:10px 10px 4px}
+.q-item{border:0;border-top:1px solid var(--line);border-left:3px solid var(--c);border-radius:0;margin:0;background:none;min-height:56px;padding:8px 10px;align-items:center}
+.q-body{display:grid;grid-template-columns:auto 1fr auto;gap:3px 8px;align-items:center}
+.q-top{display:contents}.q-title{grid-column:1/-1;grid-row:1;-webkit-line-clamp:1;font-weight:600}
+.q-top .chip{grid-column:1;grid-row:2}.q-meta{grid-column:2;grid-row:2;min-width:0}.q-wait{grid-column:3;grid-row:2}
+.fleet-srv ul{border-radius:var(--r)}.fleet-srv h3{text-transform:uppercase;letter-spacing:.05em}
+.stat b{font-size:20px}.chart,.stat,.srv-health{box-shadow:none}
