@@ -23,4 +23,12 @@ describe('rememberFocus', () => {
     rememberFocus({ activeElement: gone, body: {} })();
     expect(gone.focused).toBe(0);
   });
+  it('returns to the terminal input when a button (the one that opened the dialog) had focus', () => {
+    const input = el();
+    const doc = { activeElement: { tagName: 'BUTTON' } as unknown, body: {}, querySelector: () => input };
+    const restore = rememberFocus(doc);
+    doc.activeElement = {};
+    restore();
+    expect(input.focused).toBe(1);
+  });
 });
