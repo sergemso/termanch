@@ -170,6 +170,7 @@ try {
   });
   await page.evaluate(
     ([cert, items]) => {
+      localStorage.setItem('termenbox_settings', JSON.stringify({ renderer: 'dom' })); // the rows are text, so a blank frame can be seen
       localStorage.setItem('termenbox_auth', JSON.stringify({ cert, login: 'alice' }));
       localStorage.setItem('termenbox_servers', JSON.stringify(items));
     },
@@ -213,7 +214,9 @@ try {
   ok('+ New window and the per-window close act on the real tmux session');
 
   // 3. A session that needs you shows the banner without changing the tab the user is on.
-  const activeBefore = await page.locator('[role=tab][aria-selected=true]').getAttribute('aria-label');
+  // The label ends with the agent's status, which moves by itself; the tab is told apart by what comes before it.
+  const activeTab = async () => ((await page.locator('[role=tab][aria-selected=true]').getAttribute('aria-label')) ?? '').split(' · ').slice(0, -1).join(' · ');
+  const activeBefore = await activeTab();
   const sendNeedsInput = (s, name) =>
     s.tmux(
       'new-window', '-d', '-t', `=${name}:`,
@@ -221,7 +224,7 @@ try {
     );
   sendNeedsInput(a, 'docs');
   await page.getByRole('status').filter({ hasText: /needs you/i }).first().waitFor({ timeout: 15000 });
-  const activeAfter = await page.locator('[role=tab][aria-selected=true]').getAttribute('aria-label');
+  const activeAfter = await activeTab();
   if (activeAfter !== activeBefore) fail(`the banner changed the tab: ${activeBefore} -> ${activeAfter}`);
   ok('the needs-you banner appears without a tab change');
 
@@ -242,6 +245,37 @@ try {
   await sleep(500);
   if (!(await page.evaluate(() => window.__previewSeen))) fail('switching tabs never showed the preview of the other session');
   else ok('a session switch shows a snapshot before the live repaint');
+
+  // 4b. Switching back to sessions already visited never shows a blank screen: the saved screen is drawn in the
+  // same write that clears the terminal, and the live repaint lands on the same cells.
+  const switchTo = async (name) => {
+    await tab(name).click();
+    await page.waitForFunction((n) => document.querySelector('[role=tab][aria-selected=true]')?.getAttribute('aria-label')?.includes(n), name);
+    await sleep(700);
+  };
+  await switchTo('docs');
+  await switchTo('web'); // both sessions have now been shown once
+  await page.evaluate(() => {
+    window.__blank = 0;
+    window.__frames = 0;
+    const tick = () => {
+      const rows = document.querySelector('.xterm-rows');
+      if (rows) {
+        window.__frames++;
+        if (!rows.textContent.trim()) window.__blank++;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await switchTo('docs');
+  await switchTo('web');
+  await switchTo('docs');
+  await switchTo('web');
+  const { blank, frames } = await page.evaluate(() => ({ blank: window.__blank, frames: window.__frames }));
+  if (!frames) fail('no terminal rows to sample (the DOM renderer is not in use)');
+  else if (blank) fail(`${blank} of ${frames} frames were blank while switching between visited sessions`);
+  else ok(`tab 1 - tab 2 - tab 1 shows no blank frame (${frames} frames sampled)`);
 
   // 5. Detach closes the tab and keeps the session; Close session confirms, then ends it.
   await tab('web').click();
