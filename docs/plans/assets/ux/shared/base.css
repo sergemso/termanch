@@ -187,3 +187,6 @@ kbd{font-size:11px;border:1px solid var(--line);border-radius:5px;padding:1px 6p
 .mrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}.mrow button{font-family:inherit;font-size:13px}
 .hints{color:var(--muted);font-size:12px;margin-top:8px}
 .term-sheet footer{background:var(--bg)}
+/* touch targets: nothing tappable under 44 px (spike acceptance rule) */
+.achip{height:44px}.dock-o .pill{min-height:44px}.tab{height:44px}.kk,.pad{height:48px}.icon-btn{min-width:44px;min-height:44px}
+.btn.sm{min-height:44px}.pill{min-height:44px}.switch a{padding:12px 0}

@@ -1,0 +1,75 @@
+# U.1 design spike: result and recommendation
+
+Date: 2026-10-16 · Status: **recommended by the spike, awaiting the owner's confirmation** (U.1 is not done until the owner confirms or changes the pick).
+Prototypes (static, not wired to a server): https://termenbox.github.io/termenbox/ (sources and screenshots in this directory). Screenshots: `<direction>/screens/<screen>-<phone|desktop>-<dark|light>.png` for home, empty, empty-servers, decision, session-t1, session-t3, terminal, terminal-more, report, palette (desktop). All taken in desktop Chromium at 390 px and 1280 px, so none is an iPhone or Android check (`a-phone-check-names-its-platform`). Android: emulated only.
+
+## What was compared
+
+| Option | One line |
+|---|---|
+| **A · Command center** | Agent list, session detail and live terminal side by side (desktop); list-first phone with Overview / Transcript / Terminal tabs |
+| **B · Decision inbox** | Home is the oldest waiting decision, answered in place; fleet below; terminal secondary |
+| **C · Fleet board** | Columns by state (Needs you, Working, Finished, Idle), answer buttons on the card, detail in a drawer |
+| **Old three** | One card-list layout in three colour skins (first spike round). Superseded, kept in git history |
+| **Owner's reference image** | Style source only: desktop three-pane, dark navy. Not graded as a layout |
+
+Skins are independent of layout (draft decision 0110): navy, graphite and teal, each dark and light, switchable on the landing page. The first-round skins were light by default and followed the OS setting; all skins now default to dark.
+
+## Grades (1 worst, 5 best; the spike's judgement from prototypes, not user tests)
+
+Criteria come from guardrail `ux-acceptance-targets`, decisions 0100-0103 and 0109, and the owner's complaints (small buttons, keyboard jumping, general layout). The keyboard behaviour cannot be graded from a headless-browser prototype, so it is a rule below, not a grade.
+
+### Mobile (390 px)
+
+| Option | Push to sent answer | Every agent's state at a glance | Touch targets, thumb reach | Terminal access | Clutter | **Total /25** |
+|---|---|---|---|---|---|---|
+| A · Command center | 4 (2 taps: item, option) | 3 (counts on top, list scrolls) | 4 | 5 (Terminal tab on every session, tab strip) | 4 | **20** |
+| B · Decision inbox | 5 (1 tap: Home is the decision) | 2 (fleet is below the fold) | 5 (big options) | 4 (switch and "Open terminal") | 3 | **19** |
+| C · Fleet board | 3 (1 tap but the card shows no question context, which breaks 0102) | 4 (all states stacked) | 3 (inline buttons wrap and crowd) | 4 (switch in the session) | 3 | **17** |
+| Old three | 3 (2 to 3 taps) | 3 | 3 | 1 (no way into the terminal on phone) | 3 | **13** |
+| *Recommended hybrid (projected, not prototyped)* | 5 | 4 | 5 | 5 | 4 | **23** |
+
+### Desktop (1280 px)
+
+| Option | Fleet overview | Answer speed | Terminal beside context | Scales to 50 sessions | Fits decision 0101 (sidebar, main, right pane, palette) | Activity and reports | **Total /30** |
+|---|---|---|---|---|---|---|---|
+| A · Command center | 4 | 3 (click, then answer; no shortcuts shown) | 5 | 4 (list, search, filter) | 5 | 4 | **25** |
+| B · Decision inbox | 3 | 5 (stage with 1/2/3 and J/K) | 2 (terminal hidden until opened) | 4 (queue) | 3 (no right pane) | 4 | **21** |
+| C · Fleet board | 5 | 4 (on the card or in the drawer) | 4 (drawer, narrow) | 3 (long columns) | 4 | 4 | **24** |
+| Old three | 2 | 2 | 1 | 3 | 1 | 3 | **12** |
+| *Recommended hybrid (projected, not prototyped)* | 5 | 5 | 5 | 4 | 5 | 4 | **28** |
+
+## Recommendation
+
+**Mobile: B's decision-first Home, A's session sheet, C's state counts.**
+- Home shows one state strip (C's counts: needs you, working, failed, finished), then the oldest waiting decision with large options and a text and dictation field, then the rest of the queue, then the fleet. Push to answer is one tap.
+- Every session opens as A's sheet: header, a session tab strip, and a switch between the structured view and the terminal. The terminal is always one tap away and keeps its place.
+- The terminal uses the redesigned input (action chips for the detected agent, a "send a line" prompt with dictation, 48 px keys with word labels, an arrow pad, a More sheet), with the decision docked above it when something needs the user.
+
+**Desktop: A's three-pane workspace, B's keyboard answering, C's board as a second fleet view.**
+- Agent list, session detail, live terminal; answer a decision with 1/2/3 and move with J/K; palette on Ctrl/Cmd+K.
+- A "Board" view of the fleet (C's columns) as an alternative to the list, later.
+
+**Skin:** navy dark as the default (the owner's reference palette), with graphite and teal shipped; all through tokens (0110).
+
+**Remove from the prototypes before they become designs.** A and the shared components borrow content from the owner's reference image (current task with a step checklist, runtime and uptime row, recent-activity timeline, Live/Scrollback header). The reference was for styling only. Session views show only what our decisions define: header, decision area, tier-appropriate content (T0 or T1 timeline, T2 or T3 cleaned tail), composer, tier label.
+
+## Acceptance rules from the owner's complaints (for U.2, U.4, U.6, U.7b, U.8)
+
+1. **Targets:** no tappable control under 44 x 44 pt, including chips, tabs, pills and keys. Tested by a Playwright bounding-box check.
+2. **Keyboard stays put (iPhone):** the soft keyboard opens and closes only by the user's explicit action and stays as the user left it per session; tapping a key, chip, option, tab or the terminal never opens, closes or re-focuses it (pointerdown with preventDefault, as `KeyRow.svelte` does today). The composer or line input is the only text focus; raw terminal typing is an explicit toggle, so tapping the terminal to scroll or select does not raise the keyboard. The footer (peek, chips, input, keys) is docked to the visual viewport (`visualViewport` events, since iOS Safari ignores `interactive-widget`) and the content above scrolls; no layout jump when the keyboard appears. Verified on a real iPhone, labelled by platform; a desktop run proves nothing here.
+3. **Vertical budget:** on a 390 x 844 phone with the keyboard open the terminal keeps at least 40% of the height; the peek and the chips collapse to one line when the keyboard is open.
+4. **Terminal:** one tap from every session, keeps place when switching, never replaced by a modal (draft decision 0109).
+5. **Layout:** the structure of a screen does not change between skins.
+
+## What to keep from each option
+
+- **A:** the desktop workspace, the Terminal tab and session tab strip on phone, status chips and avatars.
+- **B:** decision-first Home, big numbered options, the pager ("1 of 5"), keyboard answering, "Skip to next".
+- **C:** state counts and grouping, the board as a view, inline "Approve" on low-risk cards only after the question is visible.
+
+## Not done by the spike
+
+- No real-device check on any phone. The keyboard, safe-area, install and haptic behaviour are unverified.
+- Swipe on the arrow pad, long-press select and two-finger scrollback are not drawn.
+- Settings is a stub; nothing is wired to a server; first-paint time is not measured.
