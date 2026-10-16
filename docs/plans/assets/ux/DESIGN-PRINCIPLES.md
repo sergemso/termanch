@@ -17,7 +17,10 @@ Written 2026-10-16 so the final mobile design is derived from established guidan
 - **R1** Every tappable control is at least 44 x 44 pt. *Audit: bounding boxes.*
 - **R2** At least 8 pt between adjacent tappable controls. *Audit: pairwise gaps.*
 - **R3** One primary action per screen state, visually dominant (filled); everything else tonal or text. *Review.*
-- **R4** At most 7 controls in any row; 6 for the key row. Rarely used keys live in the More sheet (Hick). *Audit: count per row.*
+- **R4** At most 7 controls in any row, except the terminal key row (see the exception below). Rarely used keys live in the More sheet (Hick). *Audit: count per row.*
+
+- **Exception: the terminal key row (owner decision, 2026-10-16).** The default row stays today's 16-key row from `KeyRow.svelte` (`/ ^C ⎋ ↵ ⌃ ⌥ ⇧ ⇥ Fn ↑ ↓ ⌨ 🎤 EN A− A+`), because a six-key row does not match how the owner works. Keys are at least 44 pt tall; their width is shared across the row (about 21 pt on a 390 pt phone) with 2 pt gaps, below R1 and R2 on purpose. The system keyboard's own keys are also under 44 pt wide, but this is narrower, so it is a known usability cost, mitigated by making the row configurable (below) and by the 44 pt height. To be revisited after the real-device pass; `audit.mjs` checks the height and exempts only `.f-keys.dense`.
+- **Key row configuration.** Which keys show, in what order, is a per-device user setting in Settings, with presets (today's row, a minimal 6-key row, custom) and a reset. The default is today's row. Same layout on iPhone and Android; no key row on desktop (physical keyboard), a shortcut hint line instead.
 
 ### Hierarchy and type
 - **R5** A type scale of at most six sizes: 12, 13, 15, 17, 22 (+ 13 mono for the terminal). Inputs are 16 so iOS does not zoom. *Audit: distinct sizes, input size.*
@@ -49,6 +52,6 @@ Written 2026-10-16 so the final mobile design is derived from established guidan
 1. **Home shows fleet state without scrolling or tapping**: four equal tiles with counts (needs you, working, failed, finished), not a sideways-scrolling chip row (hidden content breaks visibility of status).
 2. **Home's hero is the oldest waiting decision** with one filled primary option and the others tonal (R3), followed by the rest of the queue.
 3. **A session has two views, Decision and Terminal**, in a segmented control directly under a session strip of avatars with state rings. Chrome stays under 20% (R12).
-4. **The input dock is one surface with three rows at most**: the decision line when something needs the user, the line input with dictation and send, and six large keys (esc, tab, ctrl, up, down, more). Send on an empty line is Enter.
+4. **The input dock is one surface with three rows at most**: the decision line when something needs the user, the line input with dictation and send, and the key row (today's 16-key row by default, configurable; see the exception above). Send on an empty line is Enter.
 5. **Everything else is one tap away in the More sheet**, grouped: agent actions, navigation, control keys, symbols, function keys, tmux, tools (paste, copy, select, text size, raw typing).
 6. **Skins are tokens**, switchable in Settings (draft decision 0110).

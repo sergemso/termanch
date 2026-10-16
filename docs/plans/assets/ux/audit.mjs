@@ -20,7 +20,7 @@ function probe() {
   const opac = (e) => { let o = 1; for (let n = e; n; n = n.parentElement) o *= Number(getComputedStyle(n).opacity); return o; };
   const tabs = document.querySelector('.f-tabs'); const tabsTop = tabs ? tabs.getBoundingClientRect().top : 1e9;
   const scrim = document.querySelector('.f-scrim, .scrim'); const targets = [...document.querySelectorAll('button, a[href], input, [role=tab]')].filter(vis).filter((e) => !scrim || e.closest('.f-sheet, .msheet')).filter((e) => e.closest('.f-tabs') || !tabs || e.getBoundingClientRect().top + e.getBoundingClientRect().height / 2 < tabsTop);
-  const small = targets.map((e) => ({ n: name(e), r: e.getBoundingClientRect() })).filter((t) => t.r.width < 43.5 || t.r.height < 43.5).map((t) => `${t.n} ${Math.round(t.r.width)}x${Math.round(t.r.height)}`);
+  const small = targets.map((e) => ({ n: name(e), r: e.getBoundingClientRect(), dense: !!e.closest('.f-keys.dense') })).filter((t) => t.r.height < 43.5 || (t.r.width < 43.5 && !t.dense)).map((t) => `${t.n} ${Math.round(t.r.width)}x${Math.round(t.r.height)}`);
   const gaps = [];
   for (let i = 0; i < targets.length; i++) for (let j = i + 1; j < targets.length; j++) {
     const a = targets[i], c = targets[j]; if (a.contains(c) || c.contains(a)) continue;
@@ -28,10 +28,11 @@ function probe() {
     const dx = Math.max(rc.left - ra.right, ra.left - rc.right, 0), dy = Math.max(rc.top - ra.bottom, ra.top - rc.bottom, 0);
     const g = dx > 0 && dy > 0 ? Math.hypot(dx, dy) : Math.max(dx, dy);
     const sameTabs = (a.closest('[role=tablist]') && a.closest('[role=tablist]') === c.closest('[role=tablist]')) || (a.closest('form') && a.closest('form') === c.closest('form'));
-    if (g < (sameTabs ? 3.5 : 7.5)) gaps.push(`${name(a)} | ${name(c)} ${g.toFixed(1)}`);
+    const denseKeys = a.closest('.f-keys.dense') && a.closest('.f-keys.dense') === c.closest('.f-keys.dense');
+    if (!denseKeys && g < (sameTabs ? 3.5 : 7.5)) gaps.push(`${name(a)} | ${name(c)} ${g.toFixed(1)}`);
   }
   const rows = {}; targets.forEach((e) => { const r = e.getBoundingClientRect(); const k = Math.round((r.top + r.height / 2) / 8); (rows[k] ||= []).push(e); });
-  const wide = Object.values(rows).filter((l) => l.length > 7).map((l) => l.length + ' controls in a row');
+  const wide = Object.values(rows).filter((l) => l.length > 7 && !l[0].closest('.f-keys.dense')).map((l) => l.length + ' controls in a row');
   const contrast = [], sizes = new Set();
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let t; (t = walker.nextNode());) { if (!t.nodeValue.trim()) continue; const e = t.parentElement; if (!vis(e) || e.closest('.ioskb')) continue;
