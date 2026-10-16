@@ -1,0 +1,40 @@
+
+   ▄▄▄▄▄▄  ▄▄     ▄▄ ▄▄▄▄▄▄▄ ▄▄▄    ▄▄   ┌───────────────────────────────────────────────────────┐
+  ██╔═══██╗██║    ██║██╔════╝████╗  ██║  │ >_ Qwen Code (v0.25.2)                                │
+  ██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║  │                                                       │
+  ██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║  │ API Key | nvidia/nemotron-3.5-super-vl-120b-a12b      │
+  ╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║  │ /tmp/.../scratchpad/work/qwen                         │
+   ╚══▀▀═╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝  └───────────────────────────────────────────────────────┘
+
+  Tips: Add a QWEN.md file to give Qwen Code persistent project context.
+  ●︎ Auto mode enabled.
+       An LLM classifier evaluates each tool call — safe actions auto-approve,
+       risky ones are blocked. Exit: Shift+Tab or /approval-mode default.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  > Create a file named hello.txt containing the word hi
+
+  ∴︎ Thought for 1s (click or ctrl+o to expand)
+  ✓ WriteFile Writing to hello.txt
+    1 hi
+
+  ∴︎ Thought briefly (click or ctrl+o to expand)
+
+  ◆︎ Created `/tmp/claude-1000/-home-ubuntu-projects-termenbox-termenbox/9bf89f8d-d1b
+
+  .. Counting electrons... (5s · ↓ 136 tokens · esc to cancel)
+────────────────────────────────────────────────────────────────────────────────────────────────────
+>   Type your message or @path/to/file
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ➜ qwen · nvidia/nemotron-3.5-super-vl-120b-a12b
+  Enter to steer · Ctrl+Q to queue · Auto mode (shift + tab to cycle)
+
+
+
+
+
+
+
+
+
+

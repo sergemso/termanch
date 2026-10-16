@@ -1,0 +1,40 @@
+  ██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║  │                                                       │
+  ██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║  │ API Key | nvidia/nemotron-3.5-super-vl-120b-a12b      │
+  ╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║  │ /tmp/.../scratchpad/work/qwen                         │
+   ╚══▀▀═╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝  └───────────────────────────────────────────────────────┘
+
+  Tips: Type / to open the command popup; Tab autocompletes slash commands and saved prompts.
+  ●︎ Auto mode enabled.
+       An LLM classifier evaluates each tool call — safe actions auto-approve,
+       risky ones are blocked. Exit: Shift+Tab or /approval-mode default.
+  ●︎ Read context files: ~/.qwen/output-language.md
+
+  > Create a file named hello.txt containing the word hi
+
+  ∴︎ Thought for 1s (click or ctrl+o to expand)
+  ✓ WriteFile Writing to hello.txt
+    1 hi
+
+  ∴︎ Thought briefly (click or ctrl+o to expand)
+
+  ◆︎ Created /tmp/claude-1000/-home-ubuntu-projects-termenbox-termenbox/9bf89f8d-d1b3-4d54-8b69-71
+    5ab1ed4938/scratchpad/work/qwen/hello.txt containing hi.
+
+  > cat hello.txtRun the bash command: touch /tmp/u03-scratch-file2
+
+  ∴︎ Thought briefly (click or ctrl+o to expand)
+  ✓ Read hello.txt
+
+  ∴︎ Thought briefly (click or ctrl+o to expand)
+  ✓ Shell touch /tmp/u03-scratch-file2 (Create empty scratch file at /tmp/u03-scratch-file2)
+
+
+  ∴︎ Thought briefly (click or ctrl+o to expand)
+
+  ◆︎ hello.txt contains hi, and /tmp/u03-scratch-file2 was created successfully.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+*   Type your message or @path/to/file
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ➜ qwen · nvidia/nemotron-3.5-super-vl-120b-a12b
+  YOLO mode (shift + tab to cycle)
