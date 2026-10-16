@@ -24,7 +24,7 @@ Extends fact 0038 (which agents have ACP and their `initialize` capabilities). M
 | qwen | 0.25.2 | measured |
 | goose | 1.55.0 | measured |
 | copilot | 1.0.98 | measured (owner's login) |
-| gemini | 0.64.0 | **unmeasured live**: `session/new` fails `-32000 "Gemini API key is missing or not configured."`; needs a Google login or `GEMINI_API_KEY`/Vertex. Source-derived facts below. |
+| gemini | 0.64.0, model `gemini-3.8-flash` | measured with `GEMINI_API_KEY` and `authenticate` methodId `gemini-api-key` (without it `session/new` fails `-32000 "Gemini API key is missing or not configured."`). `initialize` has `loadSession` only: `session/list`, `resume`, `close`, `set_config_option` are `-32601`. |
 | cursor-agent | 2026.10.16 | **unmeasured live**: `session/new` fails `-32000 "Authentication required"` until the owner runs `agent login`, then `authenticate` with methodId `cursor_login`. Source-derived facts below. |
 | aider, amp | | no ACP (fact 0038) |
 
@@ -38,7 +38,7 @@ Extends fact 0038 (which agents have ACP and their `initialize` capabilities). M
 | qwen | No `plan` live. `todo_write` is a deferred tool that `ToolSearch` did not find in ACP mode ("Not found: todo_write"). The source has `plan` only in the transcript-replay path (`entries[{content, priority:"medium", status}]`, `_meta.qwenTodo`), so `session/load` may replay it. |
 | goose | No todo tool by default (tools: `analyze, apps__*, delegate, edit, extensionmanager__*, load, load_skill, read_image, shell, tree, write`). No `plan`. |
 | copilot | **The only agent that sent `plan`, and it was always `{"entries": []}`** (after a SQL tool call that inserted todos, and after plan mode). Todos live in a SQL `todos` table written by a `kind: other` tool call whose `rawInput.query` is SQL text. Plan mode saves `plan.md` and the answer says so. Entries are not usable; parse nothing from `plan`. |
-| gemini | Source: no `plan` update; modes `default, autoEdit, yolo, plan`. Unmeasured live. |
+| gemini | No `plan` (source and live). The model made no `write_todos` call when asked, so todo surfacing is unmeasured; tool calls are `tool_call` with ids like `write_file__call_1732289`. |
 | cursor-agent | Source: sends `plan` (`entries`), plus extension requests `cursor/update_todos`, `cursor/create_plan`, `cursor/task`, and `subagent_spawned` / `subagent_state_update` updates. Unmeasured live. |
 | codex | See Codex section. |
 
@@ -56,7 +56,7 @@ Gap: no agent was seen sending a non-empty `plan`. Plan progress for T1 comes fr
 | qwen | `{used, size: 1000000}` (no cost), before each model call | **none** in the response; usage is in an empty `agent_message_chunk` with `_meta.usage` `{inputTokens, outputTokens, totalTokens, thoughtTokens, cachedReadTokens}` and `_meta.durationMs` |
 | goose | `{used, size: 128000}` at turn start and end | `{totalTokens, inputTokens, outputTokens}` |
 | copilot | `{used, size: 272000}` several times per turn | `{inputTokens, outputTokens, totalTokens, thoughtTokens, cachedReadTokens, cachedWriteTokens}` |
-| gemini | Source: sends `usage_update`. Unmeasured live. | |
+| gemini | `{used, size: 1048576}` several times per turn, no cost | `{inputTokens, outputTokens, thoughtTokens, totalTokens, cachedReadTokens?}`, `_meta.quota.model_usage[]` |
 | cursor-agent | No `usage_update` in the source. Unmeasured live. | |
 
 ## Resets and lifecycle
@@ -92,7 +92,7 @@ Gap: no agent was seen sending a non-empty `plan`. Plan progress for T1 comes fr
 | qwen plan | `restore_previous`, `proceed_always`, `proceed_once`, `cancel` | `kind: "switch_mode"`, `rawInput.plan`, `_meta.toolName: "exit_plan_mode"`. |
 | goose | `allow_always`, `allow_once`, `reject_once`, `reject_always` (**the only one with `reject_always`**) | Only in mode `approve` or `smart_approve`; default mode `auto` never asks. `toolCall.kind: "other"`. |
 | copilot | `allow_once`, `allow_always`, `reject_once` | `rawInput` = `{fileName, diff, ...}` for edits; safe shell commands (`ls`) did not ask. |
-| gemini | Source: `proceed_once`, `proceed_always`, `proceed_always_and_save`, `proceed_always_server`, `proceed_always_tool` (allow_*), `cancel` (reject_once) | unmeasured live |
+| gemini | `proceed_always` "Allow for this session" (allow_always), `proceed_once` "Allow", `cancel` "Reject" (reject_once) | asks in mode `default` for `write_file` (with a `{type:"diff", path, oldText, newText}`) and `run_shell_command` (even `ls`); the source has more ids for MCP/tool-scoped approvals. Rejecting ended the turn `end_turn`. |
 | cursor-agent | Source: `allow-once`, `allow-always`, `reject-once` | unmeasured live |
 
 **No answer ever**: the prompt blocks without timeout (opencode, kilo, qwen, goose, claude waited 30 s or more) until `session/cancel` or the process dies.
@@ -108,7 +108,8 @@ Gap: no agent was seen sending a non-empty `plan`. Plan progress for T1 comes fr
 | goose | No question tool. |
 | copilot | Asked "Red or blue?" as plain `agent_message_chunk` text; no request. |
 | cursor-agent | Source: extension request `cursor/ask_question`; if the client answers `-32601` it falls back to one `session/request_permission` per single-choice question with options `{optionId: <option id>, kind: allow_once}` plus `__ask_question_skip__`. Multi-select and free text are not offered in the fallback. |
-| gemini, codex | gemini unmeasured; codex see below. |
+| gemini | Asked "red or blue" as plain text (no ask tool offered); no request. |
+| codex | see below. |
 
 ## Modes and configuration
 
@@ -122,11 +123,11 @@ Modes are the prompting policy. All of these reported them in `session/new` as `
 | qwen | `auto` (default), `plan`, `default`, `auto-edit`, `yolo` |
 | goose | `auto` (default; never asks), `approve`, `smart_approve`, `chat` |
 | copilot | URIs `https://agentclientprotocol.com/protocol/session-modes#agent` / `#plan` / `#autopilot`, plus config `allow_all` on/off |
-| gemini | source: `default`, `autoEdit`, `yolo`, `plan` |
+| gemini | `default` (prompts), `autoEdit`, `yolo`, `plan` |
 
-- `session/set_mode {sessionId, modeId}` works in claude, opencode, qwen, goose, copilot and answers `{}`; goose, copilot and qwen announce it back (`current_mode_update` for goose and copilot; `config_option_update` for claude and for qwen's `config` form). Unknown id: opencode, qwen, goose `-32602`; claude `-32603 "Invalid Mode"`.
+- `session/set_mode {sessionId, modeId}` works in claude, opencode, qwen, goose, copilot, gemini and answers `{}`; goose, copilot and qwen announce it back (`current_mode_update` for goose and copilot; `config_option_update` for claude and for qwen's `config` form). Unknown id: opencode, qwen, goose `-32602`; claude and gemini `-32603` ("Invalid Mode" / "Invalid or unavailable mode").
 - `session/set_config_option {sessionId, configId, value}` returns the full `configOptions`; unknown id or value `-32602` (opencode, kilo) or `-32603` (claude). Config ids seen: `mode`, `model`, `effort`/`reasoning_effort`, `fast-mode`, `allow_all`, `provider` (goose).
-- `session/set_model` exists only in qwen (`-32602` for an unknown model) and is `-32601` in opencode; use `set_config_option` with `configId: "model"` elsewhere.
+- `session/set_model` exists in qwen (`-32602` for an unknown model) and gemini (**accepts any id**; the next prompt then fails with JSON-RPC code `500` "models/bogus is not found") and is `-32601` in opencode; use `set_config_option` with `configId: "model"` elsewhere.
 - Entering plan mode in claude switched the model from haiku to sonnet (`config_option_update` showed `model: sonnet`): re-read `configOptions` after a mode change.
 - Unknown methods answer `-32601` (opencode `"Method not found": session/bogus`).
 
@@ -134,7 +135,7 @@ Modes are the prompting policy. All of these reported them in `session/new` as `
 
 - We advertised `fs.readTextFile/writeTextFile` and `terminal` to claude and opencode: **neither ever called `fs/*` or `terminal/*`**. The agents run their own tools, so terminal output reaches us only as `tool_call_update.content` / `rawOutput`. Do not rely on being asked for them. Not tried for the others.
 - Capabilities that change behaviour: opencode honours `elicitation.form`, `session.compaction`, `session.configOptions`, `session.notices`; others ignored what we sent.
-- `authenticate`: opencode `opencode-login` (terminal `opencode auth login`), qwen `openai` (reads `OPENAI_API_KEY`), goose `goose-provider`, copilot `copilot-login` (terminal `copilot login`), cursor `cursor_login`, gemini `oauth-personal` / `gemini-api-key` / `vertex-ai`, codex `api-key` / `chat-gpt`, claude none (the adapter reuses the Claude Code login and has `auth.logout`). All the ones tried returned `{}` on success, or failed at `session/new` or the prompt.
+- `authenticate`: opencode `opencode-login` (terminal `opencode auth login`), qwen `openai` (reads `OPENAI_API_KEY`), goose `goose-provider`, copilot `copilot-login` (terminal `copilot login`), cursor `cursor_login`, gemini `oauth-personal` / `gemini-api-key` (works with `GEMINI_API_KEY`) / `vertex-ai`, codex `api-key` / `chat-gpt`, claude none (the adapter reuses the Claude Code login and has `auth.logout`). All the ones tried returned `{}` on success, or failed at `session/new` or the prompt.
 
 ## Terms of use for the adapters (secondary sources only)
 
@@ -147,7 +148,7 @@ Web search 2026-10-16 found no statement about ACP adapters themselves. For Clau
 | Status working/idle | open `session/prompt` request (working until its response) | process scan, screen |
 | Last message / timeline | `agent_message_chunk`, `tool_call`, `tool_call_update` (merge by `toolCallId`; first `tool_call` often has empty `rawInput`, the input arrives in a later update) | screen tail |
 | Plan progress | kilo `todowrite` tool calls; claude hooks/transcript | none from `plan` (empty or absent everywhere measured) |
-| Context % | `usage_update.used / size` (all measured agents except cursor-agent; gemini unmeasured) | none |
+| Context % | `usage_update.used / size` (all measured agents except cursor-agent) | none |
 | Spend | claude/opencode/kilo `usage_update.cost`; per-turn `usage` | none for qwen, goose, copilot |
 | Rate-limit headroom | claude only: `_meta["_claude/rateLimit"].unifiedWindows` | none |
 | Title | `session_info_update.title` (claude, copilot, goose) or `session/list` | pane title |
@@ -157,7 +158,7 @@ Web search 2026-10-16 found no statement about ACP adapters themselves. For Clau
 | Compaction / reset | opencode `compaction_update`; others none | screen |
 | Resume after crash | new process, `initialize`, `session/load` (replays) or `session/resume` where advertised (no replay; goose has no resume) | n/a |
 
-Gaps that remain for the screen/process scan: kilo questions, claude and copilot questions, compaction in every agent but opencode, plan progress for everything but kilo, and every cell marked unmeasured (gemini and cursor-agent need a login; codex see below).
+Gaps that remain for the screen/process scan: kilo questions, claude and copilot questions, compaction in every agent but opencode, plan progress for everything but kilo, and every cell marked unmeasured (cursor-agent needs a login; codex see below; gemini cancel was not captured).
 
 ## Codex
 
