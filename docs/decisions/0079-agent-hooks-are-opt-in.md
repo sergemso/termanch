@@ -16,6 +16,10 @@ tags: [agents, hooks, security, roadmap]
 - Hooks are not offered in container mode unless the sessions' home belongs to Termenbox.
 - ACP (a tool run as a managed child process, not a TUI) is out of scope for this layer; it would be a separate session backend under 0054 with its own decision.
 
+## Amended 2026-10-16
+
+"Connect" becomes a contextual one-tap offer with an anti-nag rule: see [[0106-hook-offer-is-contextual-and-not-a-nag]].
+
 ## Why
 
 Editing another program's settings is a change on the owner's machine they did not ask for unless they ask. The scan floor keeps cards useful for everyone, and fail-open hooks mean a Termenbox outage never stalls an agent mid-task.

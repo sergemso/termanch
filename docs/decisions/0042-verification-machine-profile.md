@@ -1,7 +1,8 @@
 ---
 id: 0042-verification-machine-profile
 title: Cheap checks run locally, slow checks only in CI (thin machine profile)
-status: active
+status: superseded
+superseded-by: 0108-verification-machine-profile
 date: 2026-10-11
 tags: [practice-packs, verification, harness, ci]
 track: process

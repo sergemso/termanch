@@ -1,7 +1,8 @@
 ---
 id: 0088-the-start-screen-resumes-the-last-session
 title: The start screen resumes the last session
-status: active
+status: superseded
+superseded-by: 0100-home-is-a-decision-first-board
 accepted-by: Sergey Strebulaev <s@vivantel.dev>
 date: 2026-10-14
 track: product

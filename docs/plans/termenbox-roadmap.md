@@ -6,6 +6,10 @@ Written 2026-10-14 by consolidating plans v1-v10 and session-tabs (now in `docs/
 
 Repository: Rust server `packages/server`, shared wire types `packages/core/src/protocol.rs` (mirrored by hand in `packages/client/src/lib/protocol.ts`), Svelte 5 client `packages/client/src` (`npx --yes pnpm@9`), directory Pages Functions `packages/client/functions/api`. Knowledge base in `docs/{facts,decisions,guardrails,skills}`; read `CLAUDE.md` first. One squashed pull request per step from its own branch off master, green CI, merge only on the owner's "merge" (guardrails `changes-land-as-one-squashed-pull-request`, `no-commits-on-the-default-branch`). Constraints: 512 MB RAM, 1 vCPU, no paid services in the required stack, secrets never logged, builds only in CI. The owner tests on an iPhone; emulated Chrome is never claimed as a phone check. Never touch the owner's own `termenbox.service` (read its journal only). Pre-push hook: commit subject `type(scope): ...` with a one-word scope. Plans are tracked in GitHub issues (decision 0049); ask before writing to the tracker.
 
+## Main line: the UX programme
+
+Since 2026-10-16 the main line is `docs/plans/ux-programme.md` (decisions 0100-0107): decision-first Home, act in place, tiered session view for every agent, reports, desktop workspace, real-device gate. Only R02, R03, R08 and R36 stay ahead of it; the other steps below wait unless a UX step needs them. R13, R20 and R53 are folded into it; R45 keeps only its cross-server cloud part. The free gate (R40) now also requires the UX programme's device pass (its step U.16).
+
 ## How to use this plan (cheap to re-enter and update)
 
 1. Read only this file: the Order table below is generated, one line per open step, in the order to work. Take the first `pending` row whose predecessors are done.
@@ -26,11 +30,11 @@ Status values: `pending`, `blocked (reason)`, `done (PR #n)`.
 | 2 | [R10](roadmap/R10.md) | Spike: connector payload and abuse review (O.1) | pending | 8.5 | R01 |
 | 3 | [R03](roadmap/R03.md) | Real-iPhone checklist and two-real-server e2e (G.10, H.11) | blocked (owner's iPhone checklist, docs/skills/mobile-ui-device-check.md) | 8.0 | R02 |
 | 4 | [R08](roadmap/R08.md) | Privacy notice and delete-my-data (S.6) | pending | 6.3 | - |
-| 5 | [R20](roadmap/R20.md) | Card design pass: owner picks a variant (K.1) | pending | 6.0 | - |
+| 5 | [R20](roadmap/R20.md) | Card design pass: owner picks a variant (K.1) | blocked (replaced by step U.1 of docs/plans/ux-programme.md; decision 0107) | 6.0 | - |
 | 6 | [R22](roadmap/R22.md) | Badge, stats sheet and Say thanks (T.2) | pending | 6.0 | - |
 | 7 | [R36](roadmap/R36.md) | WebKit in CI (new) | pending | 6.0 | - |
 | 8 | [R07](roadmap/R07.md) | Request-budget alarm (C.5) | pending | 5.0 | R06 |
-| 9 | [R13](roadmap/R13.md) | Inbox view in the sessions UI (K.6) | pending | 4.3 | R12 |
+| 9 | [R13](roadmap/R13.md) | Inbox view in the sessions UI (K.6) | blocked (folded into steps U.5 and U.8 of docs/plans/ux-programme.md; decision 0100) | 4.3 | R12 |
 | 10 | [R32](roadmap/R32.md) | Key rotation and incident runbook (S.8) | pending | 4.3 | - |
 | 11 | [R09](roadmap/R09.md) | Directory abuse controls and degraded mode (S.4) | pending | 4.0 | R06 |
 | 12 | [R35](roadmap/R35.md) | Make the local e2e throughput step pass on the dev VPS | pending | 4.0 | - |
@@ -44,7 +48,7 @@ Status values: `pending`, `blocked (reason)`, `done (PR #n)`.
 | 20 | [R19](roadmap/R19.md) | Cache event and Claude status-line forwarder (G.8) | pending | 2.6 | - |
 | 21 | [R27](roadmap/R27.md) | Remote uninstall on the native host (N.6) | pending | 2.2 | - |
 | 22 | [R16](roadmap/R16.md) | Rules screen (O.6) | pending | 2.4 | R11, R12, R05 |
-| 23 | [R53](roadmap/R53.md) | Voice input to the agent prompt (new) | pending | 2.4 | - |
+| 23 | [R53](roadmap/R53.md) | Voice input to the agent prompt (new) | blocked (folded into step U.8 of docs/plans/ux-programme.md; decision 0102) | 2.4 | - |
 | 24 | [R50](roadmap/R50.md) | Release channels and auto-update policies for server and client | pending | 2.4 | - |
 | 25 | [R51](roadmap/R51.md) | Cloudflare isolation, usage dashboard and threshold alerts | pending | 2.4 | R07 |
 | 26 | [R23](roadmap/R23.md) | Bundle a pinned static tmux (replaces 7.2; needs a decision) | pending | 2.2 | - |

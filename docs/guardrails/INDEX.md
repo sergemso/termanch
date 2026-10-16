@@ -50,3 +50,5 @@ user-settings-are-wrapped-not-replaced,"Termenbox adds to a user's agent setting
 free-features-are-never-capped-for-a-tier,"A free feature is never removed or capped to create a paid tier","tiers, product",active
 paid-data-is-ciphertext-only,"Paid-tier data is stored as ciphertext only","tiers, privacy, security",active
 notifications-carry-no-agent-text,"A notification or push payload never carries anything the agent wrote","notifications, privacy, security",active
+ux-acceptance-targets,"Every UX screen meets the acceptance targets for taps, glanceability, speed and device checks","client, mobile, ux",active
+a-phone-check-names-its-platform,"A phone check names the platform it ran on, and an emulator is never reported as a phone","client, mobile, android",active

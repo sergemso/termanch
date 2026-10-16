@@ -15,14 +15,15 @@ tags: [process, ci, build, release]
 ## Prohibited
 - `Makefile`, `build.sh`, `justfile`, `Taskfile.yml`, `build.rs` (except for codegen in CI)
 - Custom scripts in `scripts/` that compile/test/package
-- Local `cargo build --release` for production artifacts
-- Local `pnpm build` for production client assets
-- Local `docker build` for release images
+- Any local `cargo build`, `cargo test`, `cargo check`, `cargo clippy`, `wasm-pack`
+- Any local `pnpm build` or `pnpm test`, and the browser e2e
+- Any local `docker build`
 
-## Allowed (Local Development Only)
-- `cargo check` / `cargo test` — fast feedback loop
-- `pnpm dev` / `pnpm build` — local preview
-- `docker compose up` — local integration testing
+## Allowed Locally
+- `docker compose up` of pre-built images — local integration testing
+- Reading and editing code; `cargo fmt` is not a build and is also left to CI (decision 0108)
+
+Since 2026-10-16 no compile, test, lint, typecheck, format check, client build or e2e run happens on a development machine (decision 0108, verification machine profile `ci-only`). A thin dev VPS ran out of disk from `target/`; the agent's permission rules deny those commands in `.claude/settings.local.json`, and the verification gate reads CI status instead.
 
 ## Required CI Pipelines
 | Pipeline | Trigger | Produces |
