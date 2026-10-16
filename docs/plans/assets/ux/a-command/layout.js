@@ -24,7 +24,7 @@
     if (screen === 'decision') { const s = ses('s1'); return sheet(sheetHead(s) + segs(0), U.waitingCard({ composer: false }) + U.stepsCard('s1') + U.activityCard(), U.composer('Or answer in your own words')); }
     if (screen === 'session-t1') { const s = ses('s1'); return sheet(sheetHead(s) + segs(1), U.transcriptView() + U.waitingCard({ hints: false, composer: false }), U.composer('Reply to Claude')); }
     if (screen === 'session-t3') { const s = ses('s3'); return sheet(sheetHead(s) + segs(0), `<p class="a-tier">${icon('info', 14)} Generic view · screen read from the terminal</p>` + U.genericPrompt() + U.stepsCard('s3') + U.activityCard(), U.composer('Type to the agent')); }
-    if (screen === 'terminal' || screen === 'terminal-more') { const s = ses('s1'); return `<div class="a-sheet term-sheet"><div>${sheetHead(s)}${U.tabStrip('s1')}${segs(2)}</div><div class="a-tbody">${U.phoneTerm('s1')}</div><footer>${U.dock()}${U.actionChips('claude')}${U.lineInput()}${U.keyBar()}</footer>${screen === 'terminal-more' ? U.moreSheet() : ''}</div>`; }
+    if (screen === 'terminal' || screen === 'terminal-more') { const s = ses('s1'); return `<div class="a-sheet term-sheet"><div>${sheetHead(s)}${U.tabStrip('s1')}${segs(2)}</div><div class="a-tbody">${U.phoneTerm('s1')}</div><footer>${U.inputDock({ context: U.dockLine() })}</footer>${screen === 'terminal-more' ? U.moreSheet() : ''}</div>`; }
     const body = {
       report: () => `<div class="a-page report">${U.report()}</div>`,
       settings: () => `<div class="a-page"><header class="page-h"><h1>Settings</h1></header><p class="muted">Out of scope for the spike.</p></div>`,

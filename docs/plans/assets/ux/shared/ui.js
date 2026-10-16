@@ -31,6 +31,7 @@ window.UI = (function () {
     list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
     pulse: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
     arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+    up: '<path d="m6 15 6-6 6 6"/>',
     kbd: '<rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
     skip: '<path d="m6 5 8 7-8 7zM19 5v14"/>',
     bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4"/>',
@@ -73,31 +74,32 @@ window.UI = (function () {
   // Redesigned phone keys. Words not glyphs, 44px targets, sticky modifiers that read as sticky,
   // agent-aware action chips, a swipeable arrow pad, and everything else in a More sheet.
   const chipsFor = (agent) => ({
-    claude: [['Interrupt', 'Esc', 'danger'], ['Accept edits', '⇧ Tab'], ['/ commands', '/'], ['Newline', '⌥ ↵'], ['Paste', ''], ['Select', '']],
-    codex: [['Interrupt', '⌃C', 'danger'], ['Approve', 'y'], ['/ commands', '/'], ['Paste', ''], ['Select', '']],
-  }[agent] || [['Interrupt', '⌃C', 'danger'], ['Yes', 'y'], ['No', 'n'], ['Paste', ''], ['Select', '']]);
-  const actionChips = (agent = 'claude') => `<div class="achips" role="toolbar" aria-label="Agent actions">${chipsFor(agent).map(([l, k, c]) =>
-    `<button class="achip ${c || ''}"><b>${l}</b>${k ? `<kbd>${k}</kbd>` : ''}</button>`).join('')}</div>`;
+    claude: [['Interrupt', 'danger'], ['Accept edits'], ['Commands'], ['New line'], ['Paste'], ['Select']],
+    codex: [['Interrupt', 'danger'], ['Approve'], ['Commands'], ['Paste'], ['Select']],
+  }[agent] || [['Interrupt', 'danger'], ['Yes'], ['No'], ['Paste'], ['Select']]);
+  const actionChips = (agent = 'claude') => `<div class="achips" role="toolbar" aria-label="Agent actions">${chipsFor(agent).map(([l, c]) => `<button class="achip ${c || ''}">${esc(l)}</button>`).join('')}</div>`;
+  const arrowsIcon = `<svg class="i" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg>`;
   const keyBar = (opts = {}) => `<div class="kbar" role="toolbar" aria-label="Terminal keys">
-    <button class="kk">Esc</button><button class="kk">Tab</button>
-    <button class="kk mod ${opts.ctrl ? 'on' : ''}" aria-pressed="${!!opts.ctrl}"><span>Ctrl</span><i>${opts.ctrl ? 'next key' : 'tap'}</i></button>
-    <button class="kk mod"><span>Alt</span><i>tap</i></button>
-    <span class="pad" role="group" aria-label="Arrow keys, swipe to move"><b class="u">▲</b><b class="l">◀</b><b class="r">▶</b><b class="d">▼</b></span>
-    <button class="kk more" aria-label="More keys">${icon('more', 18)}<span>More</span></button></div>`;
+    <button class="kk">esc</button><button class="kk">tab</button>
+    <button class="kk mod ${opts.ctrl ? 'on' : ''}" aria-pressed="${!!opts.ctrl}">ctrl</button><button class="kk mod" aria-pressed="false">alt</button>
+    <button class="kk wide" aria-label="Arrow keys: tap or drag to move">${arrowsIcon}</button>
+    <button class="kk" aria-label="More keys">${icon('more', 20)}</button></div>`;
   const lineInput = (ph = 'Send a line to the agent') => `<form class="lineinput" onsubmit="return false">
-    <button class="icon-btn" type="button" aria-label="Show the system keyboard">${icon('kbd', 20)}</button>
     <input type="text" placeholder="${esc(ph)}" aria-label="${esc(ph)}" />
     <button class="icon-btn" type="button" aria-label="Dictate">${icon('mic', 20)}</button>
     <button class="icon-btn send" type="submit" aria-label="Send line and press Enter">${icon('send', 18)}</button></form>`;
+  // One calm surface: a context row (the decision if one is waiting, else agent actions), the line, the keys.
+  const inputDock = (o = {}) => `<div class="idock">${o.context === undefined ? '' : o.context}${o.line === false ? '' : lineInput(o.ph)}${keyBar()}</div>`;
   const moreSheet = () => `<div class="scrim"></div><section class="msheet" role="dialog" aria-label="More keys">
     <header><b>More keys</b><span class="muted">Tap to send</span></header>
+    <div class="mgroup"><h4>Claude Code</h4><div class="mkeys agent">${['Interrupt', 'Accept edits', 'Commands', 'New line', 'Paste', 'Select text'].map((k) => `<button class="${k === 'Interrupt' ? 'danger' : ''}">${k}</button>`).join('')}</div></div>
     ${[
       ['Navigate', ['Home', 'End', 'PgUp', 'PgDn', '⌃A', '⌃E', '⌃W', '⌃U']],
       ['Symbols', ['|', '~', '`', '\\', '{', '}', '[', ']', '<', '>', '-', '_', '=', '*']],
       ['Function', ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12']],
       ['tmux', ['Prefix', 'New window', 'Next', 'Previous', 'Detach', 'Scroll mode']],
     ].map(([t, ks]) => `<div class="mgroup"><h4>${t}</h4><div class="mkeys">${ks.map((k) => `<button>${esc(k)}</button>`).join('')}</div></div>`).join('')}
-    <div class="mrow"><button>${icon('file', 16)}Paste</button><button>Copy</button><button>Select text</button><button>A−</button><button>A+</button><button>Dictation: Auto</button></div></section>`;
+    <div class="mrow"><button>Copy</button><button>A−</button><button>A+</button><button>Dictation: Auto</button></div></section>`;
   const keyRow = () => ''; // desktop uses the physical keyboard; phone uses keyBar
   const tabStrip = (cur) => {
     const order = [...sessions].sort((a, b) => STATE[a.state].rank - STATE[b.state].rank).slice(0, 8);
@@ -188,7 +190,7 @@ window.UI = (function () {
   const report = () => {
     const rows = Object.entries(timeline).map(([id, segs]) => {
       const s = ses(id);
-      return `<div class="lane"><span class="lane-l">${avatar(s.agent, null, 22)}<span>${esc(s.name)}</span></span>
+      return `<div class="lane"><span class="lane-l">${avatar(s.agent, null, 32)}<span>${esc(s.name)}</span></span>
         <span class="lane-bar" role="img" aria-label="${esc(s.name)} over 24 hours">${segs.map(([a, b, st]) =>
           `<i class="seg st-${st}" style="left:${(a / 24) * 100}%;width:${((b - a) / 24) * 100}%" title="${STATE[st].label}"></i>`).join('')}</span></div>`;
     }).join('');
@@ -212,6 +214,6 @@ window.UI = (function () {
       <li><span class="act">${icon('plus', 16)}</span><span>New session on home-lab</span><small>action</small></li>
       <li><span class="act">${icon('server', 16)}</span><span>Open server work-vps</span><small>server</small></li></ul></div>`;
 
-  return { esc, srv, ses, needs, count, icon, logo, chip, avatar, btn, iconBtn, progress, waitingCard, composer, keyRow, actionChips, keyBar, lineInput, moreSheet, tabStrip, seg, dock, phoneTerm, genericPrompt, stepsCard, activityCard,
+  return { esc, srv, ses, needs, count, icon, logo, chip, avatar, btn, iconBtn, progress, waitingCard, composer, keyRow, actionChips, keyBar, lineInput, inputDock, moreSheet, tabStrip, seg, dock, phoneTerm, genericPrompt, stepsCard, activityCard,
     termPane, transcriptView, sessionHeader, statChips, listRow, hrefFor, emptyQuiet, emptyServers, report, palette, sessions, servers, STATE, AGENT, decision };
 })();

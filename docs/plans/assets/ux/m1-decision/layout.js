@@ -14,7 +14,7 @@
       ${U.lineInput('Or answer in your own words')}
       <div class="m1-foot"><button class="btn ghost">${icon('skip', 15)}<span>Skip to next</span></button><a class="btn ghost" href="#terminal">${icon('terminal', 15)}<span>Open terminal</span></a></div></article>`; };
   const head = (s) => U.slimHead(s) + U.tabStrip(s.id) + U.seg(['Decision', 'Terminal'], ['decision', 'terminal'], 1);
-  const foot = (kbd) => U.dockLine() + (kbd ? '' : U.actionChips('claude')) + U.lineInput() + U.keyBar();
+  const foot = (kbd) => U.inputDock({ context: U.dockLine() });
   function mobile(screen) {
     const s1 = ses('s1');
     if (screen === 'decision') return `<div class="m1-sheetwrap">${U.slimHead(s1)}${U.seg(['Decision', 'Terminal'], ['decision', 'terminal'], 0)}<div class="m1-sbody">${pager(1, queue().length)}${stage()}</div></div>`;

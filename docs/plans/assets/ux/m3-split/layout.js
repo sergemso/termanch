@@ -9,7 +9,7 @@
       <div class="m3-opts">${d.options.map((o, i) => `<button class="m3-opt ${i === 0 ? 'primary' : ''}"><kbd>${o.key}</kbd><b>${U.esc(o.label)}</b></button>`).join('')}</div></section>`; };
   const tail = () => `<div class="m3-tail"><header>${icon('terminal', 16)}<b>Terminal</b><a href="#terminal">Expand ${icon('expand', 14)}</a></header>${U.phoneTerm('s1')}</div>`;
   const miniBar = () => `<div class="m3-mini">${U.lineInput('Send a line to the agent')}</div>`;
-  const foot = (kbd) => `<a class="m3-sum" href="#decision">${icon('info', 16)}<b>Needs you</b><span>${U.esc(U.decision.question)}</span>${icon('arrow', 16)}</a>` + (kbd ? '' : U.actionChips('claude')) + U.lineInput() + U.keyBar();
+  const foot = (kbd) => U.inputDock({ context: `<a class="m3-sum" href="#decision">${icon('info', 16)}<b>Needs you</b><span>${U.esc(U.decision.question)}</span>${icon('arrow', 16)}</a>` });
   function mobile(screen) {
     const s1 = ses('s1');
     if (screen === 'decision') return `<div class="screen"><div class="m3-split">${U.slimHead(s1)}${snaps(1)}<div class="m3-top-pane">${decisionCard()}</div><div class="m3-handle" aria-hidden="true"><i></i></div><div class="m3-bot-pane">${tail()}${miniBar()}</div></div></div>`;

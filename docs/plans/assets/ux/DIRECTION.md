@@ -1,6 +1,6 @@
 # U.1 design spike: result and recommendation
 
-> **Round 2 (mobile, with terminal) is at the end of this file and supersedes the mobile recommendation in round 1.**
+> **The final mobile design (last section) supersedes rounds 1 and 2 for phones. Desktop recommendations from round 1 stand.**
 
 Date: 2026-10-16 · Status: **recommended by the spike, awaiting the owner's confirmation** (U.1 is not done until the owner confirms or changes the pick).
 Prototypes (static, not wired to a server): https://termenbox.github.io/termenbox/ (sources and screenshots in this directory). Screenshots: `<direction>/screens/<screen>-<phone|desktop>-<dark|light>.png` for home, empty, empty-servers, decision, session-t1, session-t3, terminal, terminal-more, report, palette (desktop). All taken in desktop Chromium at 390 px and 1280 px, so none is an iPhone or Android check (`a-phone-check-names-its-platform`). Android: emulated only.
@@ -102,3 +102,21 @@ Measured, all three: no tap target under 44 x 44 pt after the fix (two 40 px but
 - If your real habit is to live in the terminal and glance at state, M2 is the alternative; it scores equal here, but it reverses decision 0100 (Home is a decision board), so choosing it means amending that decision.
 
 Still not verified, because a headless browser cannot: the real iPhone keyboard (opening, closing, `visualViewport` resizing), safe areas, installed-PWA behaviour, haptics, swipe on the arrow pad, long-press select, scrollback gestures.
+
+---
+
+# Final mobile design (built to the spec, audited)
+
+Prototype: https://termenbox.github.io/termenbox/f-final/ · Spec: `DESIGN-PRINCIPLES.md` · Check: `node audit.mjs f-final` (CHROME_PATH set).
+
+This replaces taste-driven iteration with a written spec derived from Apple's 44 pt control size, WCAG 2.2 (target size, contrast), the Hoober one-handed-use findings (with his own caveat that the thumb zone is a bias, not a law), iOS Safari keyboard reports, and the usual laws (Fitts, Hick, proximity, Nielsen). One design was then built to it, and an audit checks it.
+
+**Structure.** Four bottom tabs (Inbox, Sessions, Activity, Settings). Inbox: four fleet-state tiles with counts (no sideways scrolling), the oldest waiting decision as the hero with one filled primary option and a free-text and dictation field, then the next in the queue. A session has Decision and Terminal views under a strip of avatars with state rings. The terminal's input is one surface: a "Needs you" row with a one-tap primary answer, a line input with dictation and send (send on an empty line is Enter), and six large keys (esc, tab, ctrl, up, down, more). Everything else is in the More sheet (agent actions, navigation, control keys, symbols, function keys, tmux, tools).
+
+**Audit result (all 9 screens x 3 skins x 2 modes): PASS.** Targets at least 44 pt and 8 pt apart (4 pt inside segmented controls and inside a single field), at most 7 controls per row, type scale 12/13/15/16/22, text contrast at least 4.5:1 (derived tokens, including a terminal palette and an `--accent-text` token), no horizontal overflow, chrome 20% of the height with the keyboard closed, the terminal 303 px (55%) of the area above the keyboard when it is open, and identical layout across skins. The audit found and drove 7 fixes before this passed (muted and accent text on dark navy, avatar letters, amber on light, terminal colours, teal accent fill, chrome height, report type sizes).
+
+**The keyboard.** Cannot be shown by a headless browser. The spec gives rules K1 to K6, including two concrete suspects found in the current client: `Terminal.svelte` calls `focus()` after closing the paste, select and menu sheets (lines 259, 572, 617, 618), and `AppShell.svelte` re-measures and moves the shell on every `visualViewport` resize and scroll event. Both are hypotheses until confirmed on an iPhone with the existing `?debug` overlay.
+
+**Not verified:** any real device (iPhone Safari, installed PWA, Android); haptics; first-paint time; swipe on the key row; long-press select. In light mode amber becomes a dark amber to pass contrast, which looks heavier than in dark: review on a real screen.
+
+**Pick.** The owner picks or changes this, and the desktop direction (round 1: A's workspace, B's keyboard answering, C's board as a view); then U.1 is done.

@@ -13,7 +13,12 @@ a.card b{display:block;font-size:17px}a.card span{color:var(--muted);font-size:1
 .pick button.on{border-color:#4a86ff;background:#16294d}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.row a{font-size:13px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:6px 12px;text-decoration:none}
 </style></head><body><main>
-<h1>Three directions</h1>
+<h1>Final mobile design</h1>
+<p>Built once from written principles (<a href="https://github.com/termenbox/termenbox/blob/docs/ux-design-spike/docs/plans/assets/ux/DESIGN-PRINCIPLES.md" style="color:#7fb0ff">DESIGN-PRINCIPLES.md</a>) and checked by an automated audit: 44 pt targets, 8 pt spacing, 4.5:1 contrast, a six-size type scale, identical layout in every skin. Skin and mode are switchable in its Settings.</p>
+<a class="card" href="f-final/"><b>Inbox, decision, terminal, more keys, sessions, activity</b><span>Fleet counts, the oldest waiting decision answered in place, a terminal one tap away with a docked decision, and six large keys.</span><small>Open on your iPhone</small></a>
+<div class="row"><a href="f-final/#terminal">Terminal</a><a href="f-final/#terminal-kbd">Terminal, keyboard open</a><a href="f-final/#terminal-more">More keys</a><a href="f-final/#fleet">Sessions</a><a href="f-final/#settings">Settings (skins)</a></div>
+<h1 style="margin-top:32px">Earlier rounds</h1>
+<h1 style="font-size:20px;margin-top:8px">Three directions (round 1)</h1>
 <p>Same data, same components. The directions differ in where information lives; skins only change colour, so any skin works with any direction.</p>
 <div class="pick" id="pick"><span>Skin</span><button data-k="skin" data-v="navy" class="on">Navy</button><button data-k="skin" data-v="graphite">Graphite</button><button data-k="skin" data-v="teal">Teal</button>
 <span>Mode</span><button data-k="theme" data-v="dark" class="on">Dark</button><button data-k="theme" data-v="light">Light</button></div>
@@ -38,7 +43,7 @@ a.card b{display:block;font-size:17px}a.card span{color:var(--muted);font-size:1
     document.querySelectorAll('#pick button').forEach(function(b){b.classList.toggle('on',st[b.dataset.k]===b.dataset.v);});
     document.querySelectorAll('a[href]').forEach(function(a){
       var h=a.getAttribute('href').split('#'),p=h[0].split('?')[0];
-      if(!/^(a-command|b-inbox|c-board|m1-decision|m2-terminal|m3-split)\//.test(p))return;
+      if(!/^(a-command|b-inbox|c-board|m1-decision|m2-terminal|m3-split|f-final)\//.test(p))return;
       a.setAttribute('href',p+'?skin='+st.skin+'&theme='+st.theme+(h[1]?'#'+h[1]:''));
     });
   }

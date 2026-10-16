@@ -43,9 +43,9 @@ window.TB = (function () {
     context: 'Claude wants to change 9 files to move login onto the new session store. The 3 integration tests that log in will be rewritten. Nothing has been changed yet.',
     question: 'How should it handle users who are already signed in?',
     options: [
-      { key: '1', label: 'Keep them signed in', hint: 'Copy existing sessions to the new store. Safer, takes longer.' },
-      { key: '2', label: 'Sign everyone out once', hint: 'Fastest. Users log in again after the deploy.' },
-      { key: '3', label: 'Ask me again later', hint: 'Skip this step for now.' },
+      { key: '1', short: 'Keep signed in', label: 'Keep them signed in', hint: 'Copy existing sessions to the new store. Safer, takes longer.' },
+      { key: '2', short: 'Sign all out', label: 'Sign everyone out once', hint: 'Fastest. Users log in again after the deploy.' },
+      { key: '3', short: 'Later', label: 'Ask me again later', hint: 'Skip this step for now.' },
     ],
   };
   const steps = {
