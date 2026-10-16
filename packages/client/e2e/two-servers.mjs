@@ -306,6 +306,7 @@ try {
   }
   statics.close();
   appServer.close();
-  rmSync(root, { recursive: true, force: true });
+  // A killed server may still be writing into the directory for a moment.
+  rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   process.exit(failed ? 1 : 0);
 }
