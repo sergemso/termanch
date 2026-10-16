@@ -29,7 +29,7 @@ One roadmap file per step (the old numbering `U.n` equals `Un` with a zero pad: 
 |---|---|---|---|---|
 | [U01](roadmap/archive/U01.md) | Design spike: three directions, owner picks one | both | none | done (PR #150) |
 | [U02](roadmap/U02.md) | Codify the design system | both | none | pending |
-| [U03](roadmap/U03.md) | Measure which agents expose what; set the T2 priority list | n/a | none | pending |
+| [U03](roadmap/archive/U03.md) | Measure which agents expose what; set the T2 priority list | n/a | none | done (PRs #153, #154, #155) |
 | [U04](roadmap/U04.md) | App shell: bottom bar, sidebar, palette, four destinations | both | U02 | pending |
 | [U05](roadmap/U05.md) | Home: Needs you queue, fleet summary, Continue | both | U04 | pending |
 | [U06](roadmap/U06.md) | Session-view framework: T3 view, composer, profile engine | both | U02 | pending |
