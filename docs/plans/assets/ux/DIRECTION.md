@@ -1,5 +1,7 @@
 # U.1 design spike: result and recommendation
 
+> **Round 2 (mobile, with terminal) is at the end of this file and supersedes the mobile recommendation in round 1.**
+
 Date: 2026-10-16 · Status: **recommended by the spike, awaiting the owner's confirmation** (U.1 is not done until the owner confirms or changes the pick).
 Prototypes (static, not wired to a server): https://termenbox.github.io/termenbox/ (sources and screenshots in this directory). Screenshots: `<direction>/screens/<screen>-<phone|desktop>-<dark|light>.png` for home, empty, empty-servers, decision, session-t1, session-t3, terminal, terminal-more, report, palette (desktop). All taken in desktop Chromium at 390 px and 1280 px, so none is an iPhone or Android check (`a-phone-check-names-its-platform`). Android: emulated only.
 
@@ -58,7 +60,7 @@ Criteria come from guardrail `ux-acceptance-targets`, decisions 0100-0103 and 01
 
 1. **Targets:** no tappable control under 44 x 44 pt, including chips, tabs, pills and keys. Tested by a Playwright bounding-box check.
 2. **Keyboard stays put (iPhone):** the soft keyboard opens and closes only by the user's explicit action and stays as the user left it per session; tapping a key, chip, option, tab or the terminal never opens, closes or re-focuses it (pointerdown with preventDefault, as `KeyRow.svelte` does today). The composer or line input is the only text focus; raw terminal typing is an explicit toggle, so tapping the terminal to scroll or select does not raise the keyboard. The footer (peek, chips, input, keys) is docked to the visual viewport (`visualViewport` events, since iOS Safari ignores `interactive-widget`) and the content above scrolls; no layout jump when the keyboard appears. Verified on a real iPhone, labelled by platform; a desktop run proves nothing here.
-3. **Vertical budget:** on a 390 x 844 phone with the keyboard open the terminal keeps at least 40% of the height; the peek and the chips collapse to one line when the keyboard is open.
+3. **Vertical budget:** on a 390 x 844 phone with the keyboard open (291 pt tall) the terminal keeps at least 50% of the area above the keyboard; the tab strip and switch collapse, the chips are hidden, and the decision peek stays one line. Measured by `measure.mjs` in this directory (round 2: 56% to 58%).
 4. **Terminal:** one tap from every session, keeps place when switching, never replaced by a modal (draft decision 0109).
 5. **Layout:** the structure of a screen does not change between skins.
 
@@ -73,3 +75,30 @@ Criteria come from guardrail `ux-acceptance-targets`, decisions 0100-0103 and 01
 - No real-device check on any phone. The keyboard, safe-area, install and haptic behaviour are unverified.
 - Swipe on the arrow pad, long-press select and two-finger scrollback are not drawn.
 - Settings is a stub; nothing is wired to a server; first-paint time is not measured.
+
+---
+
+# Round 2: mobile directions including the terminal
+
+Prototypes: https://termenbox.github.io/termenbox/ (section "Mobile, round 2"). Screens per direction: home, decision, terminal, terminal with the iOS keyboard open (an illustration, not the real keyboard), More keys, fleet, empty. Dark and light, any skin. Measured with `measure.mjs` in desktop Chromium at 390 x 844: not an iPhone check, Android emulated only.
+
+| | **M1 · Decision first** | **M2 · Terminal first** | **M3 · Split view** |
+|---|---|---|---|
+| Idea | Home is the oldest waiting decision; sessions have Decision / Terminal switch | App opens in the terminal of the session that needs you; a strip of all sessions across the top; decision docked above the input | List home; a session is structured above and terminal below, with Details / Split / Terminal snap points |
+| Push to sent answer | **5**: 1 tap on Home | **4**: 1 tap on the docked line (first option, question truncated), 2 taps with full context | **4**: 2 taps (item, option) |
+| Every agent's state at a glance | **3**: counts, queue; all sessions 1 tap away | **4**: avatar strip with state rings, scrolls sideways; fleet pull-down 1 tap | **3**: counts, list scrolls |
+| Terminal access | **4**: switch in every session and "Open terminal" | **5**: it is the main screen | **4**: snap tab |
+| Terminal space (measured) | **4**: 50% closed, 56% of visible area with keyboard | **5**: 57% closed, 56% with keyboard | **3**: 21% in Split, 59% in Terminal, 58% with keyboard |
+| Clutter | **3**: long Home, big card | **3**: heavy bottom stack (peek, chips, line, keys) | **4** |
+| Fit with decisions 0100 and 0109 | **5**: matches decision-first Home | **3**: Home is not a decision board; terminal is first-class | **4** |
+| **Total /30** | **24** | **24** | **22** |
+
+Measured, all three: no tap target under 44 x 44 pt after the fix (two 40 px buttons in M1 became 44 px); no horizontal overflow; the terminal keeps 56% to 58% of the area above the keyboard.
+
+**Recommendation: M1, with M2's session strip.**
+- It matches the goal you set: the product chases state so users need not open the terminal (Home is the decision, one tap to answer), while the terminal stays one tap away on every session and is fully usable.
+- Replace M1's name-tab strip on the session sheet with M2's avatar strip with state rings: it shows every agent's state on the terminal screen itself, and the fleet sheet pulls down from it.
+- Keep M2's rule that the terminal is never behind a modal, and M3's snap idea only as a later option for tablets.
+- If your real habit is to live in the terminal and glance at state, M2 is the alternative; it scores equal here, but it reverses decision 0100 (Home is a decision board), so choosing it means amending that decision.
+
+Still not verified, because a headless browser cannot: the real iPhone keyboard (opening, closing, `visualViewport` resizing), safe areas, installed-PWA behaviour, haptics, swipe on the arrow pad, long-press select, scrollback gestures.

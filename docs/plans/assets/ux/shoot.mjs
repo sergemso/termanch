@@ -8,8 +8,8 @@ const require = createRequire(path.resolve('../../../../packages/client/package.
 const pw = require('playwright-core');
 const engine = process.argv[2] || 'webkit';
 const dirs = (process.env.DIRS || 'a-command,b-inbox,c-board').split(',');
-const screens = ['home', 'empty', 'empty-servers', 'decision', 'session-t1', 'session-t3', 'terminal', 'terminal-more', 'report', 'palette'];
-const sizes = { phone: { width: 390, height: 844 }, desktop: { width: 1280, height: 800 } };
+const screens = (process.env.SCREENS ? process.env.SCREENS.split(',') : ['home', 'empty', 'empty-servers', 'decision', 'session-t1', 'session-t3', 'terminal', 'terminal-more', 'report', 'palette']);
+const sizes = process.env.PHONE_ONLY ? { phone: { width: 390, height: 844 } } : { phone: { width: 390, height: 844 }, desktop: { width: 1280, height: 800 } };
 const browser = await pw[engine].launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
 const errors = [];
 for (const d of dirs) for (const [sz, vp] of Object.entries(sizes)) for (const theme of (process.env.THEMES || 'dark,light').split(',')) {
