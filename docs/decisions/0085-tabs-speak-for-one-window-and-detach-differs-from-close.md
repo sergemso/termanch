@@ -10,7 +10,7 @@ tags: [client, mobile, agents, tmux, protocol]
 
 ## Decision (draft: needs the owner's acceptance)
 
-- **A tab is the icon and working directory of one window of its session** (the representative window): the agent window with the latest output, else tmux's current window, else the first. Tabs have no rename and no copy-name. Tabs that would read the same add the session name. Labels never change under a finger (0082's frozen order).
+- **A tab is the icon and working directory of one window of its session** (the representative window): tmux's current window (where the user left off), else the agent window with the latest output, else the first. Tabs have no rename and no copy-name. Tabs that would read the same add the session name. Labels never change under a finger (0082's frozen order).
 - **Detach closes the tab and keeps the session running; Close session ends it** and asks first (guardrail `kill-session-needs-confirmation`). Detached sessions stay in the Sessions sheet and reappear as a tab while their agent needs you.
 - **Windows come from tmux control mode** (`tmux -C`, tmux 3.2 or newer), one control client per session, used only as a change signal; the content is read with `list-panes`. Older tmux keeps the periodic scan and the app says why live window updates are off. The state scan (working/idle, prompts) is unchanged.
 - **herdr is a session manager, not an agent.** Managers declare what they can do (windows, close, peek, send); the app hides what a manager cannot do.
