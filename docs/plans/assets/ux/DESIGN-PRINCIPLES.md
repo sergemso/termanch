@@ -54,4 +54,4 @@ Written 2026-10-16 so the final mobile design is derived from established guidan
 3. **A session has two views, Decision and Terminal**, in a segmented control directly under a session strip of avatars with state rings. Chrome stays under 20% (DR12).
 4. **The input dock is one surface with three rows at most**: the decision line when something needs the user, the line input with dictation and send, and the key row (today's 16-key row by default, configurable; see the exception above). Send on an empty line is Enter.
 5. **Everything else is one tap away in the More sheet**, grouped: agent actions, navigation, control keys, symbols, function keys, tmux, tools (paste, copy, select, text size, raw typing).
-6. **Skins are tokens**, switchable in Settings (draft decision 0110).
+6. **Skins are tokens**, switchable in Settings (decision 0110).

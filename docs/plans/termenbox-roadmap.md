@@ -8,7 +8,7 @@ Repository: Rust server `packages/server`, shared wire types `packages/core/src/
 
 ## Priority: the UX programme comes first
 
-Tier **P0** is the UX programme (`ux-programme.md`, decisions 0100-0107, drafts 0109 and 0110): decision-first Home, act in place, tiered session view for every agent including ACP, a first-class terminal with a configurable key row, reports, a desktop workspace, and the real-device gate. Its steps are `roadmap/U02.md` to `roadmap/U16.md`, ranked in plan order; U01 (the design spike) is done and its result is `docs/plans/assets/ux/DIRECTION.md`. R02 and R03 are P0 too: they are the owner's real-iPhone checks that the programme needs. Lower tiers wait unless a P0 step lists them as a predecessor, in which case they sit directly before it (R08 before U12, R36 before U16). The free gate (R40) requires the programme's device pass (U16).
+Tier **P0** is the UX programme (`ux-programme.md`, decisions 0100-0107, 0109 and 0110): decision-first Home, act in place, tiered session view for every agent including ACP, a first-class terminal with a configurable key row, reports, a desktop workspace, and the real-device gate. Its steps are `roadmap/U02.md` to `roadmap/U16.md`, ranked in plan order; U01 (the design spike) is done and its result is `docs/plans/assets/ux/DIRECTION.md`. R02 and R03 are P0 too: they are the owner's real-iPhone checks that the programme needs. Lower tiers wait unless a P0 step lists them as a predecessor, in which case they sit directly before it (R08 before U12, R36 before U16). The free gate (R40) requires the programme's device pass (U16).
 
 ## How to read and use this plan (cheap to re-enter and update)
 
@@ -121,7 +121,7 @@ Verified against the code and `git log` on 2026-10-14, plus what landed since: b
 ## Open questions for the owner
 
 1. PR #139 ("unified agent hooks for five agents") is listed as merged on 2026-10-15 but its merge commit `cb1098c0` is not reachable from master and `agent_hooks.rs` is absent. Was it reverted? If it returns, its auto-install on attach conflicts with the opt-in rule of decisions 0079 and 0106 (see U03, U10).
-2. Draft decisions awaiting acceptance: 0109 (state first, terminal first-class; supersedes 0102), 0110 (themeable skins), 0068 and 0080 (still drafts, block R18 and R10-R12), and the new ACP tier decision to be drafted in U07a.
+2. Decisions 0109 (supersedes 0102), 0110, 0111, 0068 and 0080 were accepted by the owner on 2026-10-16; no decision draft is waiting.
 3. PR #149 (desktop review) is folded into this roadmap (R55 to U15, R56 and R60 to U07c and U15, R57 and R58 to U04 and U15; R59 and R61 kept; R36, R39 and R50 enriched). Close it once this lands.
 4. R02 and R03 need the owner's iPhone; U04 step 0 (iOS keyboard hypotheses) and U16 (real-device pass, iPhone and Android) need it too.
 

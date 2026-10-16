@@ -1,13 +1,14 @@
 ---
 id: 0080-connector-credentials-from-a-root-owned-file
 title: Connector credentials come from a root-owned file read at start and are held in memory
-status: draft
+status: active
 date: 2026-10-13
 track: product
+accepted-by: Sergey Strebulaev <s@vivantel.dev>
 tags: [security, secrets, notifications, roadmap]
 ---
 
-## Decision (draft: needs the owner's acceptance; an exception to guardrail `security-secrets-handling`)
+## Decision
 
 - Third-party credentials the user supplies for output connectors (bot tokens, webhook URLs, model API keys) and the Web Push VAPID private key are read at start from one file, `connectors.env`, mode 0600, owned by the account that owns the server's state. The server holds them in memory only, never logs them, and never sends them to the client; the app shows only that a credential is set.
 - The app does not accept credentials over the connection. The user places them in the file (the app shows the exact line to add). A bot token typed into a phone is one more place for it to leak, and a stored-and-encrypted copy would sit beside its own key.

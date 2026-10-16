@@ -19,8 +19,8 @@ Method: version from `--version`; hooks, notify and JSON mode from `--help` and 
 
 | Agent | Version | Hooks | Notify | Log / JSON mode | ACP command | ACP `initialize` capabilities |
 |---|---|---|---|---|---|---|
-| claude | 2.1.301 | yes (fact 0029) | no | transcript file; `--output-format stream-json` | adapter `@zed-industries/claude-code-acp` 0.16.2 | `loadSession`; fork, list, resume; no `close` |
-| codex | 0.162.1 | `hooks` feature, stable | `notify` program (unverified, R21) | `codex exec --json`; app-server | adapter `@zed-industries/codex-acp` 0.16.0 | `loadSession`; list, resume, close |
+| claude | 2.1.301 | yes (fact 0029) | no | transcript file; `--output-format stream-json` | adapter `@agentclientprotocol/claude-agent-acp` 0.93.0 (was `@zed-industries/claude-code-acp` 0.16.2, deprecated) | `loadSession`; fork, list, resume; no `close` |
+| codex | 0.162.1 | `hooks` feature, stable | `notify` program (unverified, R21) | `codex exec --json`; app-server | adapter `@agentclientprotocol/codex-acp` 2.2.2 (was `@zed-industries/codex-acp` 0.16.0, deprecated) | `loadSession`; list, resume, close |
 | copilot | 1.0.98 | not seen in help | not seen | `--output-format json` (JSONL), `--log-dir` | native `copilot --acp` | `loadSession`; list, close; no resume |
 | opencode | 2.0.29 | not seen in help | not seen | `run --format json`; `serve` API | native `opencode acp` | `loadSession`; additionalDirectories, close, delete, fork, list, resume |
 | kilo | 7.6.2 | not seen in help | not seen | `run --format json`; `serve`, `export` | native `kilo acp` | `loadSession`; close, fork, list, resume |
@@ -33,18 +33,9 @@ Method: version from `--version`; hooks, notify and JSON mode from `--help` and 
 
 All eleven installed on 2026-10-16 (aider, cursor-agent, goose and amp by the owner from their official installers). Auth: the claude and codex adapters reuse the agent's own login (codex-acp also takes `CODEX_API_KEY` or `OPENAI_API_KEY`); opencode, kilo and copilot need their own `login`; gemini needs a Google login, API key or Vertex; qwen needs an OpenAI-style key. 
 
-## ACP events actually sent (2026-10-16)
+## ACP events actually sent
 
-| Agent | Updates seen | `session/request_permission` option kinds | Not seen |
-|---|---|---|---|
-| opencode | agent_thought_chunk, tool_call, tool_call_update, usage_update, available_commands_update | allow_once, allow_always, reject_once (with `permission` set to `ask`) | plan, session_info_update |
-| kilo | agent_thought_chunk, tool_call, tool_call_update, available_commands_update | allow_once, allow_always, reject_once | plan, usage_update, session_info_update |
-| qwen | agent_message_chunk, agent_thought_chunk, tool_call, tool_call_update, available_commands_update | none asked (default mode ran the tool) | plan, usage_update, session_info_update |
-| goose | session_info_update, usage_update, agent_thought_chunk, agent_message_chunk, tool_call, tool_call_update, available_commands_update | none asked (auto mode) | plan |
-| codex | not measured: `codex-acp` 0.16.0 failed on every model with the owner's ChatGPT login (`gpt-6.1-sol` unsupported for ChatGPT accounts; `gpt-5.6-luna` needs a newer Codex), so it bundles an older core than CLI 0.162.1 | not measured | all |
-| claude, gemini, copilot, cursor-agent | not measured (need their own login or paid account) | not measured | all |
-
-No agent sent `plan`. Kilo also ships a free model through its own gateway, but needs a login to use it (its screen errors without one).
+Superseded by fact 0040, which measured events, permissions, usage and lifecycle for all agents but cursor-agent (needs a login), with fixtures in `packages/server/testdata/acp/`. This table's earlier opencode, kilo, qwen and goose rows were incomplete (qwen does send `usage_update`; opencode sends `session_info_update`); codex-acp 0.16.0 and the `@zed-industries` adapter names are deprecated for `@agentclientprotocol/codex-acp` 2.2.2 and `@agentclientprotocol/claude-agent-acp` 0.93.0.
 
 ## Screens
 
