@@ -7,12 +7,12 @@ import fs from 'node:fs';
 const require = createRequire(path.resolve('../../../../packages/client/package.json'));
 const pw = require('playwright-core');
 const engine = process.argv[2] || 'webkit';
-const dirs = ['a-calm', 'b-dense', 'c-focus'];
+const dirs = (process.env.DIRS || 'a-command,b-inbox,c-board').split(',');
 const screens = ['home', 'empty', 'empty-servers', 'decision', 'session-t1', 'session-t3', 'terminal', 'report', 'palette'];
 const sizes = { phone: { width: 390, height: 844 }, desktop: { width: 1280, height: 800 } };
 const browser = await pw[engine].launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
 const errors = [];
-for (const d of dirs) for (const [sz, vp] of Object.entries(sizes)) for (const theme of ['light', 'dark']) {
+for (const d of dirs) for (const [sz, vp] of Object.entries(sizes)) for (const theme of (process.env.THEMES || 'dark,light').split(',')) {
   const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: sz === 'phone' ? 2 : 1 });
   const page = await ctx.newPage();
   page.on('console', (m) => m.type() === 'error' && errors.push(`${d} ${m.text()}`));
@@ -21,7 +21,7 @@ for (const d of dirs) for (const [sz, vp] of Object.entries(sizes)) for (const t
     if (s === 'palette' && sz === 'phone') continue;
     const q = `?theme=${theme}${s === 'palette' ? '&palette' : ''}`;
     await page.goto(pathToFileURL(path.resolve(d, 'index.html')).href + q + '#' + (s === 'palette' ? 'home' : s));
-    await page.waitForTimeout(80);
+    await page.evaluate(() => document.fonts.ready); await page.waitForTimeout(150);
     const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
     if (over > 0) errors.push(`${d} ${s} ${sz} ${theme}: horizontal overflow ${over}px`);
     fs.mkdirSync(`${d}/screens`, { recursive: true });
