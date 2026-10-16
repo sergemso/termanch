@@ -111,3 +111,5 @@
 0106-hook-offer-is-contextual-and-not-a-nag,"Hooks are offered once, inline, in context, and never nagged","agents, hooks, client, roadmap",active
 0107-design-spike-precedes-the-build,"A design spike picks the visual direction before screens are built; Android is first-class and honestly labelled","client, mobile, design, roadmap",active
 0108-verification-machine-profile,"Verification checks run only in CI (ci-only machine profile)","practice-packs, verification, harness, ci",active
+0109-state-first-and-the-terminal-is-first-class,"The product aims for users never needing the terminal, and the terminal is still a first-class, super-convenient surface","client, mobile, agents, terminal, roadmap",draft
+0110-skins-are-themeable-through-tokens,"The UI is skinnable: components are styled only through design tokens, and several skins ship and are user-selectable","client, design, theming, roadmap",draft

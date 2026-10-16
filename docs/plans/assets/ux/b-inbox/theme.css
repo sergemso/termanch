@@ -1,12 +1,4 @@
 /* B · Decision inbox. Graphite and violet. */
-:root{
-  --bg:#0c0d11;--bg-2:#090a0d;--panel:#14161c;--panel-2:#1b1e26;--line:#262a35;--text:#eef0f5;--text-2:#b9bfcc;--muted:#868da0;--muted-rgb:134 141 160;
-  --accent:#8b7bff;--accent-rgb:139 123 255;--on-accent:#120d36;
-  --warn:#f5b73b;--warn-rgb:245 183 59;--ok:#4ad08a;--ok-rgb:74 208 138;--bad:#ff6b6b;--bad-rgb:255 107 107;--info:#6db3ff;--info-rgb:109 179 255;
-  --term:#08090c;--term-fg:#d1d6e2;--r:16px;--r-sm:12px}
-:root[data-theme=light]{
-  --bg:#f6f6f9;--bg-2:#ececf2;--panel:#fff;--panel-2:#f1f1f6;--line:#dfe0ea;--text:#14151c;--text-2:#44485a;--muted:#6f7488;--muted-rgb:111 116 136;
-  --accent:#5a46e6;--accent-rgb:90 70 230;--on-accent:#fff;--warn:#b86e00;--warn-rgb:184 110 0;--ok:#168650;--ok-rgb:22 134 80;--bad:#c93636;--bad-rgb:201 54 54;--info:#1f6fd1;--info-rgb:31 111 209;--term:#101218;--term-fg:#d8dce8}
 :root[data-theme=light] .opt.primary,:root[data-theme=light] .b-opt.primary{color:#fff}
 .b-top{display:flex;align-items:center;gap:10px;height:56px;padding:0 16px}.b-top b{font-size:18px}
 .b-sec{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:22px 0 10px;font-weight:600}

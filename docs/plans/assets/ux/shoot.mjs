@@ -19,7 +19,7 @@ for (const d of dirs) for (const [sz, vp] of Object.entries(sizes)) for (const t
   page.on('pageerror', (e) => errors.push(`${d} ${e.message}`));
   for (const s of screens) {
     if (s === 'palette' && sz === 'phone') continue;
-    const q = `?theme=${theme}${s === 'palette' ? '&palette' : ''}`;
+    const q = `?skin=${process.env.SKIN || 'navy'}&theme=${theme}${s === 'palette' ? '&palette' : ''}`;
     await page.goto(pathToFileURL(path.resolve(d, 'index.html')).href + q + '#' + (s === 'palette' ? 'home' : s));
     await page.evaluate(() => document.fonts.ready); await page.waitForTimeout(150);
     const over = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);

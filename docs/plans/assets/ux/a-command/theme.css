@@ -1,13 +1,4 @@
 /* A · Command center. Tokens (dark first) and layout. */
-:root{
-  --bg:#0a1120;--bg-2:#080e1a;--panel:#0f1a2e;--panel-2:#14223b;--line:#1f2f4b;--text:#e8eef9;--text-2:#b6c3db;--muted:#7f90ae;--muted-rgb:127 144 174;
-  --accent:#2f6df6;--accent-rgb:47 109 246;--on-accent:#fff;
-  --warn:#f6b83d;--warn-rgb:246 184 61;--ok:#3ccf86;--ok-rgb:60 207 134;--bad:#f2655f;--bad-rgb:242 101 95;--info:#4aa3ff;--info-rgb:74 163 255;
-  --term:#070d19;--term-fg:#cdd8ee;--r:14px;--r-sm:10px}
-:root[data-theme=light]{
-  --bg:#f3f6fb;--bg-2:#eaf0f8;--panel:#fff;--panel-2:#f0f4fa;--line:#dbe3ef;--text:#0f1b33;--text-2:#3d4c69;--muted:#6a7893;--muted-rgb:106 120 147;
-  --accent:#1f5ae0;--accent-rgb:31 90 224;--warn:#b86e00;--warn-rgb:184 110 0;--ok:#16844c;--ok-rgb:22 132 76;--bad:#c9322d;--bad-rgb:201 50 45;--info:#1f6fd1;--info-rgb:31 111 209;
-  --term:#0d1526;--term-fg:#d5dff2}
 :root[data-theme=light] .opt.primary,:root[data-theme=light] .btn.warn{color:#fff}
 :root[data-theme=light] .opt.primary .k{color:#fff}
 .dot.ok{background:var(--ok);--c:var(--ok)}
