@@ -46,9 +46,12 @@ body{font-size:var(--t15)}
 .f-ct{flex:1;min-width:0;display:flex;flex-direction:column}.f-ct b{font-size:var(--t12);color:var(--warn)}.f-ct span{font-size:var(--t13);color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .f-quick{flex:none;display:inline-flex;align-items:center;gap:var(--s8);min-height:44px;max-width:none;padding:0 var(--s12);border-radius:11px;background:var(--warn);color:var(--on-warn);font-size:var(--t15);font-weight:700;white-space:nowrap;overflow:hidden}
 .f-quick .f-k{background:rgb(var(--on-warn-rgb)/.16);color:var(--on-warn);width:24px;height:24px;flex:none}
-.f-keys{display:grid;grid-template-columns:repeat(6,1fr);gap:var(--s8)}
-.f-keys button{height:48px;border-radius:12px;background:var(--panel-2);font-size:var(--t15);font-weight:600;color:var(--text);display:grid;place-items:center}
+.f-keys{display:flex;gap:2px}
+.f-keys button{flex:1 1 0;min-width:0;height:44px;border-radius:8px;background:var(--panel-2);font-size:var(--t13);font-weight:600;color:var(--text);display:grid;place-items:center;padding:0}
 .f-keys .mod[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+.f-keycfg{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s8);margin-bottom:var(--s12)}
+.f-keycfg button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:60px;border-radius:12px;background:var(--panel-2);color:var(--text-2)}
+.f-keycfg button[aria-pressed=true]{background:rgb(var(--accent-rgb)/.18);color:var(--text)}.f-keycfg span{font-size:var(--t15);font-weight:700}.f-keycfg small{font-size:var(--t12);color:var(--text-2)}
 .f-scrim{position:absolute;inset:0;background:rgb(0 0 0/.55);z-index:30}
 .f-sheet{position:absolute;left:0;right:0;bottom:0;z-index:31;max-height:78%;overflow:auto;background:var(--panel);border-radius:22px 22px 0 0;padding:var(--s8) var(--s16) calc(var(--s16) + env(safe-area-inset-bottom));box-shadow:0 -24px 60px rgb(0 0 0/.5)}
 .f-grab{width:40px;height:5px;border-radius:3px;background:var(--line);margin:0 auto var(--s8)}
