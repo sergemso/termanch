@@ -1,0 +1,91 @@
+{
+  "commit": "87988ac",
+  "scope": "Real client components; simulated sessions/transport; no OAuth or server binary",
+  "browsers": [
+    {
+      "engine": "chromium",
+      "errors": [],
+      "observations": [
+        {
+          "check": "desktop-sidebar-toggle",
+          "width": 721,
+          "beforeWidth": 320,
+          "afterWidth": 320,
+          "heightState": "docked",
+          "overflow": false
+        },
+        {
+          "check": "desktop-sidebar-toggle",
+          "width": 1024,
+          "beforeWidth": 320,
+          "afterWidth": 320,
+          "heightState": "docked",
+          "overflow": false
+        },
+        {
+          "check": "desktop-sidebar-toggle",
+          "width": 1440,
+          "beforeWidth": 320,
+          "afterWidth": 320,
+          "heightState": "docked",
+          "overflow": false
+        },
+        {
+          "check": "tab-arrow-navigation",
+          "tabs": 12,
+          "focusBefore": "alpha/session-1",
+          "focusAfter": "alpha/session-1",
+          "tabbableTabs": 12
+        },
+        {
+          "check": "modifier-activation",
+          "afterEnter": "false",
+          "afterSpace": "false",
+          "afterPointer": "true"
+        },
+        {
+          "check": "menu-escape",
+          "closed": true
+        },
+        {
+          "check": "terminal-control-c-activation",
+          "keyboardInput": [],
+          "pointerInput": [
+            "\u0003"
+          ]
+        },
+        {
+          "check": "desktop-link-opening",
+          "opened": [],
+          "note": "Plain and Ctrl+click on second line; source confirms link opening is only wired through touch tap."
+        },
+        {
+          "check": "terminal-resize",
+          "retained": true,
+          "lastResize": {
+            "type": "resize",
+            "cols": 126,
+            "rows": 45
+          },
+          "keyRowHeight": 41
+        }
+      ],
+      "version": "151.0.7922.173",
+      "status": "completed"
+    },
+    {
+      "engine": "firefox",
+      "errors": [],
+      "observations": [],
+      "status": "unavailable-or-failed",
+      "failure": "browserType.launch: Executable doesn't exist at <playwright-cache>/firefox-1555/firefox/firefox"
+    },
+    {
+      "engine": "webkit",
+      "errors": [],
+      "observations": [],
+      "status": "unavailable-or-failed",
+      "failure": "browserType.launch: Executable doesn't exist at <playwright-cache>/webkit-2370/pw_run.sh"
+    }
+  ]
+}

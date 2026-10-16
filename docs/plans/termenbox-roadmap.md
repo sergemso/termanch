@@ -6,6 +6,10 @@ Written 2026-10-14 by consolidating plans v1-v10 and session-tabs (now in `docs/
 
 Repository: Rust server `packages/server`, shared wire types `packages/core/src/protocol.rs` (mirrored by hand in `packages/client/src/lib/protocol.ts`), Svelte 5 client `packages/client/src` (`npx --yes pnpm@9`), directory Pages Functions `packages/client/functions/api`. Knowledge base in `docs/{facts,decisions,guardrails,skills}`; read `CLAUDE.md` first. One squashed pull request per step from its own branch off master, green CI, merge only on the owner's "merge" (guardrails `changes-land-as-one-squashed-pull-request`, `no-commits-on-the-default-branch`). Constraints: 512 MB RAM, 1 vCPU, no paid services in the required stack, secrets never logged, builds only in CI. The owner tests on an iPhone; emulated Chrome is never claimed as a phone check. Never touch the owner's own `termenbox.service` (read its journal only). Pre-push hook: commit subject `type(scope): ...` with a one-word scope. Plans are tracked in GitHub issues (decision 0049); ask before writing to the tracker.
 
+## Desktop review
+
+The [desktop review and comparison](termenbox-desktop-review.md) (2026-10-16) evaluates 13 candidates against R01-R54: seven new steps R55-R61, stronger R20/R36 descriptions, additions to R39/R50, and two duplicates retained under R18/R13. Source review and a Chrome component preview support the findings; screenshots and captured observations are linked from the review. Authenticated flows and the full desktop browser matrix remain planned in R36.
+
 ## How to use this plan (cheap to re-enter and update)
 
 1. Read only this file: the Order table below is generated, one line per open step, in the order to work. Take the first `pending` row whose predecessors are done.
@@ -26,47 +30,54 @@ Status values: `pending`, `blocked (reason)`, `done (PR #n)`.
 | 2 | [R10](roadmap/R10.md) | Spike: connector payload and abuse review (O.1) | pending | 8.5 | R01 |
 | 3 | [R03](roadmap/R03.md) | Real-iPhone checklist and two-real-server e2e (G.10, H.11) | blocked (owner's iPhone checklist, docs/skills/mobile-ui-device-check.md) | 8.0 | R02 |
 | 4 | [R08](roadmap/R08.md) | Privacy notice and delete-my-data (S.6) | pending | 6.3 | - |
-| 5 | [R20](roadmap/R20.md) | Card design pass: owner picks a variant (K.1) | pending | 6.0 | - |
+| 5 | [R56](roadmap/R56.md) | Make terminal toolbars operable with Enter and Space | pending | 6.3 | R05 |
 | 6 | [R22](roadmap/R22.md) | Badge, stats sheet and Say thanks (T.2) | pending | 6.0 | - |
-| 7 | [R36](roadmap/R36.md) | WebKit in CI (new) | pending | 6.0 | - |
+| 7 | [R57](roadmap/R57.md) | Keyboard navigation and discoverable actions for session tabs | pending | 5.3 | R05 |
 | 8 | [R07](roadmap/R07.md) | Request-budget alarm (C.5) | pending | 5.0 | R06 |
-| 9 | [R13](roadmap/R13.md) | Inbox view in the sessions UI (K.6) | pending | 4.3 | R12 |
-| 10 | [R32](roadmap/R32.md) | Key rotation and incident runbook (S.8) | pending | 4.3 | - |
-| 11 | [R09](roadmap/R09.md) | Directory abuse controls and degraded mode (S.4) | pending | 4.0 | R06 |
-| 12 | [R35](roadmap/R35.md) | Make the local e2e throughput step pass on the dev VPS | pending | 4.0 | - |
-| 13 | [R26](roadmap/R26.md) | Directory deregistration (D.2) | pending | 3.7 | - |
-| 14 | [R34](roadmap/R34.md) | Self-hosted client docs (rest of 5.1) | installer and CI image done (8.5); self-hosted client docs and the size/RSS gates remain (see v2 step 0.2). | 3.5 | - |
-| 15 | [R17](roadmap/R17.md) | Signed records on R2 behind the CDN (C.3) | pending | 2.4 | R06, R09 |
-| 16 | [R18](roadmap/R18.md) | Owner-keyed server list and settings sync (C.4, 0068) | pending | 1.5 | R01, R06, R17 |
-| 17 | [R21](roadmap/R21.md) | Verify the Codex adapter against a real Codex (P.5) | pending | 3.3 | - |
-| 18 | [R25](roadmap/R25.md) | Server settings screen: name, mode, re-claim (B.3) | pending | 3.3 | R05 |
-| 19 | [R11](roadmap/R11.md) | Rule engine, connector trait and outbound guard (O.2) | pending | 2.0 | R10 |
-| 20 | [R19](roadmap/R19.md) | Cache event and Claude status-line forwarder (G.8) | pending | 2.6 | - |
-| 21 | [R27](roadmap/R27.md) | Remote uninstall on the native host (N.6) | pending | 2.2 | - |
-| 22 | [R16](roadmap/R16.md) | Rules screen (O.6) | pending | 2.4 | R11, R12, R05 |
-| 23 | [R53](roadmap/R53.md) | Voice input to the agent prompt (new) | pending | 2.4 | - |
-| 24 | [R50](roadmap/R50.md) | Release channels and auto-update policies for server and client | pending | 2.4 | - |
-| 25 | [R51](roadmap/R51.md) | Cloudflare isolation, usage dashboard and threshold alerts | pending | 2.4 | R07 |
-| 26 | [R23](roadmap/R23.md) | Bundle a pinned static tmux (replaces 7.2; needs a decision) | pending | 2.2 | - |
-| 27 | [R14](roadmap/R14.md) | Telegram and generic webhook (O.4) | pending | 2.2 | R11 |
-| 28 | [R31](roadmap/R31.md) | Passkey step-up for root sessions and device revocation (S.2) | pending | 2.1 | - |
-| 29 | [R28](roadmap/R28.md) | Remove server flow in the app (D.4, container parts of D.3) | pending | 2.0 | R26, R27, R05 |
-| 30 | [R29](roadmap/R29.md) | Migrate Docker host installs (N.7) | pending | 1.8 | - |
-| 31 | [R30](roadmap/R30.md) | Remove the Docker host code (N.8) | pending | 2.0 | R29 |
-| 32 | [R38](roadmap/R38.md) | Session sharing links, read-only and read-write (new) | pending | 1.8 | R37 |
-| 33 | [R39](roadmap/R39.md) | Image and file upload to a session, with threat review (new) | pending | 1.6 | - |
-| 34 | [R15](roadmap/R15.md) | Session and model connectors (O.5) | pending | 1.4 | R10, R11 |
-| 35 | [R24](roadmap/R24.md) | Environment profile on the native host (replaces B.4-B.6) | pending | 1.1 | R23 |
-| 36 | [R33](roadmap/R33.md) | Managed quick-tunnel fallback for hosts with no UDP port (8.3) | pending | 1.0 | R06 |
-| 37 | [R40](roadmap/R40.md) | The free gate check (P.1) | pending | 0.0 | R03, R12, R18 |
-| 38 | [R41](roadmap/R41.md) | Entitlement record and Sponsors webhook (P.2) | blocked (R40, the free gate) | 2.6 | R40 |
-| 39 | [R46](roadmap/R46.md) | Privacy notice and opt-ins for Pro data (P.7) | blocked (R40, the free gate) | 4.7 | R41, R08 |
-| 40 | [R42](roadmap/R42.md) | Pro: managed relay spike (P.3) | blocked (R40, the free gate) | 4.3 | R41 |
-| 41 | [R43](roadmap/R43.md) | Pro: encrypted history format and recovery key (P.4) | blocked (R40, the free gate) | 1.4 | R41 |
-| 42 | [R47](roadmap/R47.md) | Team: organisation, seats, merchant of record (P.8) | blocked (R40, the free gate) | 0.7 | R40, R41 |
-| 43 | [R48](roadmap/R48.md) | Enterprise design note (P.9) | blocked (R40, the free gate) | 1.5 | R47 |
-| 44 | [R44](roadmap/R44.md) | Pro: reliable push and inbox retention (P.5) | blocked (R40, the free gate) | 1.2 | R43 |
-| 45 | [R45](roadmap/R45.md) | Pro: fleet view and usage reports (P.6) | blocked (R40, the free gate) | 1.2 | R43 |
+| 9 | [R59](roadmap/R59.md) | Spike: search tmux history and local terminal text | pending | 5.0 | - |
+| 10 | [R55](roadmap/R55.md) | Desktop sidebar: collapse, resize and restore its width | pending | 4.7 | R05 |
+| 11 | [R20](roadmap/R20.md) | Responsive card design pass: owner picks a variant (K.1) | pending | 4.5 | - |
+| 12 | [R13](roadmap/R13.md) | Inbox view in the sessions UI (K.6) | pending | 4.3 | R12 |
+| 13 | [R32](roadmap/R32.md) | Key rotation and incident runbook (S.8) | pending | 4.3 | - |
+| 14 | [R36](roadmap/R36.md) | Desktop browser regression matrix and WebKit in CI | pending | 4.2 | - |
+| 15 | [R09](roadmap/R09.md) | Directory abuse controls and degraded mode (S.4) | pending | 4.0 | R06 |
+| 16 | [R35](roadmap/R35.md) | Make the local e2e throughput step pass on the dev VPS | pending | 4.0 | - |
+| 17 | [R61](roadmap/R61.md) | Open terminal web links with a desktop pointer | pending | 4.0 | - |
+| 18 | [R26](roadmap/R26.md) | Directory deregistration (D.2) | pending | 3.7 | - |
+| 19 | [R34](roadmap/R34.md) | Self-hosted client docs (rest of 5.1) | installer and CI image done (8.5); self-hosted client docs and the size/RSS gates remain (see v2 step 0.2). | 3.5 | - |
+| 20 | [R17](roadmap/R17.md) | Signed records on R2 behind the CDN (C.3) | pending | 2.4 | R06, R09 |
+| 21 | [R18](roadmap/R18.md) | Owner-keyed server list and settings sync (C.4, 0068) | pending | 1.5 | R01, R06, R17 |
+| 22 | [R21](roadmap/R21.md) | Verify the Codex adapter against a real Codex (P.5) | pending | 3.3 | - |
+| 23 | [R25](roadmap/R25.md) | Server settings screen: name, mode, re-claim (B.3) | pending | 3.3 | R05 |
+| 24 | [R60](roadmap/R60.md) | Desktop terminal controls: compact mode with a visible way back | pending | 3.0 | R56 |
+| 25 | [R11](roadmap/R11.md) | Rule engine, connector trait and outbound guard (O.2) | pending | 2.0 | R10 |
+| 26 | [R19](roadmap/R19.md) | Cache event and Claude status-line forwarder (G.8) | pending | 2.6 | - |
+| 27 | [R27](roadmap/R27.md) | Remote uninstall on the native host (N.6) | pending | 2.2 | - |
+| 28 | [R16](roadmap/R16.md) | Rules screen (O.6) | pending | 2.4 | R11, R12, R05 |
+| 29 | [R53](roadmap/R53.md) | Voice input to the agent prompt (new) | pending | 2.4 | - |
+| 30 | [R58](roadmap/R58.md) | Desktop session switcher and shortcut help | pending | 2.4 | R57 |
+| 31 | [R50](roadmap/R50.md) | Release channels and auto-update policies for server and client | pending | 2.4 | - |
+| 32 | [R51](roadmap/R51.md) | Cloudflare isolation, usage dashboard and threshold alerts | pending | 2.4 | R07 |
+| 33 | [R23](roadmap/R23.md) | Bundle a pinned static tmux (replaces 7.2; needs a decision) | pending | 2.2 | - |
+| 34 | [R14](roadmap/R14.md) | Telegram and generic webhook (O.4) | pending | 2.2 | R11 |
+| 35 | [R31](roadmap/R31.md) | Passkey step-up for root sessions and device revocation (S.2) | pending | 2.1 | - |
+| 36 | [R28](roadmap/R28.md) | Remove server flow in the app (D.4, container parts of D.3) | pending | 2.0 | R26, R27, R05 |
+| 37 | [R29](roadmap/R29.md) | Migrate Docker host installs (N.7) | pending | 1.8 | - |
+| 38 | [R30](roadmap/R30.md) | Remove the Docker host code (N.8) | pending | 2.0 | R29 |
+| 39 | [R38](roadmap/R38.md) | Session sharing links, read-only and read-write (new) | pending | 1.8 | R37 |
+| 40 | [R39](roadmap/R39.md) | Image and file upload to a session, with threat review (new) | pending | 1.6 | - |
+| 41 | [R15](roadmap/R15.md) | Session and model connectors (O.5) | pending | 1.4 | R10, R11 |
+| 42 | [R24](roadmap/R24.md) | Environment profile on the native host (replaces B.4-B.6) | pending | 1.1 | R23 |
+| 43 | [R33](roadmap/R33.md) | Managed quick-tunnel fallback for hosts with no UDP port (8.3) | pending | 1.0 | R06 |
+| 44 | [R40](roadmap/R40.md) | The free gate check (P.1) | pending | 0.0 | R03, R12, R18 |
+| 45 | [R41](roadmap/R41.md) | Entitlement record and Sponsors webhook (P.2) | blocked (R40, the free gate) | 2.6 | R40 |
+| 46 | [R46](roadmap/R46.md) | Privacy notice and opt-ins for Pro data (P.7) | blocked (R40, the free gate) | 4.7 | R41, R08 |
+| 47 | [R42](roadmap/R42.md) | Pro: managed relay spike (P.3) | blocked (R40, the free gate) | 4.3 | R41 |
+| 48 | [R43](roadmap/R43.md) | Pro: encrypted history format and recovery key (P.4) | blocked (R40, the free gate) | 1.4 | R41 |
+| 49 | [R47](roadmap/R47.md) | Team: organisation, seats, merchant of record (P.8) | blocked (R40, the free gate) | 0.7 | R40, R41 |
+| 50 | [R48](roadmap/R48.md) | Enterprise design note (P.9) | blocked (R40, the free gate) | 1.5 | R47 |
+| 51 | [R44](roadmap/R44.md) | Pro: reliable push and inbox retention (P.5) | blocked (R40, the free gate) | 1.2 | R43 |
+| 52 | [R45](roadmap/R45.md) | Pro: fleet view and usage reports (P.6) | blocked (R40, the free gate) | 1.2 | R43 |
 
 9 step(s) done (their files stay in `roadmap/`; `grep -l '^Status: done' roadmap/R*.md`).
 <!-- order:end -->
