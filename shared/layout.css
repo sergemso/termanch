@@ -164,3 +164,7 @@ pre,code{font-family:var(--mono)}
   .composer{position:static}
 }
 @media (prefers-reduced-motion:no-preference){.opt,.q-item,.pill,.btn{transition:transform .12s ease,border-color .12s}.opt:active,.q-item:active{transform:scale(.985)}}
+
+/* Sheets are column flex with min-height: children must grow the page, never shrink and overlap. */
+.is-sheet .main>*,.transcript>*,.decision>*,.options>*{flex-shrink:0}
+.tail.term{flex:1 0 auto;min-height:240px}
