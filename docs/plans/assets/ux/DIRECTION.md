@@ -3,7 +3,7 @@
 **Decision (owner, 2026-10-16): accepted.**
 - **Mobile:** the *final mobile design* (last section of this file, prototype `f-final/`, built to `DESIGN-PRINCIPLES.md` and passing `audit.mjs`).
 - **Desktop:** option A, the command-centre workspace (agent list, session detail, live terminal; sidebar, main pane, optional right pane, palette), with option B's keyboard answering (1/2/3, J/K) and option C's board as an additional fleet view later.
-- **Skins:** themeable through tokens, navy dark as the default (draft decision 0110).
+- **Skins:** themeable through tokens, navy dark as the default (decision 0110).
 - **Kept from the others:** B's decision-first Home and numbered options; C's fleet state counts and board view; A's session strip and Terminal tab.
 - **Screenshots** for the chosen designs: `f-final/screens/` (phone, dark and light, every screen) and `a-command/screens/` (desktop). Screenshots of the superseded options were removed to keep the repository small; the prototype sources remain and run.
 
@@ -26,7 +26,7 @@ Prototypes (static, not wired to a server): https://termenbox.github.io/termenbo
 | **Old three** | One card-list layout in three colour skins (first spike round). Superseded, kept in git history |
 | **Owner's reference image** | Style source only: desktop three-pane, dark navy. Not graded as a layout |
 
-Skins are independent of layout (draft decision 0110): navy, graphite and teal, each dark and light, switchable on the landing page. The first-round skins were light by default and followed the OS setting; all skins now default to dark.
+Skins are independent of layout (decision 0110): navy, graphite and teal, each dark and light, switchable on the landing page. The first-round skins were light by default and followed the OS setting; all skins now default to dark.
 
 ## Grades (1 worst, 5 best; the spike's judgement from prototypes, not user tests)
 

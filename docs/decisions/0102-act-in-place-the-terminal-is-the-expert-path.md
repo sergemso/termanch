@@ -1,7 +1,8 @@
 ---
 id: 0102-act-in-place-the-terminal-is-the-expert-path
 title: Users act in place; the full-screen terminal is the expert path and the fallback
-status: active
+status: superseded
+superseded-by: 0109-state-first-and-the-terminal-is-first-class
 date: 2026-10-16
 track: product
 accepted-by: Sergey Strebulaev <s@vivantel.dev>

@@ -1,14 +1,15 @@
 ---
 id: 0111-acp-sessions-use-one-event-model-and-per-agent-quirk-profiles
 title: ACP sessions (tier T0) map into the existing agent event model, with per-agent quirk profiles as data
-status: draft
+status: active
 amends: 0103-session-view-uses-capability-tiers-and-agent-profiles
 date: 2026-10-16
 track: product
+accepted-by: Sergey Strebulaev <s@vivantel.dev>
 tags: [agents, protocol, architecture, roadmap]
 ---
 
-## Decision (draft: needs the owner's acceptance; this is the decision U07a step 1 asks for)
+## Decision
 
 - **T0 is a new top tier of 0103, for sessions the server starts itself in ACP mode.** An ACP agent is a headless stdio child, so it cannot join or observe a TUI the user runs in tmux: those sessions stay T1 to T3 (hooks, screen profile, generic). The server owns the child (as it owns tmux sessions, 0054); client disconnects change nothing. Whether new sessions default to ACP when the agent supports it is the owner's call and is not made here.
 - **No second event model.** ACP updates are mapped by a pure function in `adapters.rs` (as for hooks) into the existing `AgentEvent` stream (`packages/core/src/events.rs`) with `Source::Acp`, tier 0 like `Hook`, confidence high. Everything downstream (hub, attention, push, Home) is unchanged. The model gains only what T0 needs, all additive with `Unknown` fallbacks: `EventKind::Usage {used, size, cost?}` (context percentage is `used / size`), `EventKind::Title`, and a `Decision` payload on `Prompt` that carries the option ids and kinds, an optional diff or plan text, and how the answer is sent. `Tool` keeps name and one-line summary; raw tool input and output are never copied (0095).

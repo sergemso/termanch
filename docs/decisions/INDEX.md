@@ -70,7 +70,7 @@
 0065-host-mode-step-up,"Root host sessions need a passkey step-up and devices can be revoked","security, auth, deployment, roadmap",active
 0066-web-baseline-and-privacy,"The hosted client ships a strict CSP, a disclosure policy, a privacy notice and data deletion","security, privacy, web, roadmap",active
 0067-change-journal-and-revert,"Every host change is journaled, previewed and revertible","safety, deployment, roadmap",active
-0068-user-data-in-r2-and-live-sync,"The owner's server list and settings are encrypted objects read from the CDN, with live sync through servers","directory, scale, sync, roadmap",draft
+0068-user-data-in-r2-and-live-sync,"The owner's server list and settings are encrypted objects read from the CDN, with live sync through servers","directory, scale, sync, roadmap",active
 0069-ui-foundation-tailwind-shadcn,"The client UI is built with Tailwind v4 and shadcn-svelte","client, build, mobile",active
 0070-session-navigation-and-connections,"Sessions of all servers are navigated in one place over simultaneous connections","client, mobile, protocol",superseded
 0071-context-aware-key-row,"The key row adapts to the detected multiplexer, with a sticky Prefix key","client, terminal, mobile, protocol",active
@@ -82,7 +82,7 @@
 0077-root-actions-by-request-file,"An unprivileged server asks for root actions through a request file, never through sudo","security, deployment, protocol",active
 0078-install-for-the-current-user,"A host install can run sessions as the user who ran the installer","deployment, security, client",active
 0079-agent-hooks-are-opt-in,"Agent hooks are installed only on the owner's explicit request, and the layer works without them","agents, hooks, security, roadmap",active
-0080-connector-credentials-from-a-root-owned-file,"Connector credentials come from a root-owned file read at start and are held in memory","security, secrets, notifications, roadmap",draft
+0080-connector-credentials-from-a-root-owned-file,"Connector credentials come from a root-owned file read at start and are held in memory","security, secrets, notifications, roadmap",active
 0081-server-name-defaults-to-the-hostname,"A server's display name defaults to the host's short hostname, and a name the owner types wins","server, client, deployment",active
 0082-navigation-tabs-sheet-and-auto-connect,"Navigation is a tab strip and a session sheet over servers that connect by themselves","client, mobile, agents",active
 0083-cache-expiry-estimate-and-statusline-forwarder,"Prompt-cache expiry is an estimate, made exact by a wrapped status line forwarder","agents, hooks, privacy",active
@@ -104,13 +104,13 @@
 0099-verification-coverage-bar,"Coverage must meet what the coverage command enforces","practice-packs, verification, harness",draft
 0100-home-is-a-decision-first-board,"Home is a decision-first board: what needs the user first, the fleet below","client, mobile, agents, roadmap",active
 0101-navigation-bottom-bar-on-phone-workspace-on-desktop,"Phone navigation is a four-destination bottom bar; desktop is a three-pane workspace with a command palette","client, mobile, desktop, roadmap",active
-0102-act-in-place-the-terminal-is-the-expert-path,"Users act in place; the full-screen terminal is the expert path and the fallback","client, mobile, agents, roadmap",active
+0102-act-in-place-the-terminal-is-the-expert-path,"Users act in place; the full-screen terminal is the expert path and the fallback","client, mobile, agents, roadmap",superseded
 0103-session-view-uses-capability-tiers-and-agent-profiles,"The in-place session view uses three capability tiers and per-agent screen profiles, for every detected agent","agents, client, protocol, roadmap",active
 0104-decision-cards-carry-context-and-escalate,"Decision cards carry context, and unanswered decisions escalate by a ladder with a deep-link push","agents, notifications, client, roadmap",active
 0105-reports-are-fleet-board-timeline-usage-and-health,"Reporting is a live fleet board, an activity timeline with a daily digest, usage and cost, and server health; on-server views are free","client, tiers, agents, roadmap",active
 0106-hook-offer-is-contextual-and-not-a-nag,"Hooks are offered once, inline, in context, and never nagged","agents, hooks, client, roadmap",active
 0107-design-spike-precedes-the-build,"A design spike picks the visual direction before screens are built; Android is first-class and honestly labelled","client, mobile, design, roadmap",active
 0108-verification-machine-profile,"Verification checks run only in CI (ci-only machine profile)","practice-packs, verification, harness, ci",active
-0109-state-first-and-the-terminal-is-first-class,"The product aims for users never needing the terminal, and the terminal is still a first-class, super-convenient surface","client, mobile, agents, terminal, roadmap",draft
-0110-skins-are-themeable-through-tokens,"The UI is skinnable: components are styled only through design tokens, and several skins ship and are user-selectable","client, design, theming, roadmap",draft
-0111-acp-sessions-use-one-event-model-and-per-agent-quirk-profiles,"ACP sessions (tier T0) map into the existing agent event model, with per-agent quirk profiles as data","agents, protocol, architecture, roadmap",draft
+0109-state-first-and-the-terminal-is-first-class,"The product aims for users never needing the terminal, and the terminal is still a first-class, super-convenient surface","client, mobile, agents, terminal, roadmap",active
+0110-skins-are-themeable-through-tokens,"The UI is skinnable: components are styled only through design tokens, and several skins ship and are user-selectable","client, design, theming, roadmap",active
+0111-acp-sessions-use-one-event-model-and-per-agent-quirk-profiles,"ACP sessions (tier T0) map into the existing agent event model, with per-agent quirk profiles as data","agents, protocol, architecture, roadmap",active

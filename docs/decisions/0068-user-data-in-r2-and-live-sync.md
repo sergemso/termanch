@@ -1,14 +1,14 @@
 ---
 id: 0068-user-data-in-r2-and-live-sync
 title: The owner's server list and settings are encrypted objects read from the CDN, with live sync through servers
-status: draft
+status: active
 date: 2026-10-12
 track: product
 accepted-by: Sergey Strebulaev <s@vivantel.dev>
 tags: [directory, scale, sync, roadmap]
 ---
 
-## Decision (draft: the write path is still being investigated)
+## Decision
 
 - Each user's server list and settings are one object, client-side encrypted, at an unguessable public path. The function derives a per-user secret by HKDF from a master secret and the GitHub id and hands it out with the device certificate (0062); the secret gives both the object name and the encryption key. Bucket listing stays disabled.
 - Reads go straight to the public domain with no Worker or D1 and with `no-cache`, so every app open is fresh. Reads survive a Workers or D1 outage and an exhausted Workers quota.
