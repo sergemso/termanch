@@ -148,7 +148,7 @@ Web search 2026-10-16 found no statement about ACP adapters themselves. For Clau
 
 | Need | Source of truth | Fallback |
 |---|---|---|
-| Status working/idle | open `session/prompt` request (working until its response) | process scan, screen |
+| Status working/blocked/idle | open `session/prompt` request (working until its response); codex also `session_info_update._meta.codex.threadStatus` (`waitingOnApproval`) | process scan, screen |
 | Last message / timeline | `agent_message_chunk`, `tool_call`, `tool_call_update` (merge by `toolCallId`; first `tool_call` often has empty `rawInput`, the input arrives in a later update) | screen tail |
 | Plan progress | kilo `todowrite` tool calls; claude hooks/transcript | none from `plan` (empty or absent everywhere measured) |
 | Context % | `usage_update.used / size` (all measured agents except cursor-agent) | none |
