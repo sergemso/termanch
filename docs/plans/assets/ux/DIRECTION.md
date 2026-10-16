@@ -1,8 +1,17 @@
-# U.1 design spike: result and recommendation
+# U.1 design spike: result and decision
+
+**Decision (owner, 2026-10-16): accepted.**
+- **Mobile:** the *final mobile design* (last section of this file, prototype `f-final/`, built to `DESIGN-PRINCIPLES.md` and passing `audit.mjs`).
+- **Desktop:** option A, the command-centre workspace (agent list, session detail, live terminal; sidebar, main pane, optional right pane, palette), with option B's keyboard answering (1/2/3, J/K) and option C's board as an additional fleet view later.
+- **Skins:** themeable through tokens, navy dark as the default (draft decision 0110).
+- **Kept from the others:** B's decision-first Home and numbered options; C's fleet state counts and board view; A's session strip and Terminal tab.
+- **Screenshots** for the chosen designs: `f-final/screens/` (phone, dark and light, every screen) and `a-command/screens/` (desktop). Screenshots of the superseded options were removed to keep the repository small; the prototype sources remain and run.
+
+Original recommendation text follows.
 
 > **The final mobile design (last section) supersedes rounds 1 and 2 for phones. Desktop recommendations from round 1 stand.**
 
-Date: 2026-10-16 · Status: **recommended by the spike, awaiting the owner's confirmation** (U.1 is not done until the owner confirms or changes the pick).
+Date: 2026-10-16 · Status: **accepted by the owner on 2026-10-16** (see the decision above).
 Prototypes (static, not wired to a server): https://termenbox.github.io/termenbox/ (sources and screenshots in this directory). Screenshots: `<direction>/screens/<screen>-<phone|desktop>-<dark|light>.png` for home, empty, empty-servers, decision, session-t1, session-t3, terminal, terminal-more, report, palette (desktop). All taken in desktop Chromium at 390 px and 1280 px, so none is an iPhone or Android check (`a-phone-check-names-its-platform`). Android: emulated only.
 
 ## What was compared
@@ -119,4 +128,4 @@ This replaces taste-driven iteration with a written spec derived from Apple's 44
 
 **Not verified:** any real device (iPhone Safari, installed PWA, Android); haptics; first-paint time; swipe on the key row; long-press select. In light mode amber becomes a dark amber to pass contrast, which looks heavier than in dark: review on a real screen.
 
-**Pick.** The owner picks or changes this, and the desktop direction (round 1: A's workspace, B's keyboard answering, C's board as a view); then U.1 is done.
+**Pick.** Accepted by the owner on 2026-10-16, together with the round 1 desktop direction.

@@ -23,7 +23,7 @@ Legend: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked, `[>]` moved
 
 ## Steps
 
-### U.1 Design spike: three directions, owner picks one — [ ]
+### U.1 Design spike: three directions, owner picks one — [x]
 Class: plan · Needs: none · Check: `test -s docs/plans/assets/ux/DIRECTION.md`
 Context: Decision 0107. The client is Tailwind v4 plus shadcn-svelte (0069). There is no `docs/plans/assets/` directory yet; create `docs/plans/assets/ux/`. The owner tests on an iPhone, so prototypes must open there (a served static page or preview URL).
 Do: 1. Build 2-3 full-fidelity directions as clickable static prototypes (plain HTML/CSS/JS or a throwaway Svelte page, not wired to the real server) for: Home with a needs-you queue and fleet summary, a decision card (context, option buttons, composer), the session view (T1 and T3 variants), and one report (fleet board or timeline). 2. Each at 390 px and a desktop width (three panes), light and dark, with realistic data: 3 servers, 12 sessions, long task titles, a failed item, an empty state. 3. Save screenshots and prototype sources under `docs/plans/assets/ux/<direction>/`. 4. Ask the owner to open them on the iPhone and pick one; write the pick and the reasons in `docs/plans/assets/ux/DIRECTION.md` with the date.
