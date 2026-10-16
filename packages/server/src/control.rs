@@ -101,18 +101,22 @@ pub fn parse_windows(out: &str) -> Vec<WindowState> {
     all
 }
 
-/// The window a session's tab speaks for: the agent window used last (ties go to the leftmost), else the window
-/// tmux has current, else the first one.
+/// The window a session's tab speaks for: the window tmux has current (the one the user last had open, so a
+/// tab switch lands where they left), else the agent window used last (ties go to the leftmost), else the first.
 pub fn representative(windows: &[WindowState]) -> Option<u32> {
     windows
         .iter()
-        .filter(|w| w.info.agent.is_some())
-        .max_by(|a, b| {
-            a.activity
-                .cmp(&b.activity)
-                .then(b.info.index.cmp(&a.info.index))
+        .find(|w| w.info.active)
+        .or_else(|| {
+            windows
+                .iter()
+                .filter(|w| w.info.agent.is_some())
+                .max_by(|a, b| {
+                    a.activity
+                        .cmp(&b.activity)
+                        .then(b.info.index.cmp(&a.info.index))
+                })
         })
-        .or_else(|| windows.iter().find(|w| w.info.active))
         .or_else(|| windows.first())
         .map(|w| w.info.index)
 }
@@ -356,16 +360,24 @@ mod tests {
     }
 
     #[test]
-    fn the_agent_window_used_last_speaks_for_the_session() {
+    fn the_current_window_then_the_agent_used_last_speaks_for_the_session() {
         let w = parse_windows(
             &[
-                row(0, 1, 500, 1, "bash", "/a", "sh"),
+                row(0, 0, 500, 1, "bash", "/a", "sh"),
                 row(1, 0, 300, 1, "claude", "/b", "c"),
                 row(2, 0, 400, 1, "codex", "/c", "x"),
             ]
             .join("\n"),
         );
         assert_eq!(representative(&w), Some(2), "most recent output wins");
+        let current = parse_windows(
+            &[
+                row(0, 1, 500, 1, "bash", "/a", "sh"),
+                row(1, 0, 300, 1, "claude", "/b", "c"),
+            ]
+            .join("\n"),
+        );
+        assert_eq!(representative(&current), Some(0), "the current window wins");
         let tie = parse_windows(
             &[
                 row(1, 0, 300, 1, "claude", "/b", "c"),
@@ -377,7 +389,7 @@ mod tests {
     }
 
     #[test]
-    fn without_an_agent_the_current_window_then_the_first_one_speaks() {
+    fn without_an_agent_or_a_current_window_the_first_one_speaks() {
         let w = parse_windows(
             &[
                 row(0, 0, 1, 1, "bash", "/a", "a"),

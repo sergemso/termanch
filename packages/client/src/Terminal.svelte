@@ -193,11 +193,13 @@
     clearTimeout(holdTimer);
     const chunks = held;
     held = null;
-    if (!chunks?.length || !term) return;
+    if (!term) return;
+    if (!chunks?.length) return void term.write('\x1b[?25h');
     const all = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
     let at = 0;
     for (const c of chunks) (all.set(c, at), (at += c.length));
     term.write(all);
+    term.write('\x1b[?25h'); // the preview hid the cursor; the repaint put it where it belongs
   }
 
   /** Draws a peeked screen at once, dimmed; the repaint after attach clears it (decision 0084). */
@@ -205,7 +207,8 @@
     if (!term || previewing || restored) return;
     previewing = true;
     term.reset();
-    term.write(text.replace(/\r?\n/g, '\r\n'));
+    // A peeked screen has no cursor position: hide it rather than show it at the end and then jump.
+    term.write('\x1b[?25l' + text.replace(/\r?\n/g, '\r\n'));
   }
   $: if (term && preview && !previewing) paintPreview(preview);
   $: if (!preview) previewing = false;
