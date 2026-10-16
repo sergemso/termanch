@@ -47,12 +47,12 @@ window.TB = (function () {
   };
   const transcript = [
     { who: 'you', text: 'Migrate the auth middleware to the new session store and update the login tests.' },
-    { who: 'agent', text: 'I will start by reading the middleware and the session store interface.' },
+    { who: 'bot', text: 'I will start by reading the middleware and the session store interface.' },
     { who: 'tool', text: 'Read  src/auth/middleware.ts  (212 lines)' },
     { who: 'tool', text: 'Read  src/session/store.ts  (148 lines)' },
-    { who: 'agent', text: 'The old store keeps sessions in memory, the new one persists them. Existing logins would be lost on deploy unless they are copied across.' },
+    { who: 'bot', text: 'The old store keeps sessions in memory, the new one persists them. Existing logins would be lost on deploy unless they are copied across.' },
     { who: 'tool', text: 'Edit  src/auth/middleware.ts  (+31 −44)' },
-    { who: 'agent', text: 'I need one decision before touching the tests.' },
+    { who: 'bot', text: 'I need one decision before touching the tests.' },
   ];
   const tail = [
     '  Running 212 tests',
