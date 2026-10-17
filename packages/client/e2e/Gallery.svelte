@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BottomBar from '../src/shell/BottomBar.svelte';
   import { StatusChip, AgentBadge, FleetTile, SessionStrip, DecisionCard, OptionButton, QueueItem, Composer, MoreSheet, ChartFrame, EmptyState, STATES, type FleetState } from '../src/lib/ds';
 
   const states = Object.keys(STATES) as FleetState[];
@@ -52,6 +53,8 @@
   <EmptyState title="No sessions yet" body="Start one and it shows up here with its state.">
     <button type="button" class="min-h-12 rounded-control bg-accent text-base text-on-accent" onclick={() => (more = true)}>Open More</button>
   </EmptyState>
+
+  <section aria-label="Bottom bar"><BottomBar current="sessions" needsYou={2} onnavigate={() => {}} class="rounded-card border" /></section>
 
   <MoreSheet bind:open={more} {groups} />
 </main>
