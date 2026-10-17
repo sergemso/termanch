@@ -53,10 +53,22 @@ if [ "$SECRET" != "-" ]; then
   [ "${#SECRET}" -eq 43 ] || die "the claim secret has the wrong length"
 fi
 
-# host-me needs no root (decision 0113): it runs as the user who ran this command, as a user service. A machine that already
-# has the system-service install of decision 0078 keeps the old route.
+# host-me needs no root (decision 0113): it runs as the user who ran this command, as a user service. The old route (a system
+# service) applies only to a machine whose system service already runs as this same user, from before 0113: refreshing it
+# needs root. Any other user gets an install of their own, whatever else runs on the machine, so one machine can have a
+# system install and a user install for each of its users.
+ME="${SUDO_USER:-$(id -un)}"
 LEGACY_SYSTEM=""
-[ "$MODE" = host-me ] && [ -f /etc/systemd/system/termenbox.service ] && LEGACY_SYSTEM=1
+if [ "$MODE" = host-me ] && [ -f /etc/systemd/system/termenbox.service ] \
+   && [ "$(sed -n 's/^User=//p' /etc/systemd/system/termenbox.service 2>/dev/null)" = "$ME" ]; then
+  LEGACY_SYSTEM=1
+fi
+if [ -n "$LEGACY_SYSTEM" ] && [ "$(id -u)" -ne 0 ]; then
+  say "Termenbox is already installed here as a system service running as $ME (an earlier version of the installer made it)."
+  say "Refreshing it needs sudo, so you will be asked for your password. To move to the install that needs no root instead,"
+  say "remove this one (keeping the server's keys and owner), then run this same command again:"
+  say "  curl -fsSL $ORIGIN/uninstall.sh | sudo sh -s -- --yes --keep-state"
+fi
 if [ "$MODE" = host-me ] && [ -z "$LEGACY_SYSTEM" ]; then
   [ "$(id -u)" -ne 0 ] || die "host-me runs sessions as the user who runs this command and needs no root. Run it as your own user, without sudo (or use host / host-user for a system service)."
 else
@@ -509,9 +521,20 @@ install_user() {
   fi
   install -m 0755 "$TMP/termenbox-server" "$BIN"
 
-  [ -d "$STATE" ] || journal dir_created "path=$STATE"
-  mkdir -p "$STATE"
-  chmod 700 "$STATE"
+  if [ ! -d "$STATE" ]; then
+    journal dir_created "path=$STATE"
+    mkdir -p "$STATE"
+    chmod 700 "$STATE"
+    # Coming from the system install of an earlier version (removed with --keep-state): the same keys and owner make it
+    # the same server in the app. Only a copy, and only when nothing runs from that directory any more.
+    OLD_STATE=/var/lib/termenbox
+    if [ ! -f /etc/systemd/system/termenbox.service ] && [ -O "$OLD_STATE" ] && [ -r "$OLD_STATE/server_key" ]; then
+      say "Reusing the server's keys and owner from $OLD_STATE (a copy; the old directory is left for you to delete)."
+      for f in "$OLD_STATE"/*; do
+        [ "$(basename "$f")" = requests ] || cp -a "$f" "$STATE/"
+      done
+    fi
+  fi
 
   journal unit_installed "name=$SERVICE" "path=$UNIT_DIR/$SERVICE"
   cat > "$UNIT_DIR/$SERVICE" <<UNIT

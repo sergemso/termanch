@@ -135,4 +135,50 @@ as_alice sh /uninstall.sh --yes
 [ ! -e "$JOURNAL" ] || fail "the journal is still there"
 [ -d /home/alice ] || fail "alice's home was touched"
 [ "$(loginctl show-user alice -p Linger --value)" != yes ] || fail "lingering the installer enabled was left on"
+
+# ---------------------------------------------------------------------------------------------------------------------
+echo "== a system install and another user's own install live side by side"
+useradd --create-home --shell /bin/bash bob
+B_UID="$(id -u bob)"
+systemctl start "user@$B_UID.service"
+i=0; while [ ! -S "/run/user/$B_UID/bus" ] && [ $i -lt 20 ]; do i=$((i + 1)); sleep 1; done
+[ -S "/run/user/$B_UID/bus" ] || fail "bob has no user manager in this machine"
+as_bob() {
+  runuser -u bob -- env HOME=/home/bob XDG_RUNTIME_DIR="/run/user/$B_UID" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$B_UID/bus" \
+    TERMENBOX_RELEASE_URL=file:///release TERMENBOX_RELEASE_KEYS="$(cat /keys.txt)" TERMENBOX_SKIP_FIREWALL=1 "$@"
+}
+SECRET2="$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 43)"
+TERMENBOX_RELEASE_URL=file:///release TERMENBOX_RELEASE_KEYS="$(cat /keys.txt)" TERMENBOX_SKIP_FIREWALL=1 sh /install.sh "$SECRET" "$ORIGIN" host-user >/dev/null
+systemctl is-active --quiet termenbox || fail "the system service is not active"
+sys_port="$(sed -n 's/^Environment=TERMENBOX_PORT=//p' /etc/systemd/system/termenbox.service)"
+as_bob sh /install.sh "$SECRET2" "$ORIGIN" host-me | tee /tmp/bob.txt
+as_bob systemctl --user is-active --quiet termenbox || fail "bob's own service is not active next to the system one"
+systemctl is-active --quiet termenbox || fail "bob's install stopped the system service"
+bob_port="$(sed -n 's/^Environment=TERMENBOX_PORT=//p' /home/bob/.config/systemd/user/termenbox.service)"
+[ "$bob_port" != "$sys_port" ] || fail "both servers took the same port"
+curl -fs "http://127.0.0.1:$sys_port/health" >/dev/null || fail "the system server does not answer"
+curl -fs "http://127.0.0.1:$bob_port/health" >/dev/null || fail "bob's server does not answer"
+bob_pid="$(as_bob systemctl --user show -p MainPID --value termenbox)"
+[ "$(stat -c %U "/proc/$bob_pid")" = bob ] || fail "bob's server does not run as bob"
+! cmp -s /var/lib/termenbox/server_key /home/bob/.config/termenbox/server_key || fail "the two servers share an identity"
+grep -q "Reusing the server" /tmp/bob.txt && fail "bob's fresh install took over someone else's state"
+
+echo "== a system service that runs as the same user keeps the old route, and says why before asking for sudo"
+sed -i 's/^User=.*/User=bob/' /etc/systemd/system/termenbox.service
+if as_bob sh /install.sh "$SECRET2" "$ORIGIN" host-me >/tmp/legacy.txt 2>&1; then fail "the old route ran without sudo"; fi
+grep -q "already installed here as a system service running as bob" /tmp/legacy.txt || { cat /tmp/legacy.txt; fail "no explanation before the sudo step"; }
+grep -q "uninstall.sh | sudo sh -s -- --yes --keep-state" /tmp/legacy.txt || fail "the way to the no-root install is not given"
+sed -i 's/^User=.*/User=termenbox/' /etc/systemd/system/termenbox.service
+
+echo "== moving to the no-root install keeps the same server"
+as_bob sh /uninstall.sh --yes >/dev/null
+sh /uninstall.sh --yes --keep-state >/dev/null
+[ -f /var/lib/termenbox/server_key ] || fail "--keep-state did not keep the state"
+chown -R bob:bob /var/lib/termenbox     # what an earlier host-me install left behind: state owned by the user
+old_key="$(sha256sum /var/lib/termenbox/server_key | cut -d' ' -f1)"
+as_bob sh /install.sh "$SECRET2" "$ORIGIN" host-me | tee /tmp/move.txt
+grep -q "Reusing the server" /tmp/move.txt || fail "the old keys were not reused"
+[ "$(sha256sum /home/bob/.config/termenbox/server_key | cut -d' ' -f1)" = "$old_key" ] || fail "the new install has other keys"
+as_bob systemctl --user is-active --quiet termenbox || fail "bob's service is not active after the move"
+as_bob sh /uninstall.sh --yes >/dev/null
 echo "OK: host-me"
