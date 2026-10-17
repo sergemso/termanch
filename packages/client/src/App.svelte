@@ -25,7 +25,7 @@
   import type { ServerListItem } from './lib/protocol';
   import { parseClaim, parseServerLink, serverLink } from './lib/onboard';
   import { sendServerLink } from './lib/share';
-  import { ServerHub, serverKey, sessionDestinations, sessionKey, type HubServer } from './lib/hub';
+  import { ServerHub, newSessionTargets, serverKey, sessionDestinations, sessionKey, type HubServer } from './lib/hub';
   import { lookup } from './lib/directory';
   import { deviceKey, publicKeyB64, signChallenge, certExpiry, certUserId, avatarUrl } from './lib/device';
   import AppShell from './AppShell.svelte';
@@ -426,8 +426,13 @@
     if (activeServerId === id) { activeKey = null; activeServerId = null; }
   }
 
-  function newSession() {
-    if (!sessionDestinations($hubServers, selected).length) { showToast('Wait for a server to connect or retry it in Servers.', 'error'); return; }
+  /** `serverId` comes from a server's own "+ New" (the sheet is then locked to it); without it the sheet asks when there are several. */
+  let newTarget = { serverId: '', locked: false };
+  function newSession(serverId?: string) {
+    const asked = typeof serverId === 'string' ? serverId : undefined;
+    const t = newSessionTargets($hubServers, asked ?? selected?.id);
+    if (!t.servers.length || (asked && t.serverId !== asked)) { showToast('Wait for a server to connect or retry it in Servers.', 'error'); return; }
+    newTarget = { serverId: t.serverId, locked: !!asked };
     showNew = true;
   }
 
@@ -689,7 +694,7 @@
       ondetach={() => detach(menuSession.key)} onclosesession={() => { actionConfirm = true; actionKey = menuSession.key; }} onclose={() => menuKey = null} />
   {/if}
   {#if showNew}
-    <NewSessionSheet servers={sessionDestinations($hubServers, selected)} sessions={$allSessions} windows={$allWindows} oncreate={createSession} onclose={() => showNew = false} />
+    <NewSessionSheet servers={newSessionTargets($hubServers).servers} initialServerId={newTarget.serverId} locked={newTarget.locked} sessions={$allSessions} windows={$allWindows} oncreate={createSession} onclose={() => showNew = false} />
   {/if}
 
   {#if reportText !== null}

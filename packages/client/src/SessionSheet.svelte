@@ -23,7 +23,7 @@
   export let onpeek: (key: string) => void = () => {};
   export let onwarm: (key: string) => void = () => {};
   export let onopen: (key: string) => void;
-  export let onnew: () => void;
+  export let onnew: (serverId?: string) => void;
   export let onrefresh: () => void;
   export let onretry: (id: string) => void;
   export let send: (message: ClientMessage) => void;
@@ -140,7 +140,7 @@
     <button class="handle" aria-label={`Resize sessions sheet, ${height}`} on:pointerdown={startDrag} on:pointermove={moveDrag} on:pointerup={(e) => endDrag(e)} on:pointercancel={(e) => endDrag(e, true)} on:click={cycle}
       on:keydown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); const i = HEIGHTS.indexOf(height); height = HEIGHTS[Math.max(0, Math.min(2, i + (e.key === 'ArrowUp' ? 1 : -1)))]; } }}><span aria-hidden="true"></span></button>
   {/if}
-  <div class="sheet-header"><h2>Sessions</h2><button class="secondary icon" on:click={onrefresh}>Refresh</button><button class="secondary icon" on:click={onnew}>+ New</button>{#if mobile}<button class="secondary" aria-label="Minimize sessions" on:click={() => height = 'closed'}>⌄</button>{/if}</div>
+  <div class="sheet-header"><h2>Sessions</h2><button class="secondary icon" on:click={onrefresh}>Refresh</button><button class="secondary icon" on:click={() => onnew()}>+ New</button>{#if mobile}<button class="secondary" aria-label="Minimize sessions" on:click={() => height = 'closed'}>⌄</button>{/if}</div>
   <div class="content" bind:this={content} on:scroll={() => { frozen.scrolled(Date.now()); revision++; }}>
     <div class="presets" on:scroll={() => { frozen.scrolled(Date.now()); revision++; }}>
       {#each PRESETS as preset}<button class="secondary" aria-pressed={effectiveView.preset === preset.id} on:click={() => choose(presetView(preset.id))}>{preset.label}</button>{/each}
@@ -163,7 +163,7 @@
       {/if}
       {#each shown as group (group.key)}
         <section class="session-group" data-group={group.key}>
-          {#if group.label || group.server}<div class="group-header"><h3>{group.label}</h3>{#if group.server}<ServerStatus server={group.server} {onretry} />{/if}</div>{/if}
+          {#if group.label || group.server}<div class="group-header"><h3>{group.label}</h3>{#if group.server}<ServerStatus server={group.server} {onretry} />{#if group.server.state === 'connected'}<button class="secondary icon" aria-label={`New session on ${group.server.server.server_name || 'Server'}`} on:click={() => onnew(group.server?.id)}>+ New</button>{/if}{/if}</div>{/if}
           {#each group.sessions as session (session.key)}
             {@const agent = shownAgents[session.key]}
             {#if agent}

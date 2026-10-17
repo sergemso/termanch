@@ -49,6 +49,15 @@ export function sessionDestinations(servers: HubServer[], selected?: HubServer):
   return selected?.state === 'connected' ? [selected] : servers.filter(s => s.state === 'connected');
 }
 
+/**
+ * Where a new session can go: every connected server, with the one to preselect. `preferredId` is the server whose own
+ * "+ New" was tapped, or else the open one; with several servers the sheet asks, so a plain "+ New" never picks silently.
+ */
+export function newSessionTargets(servers: HubServer[], preferredId?: string): { servers: HubServer[]; serverId: string } {
+  const connected = servers.filter(s => s.state === 'connected');
+  return { servers: connected, serverId: (connected.find(s => s.id === preferredId) ?? connected[0])?.id ?? '' };
+}
+
 /** Owns connections for the device's saved servers. Only user actions pause/remove them; no cap drops a peer. */
 export class ServerHub {
   private entries = new Map<string, Entry>();
