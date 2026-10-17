@@ -23,7 +23,7 @@
   import { cacheRemaining, expiringSoon } from './lib/cache';
   import { settings, applyTheme, type Skin } from './lib/settings';
   import type { ServerListItem } from './lib/protocol';
-  import { parseClaim, parseServerLink, serverLink } from './lib/onboard';
+  import { parseClaim, parseServerLink, serverCode, serverLink } from './lib/onboard';
   import { sendServerLink } from './lib/share';
   import { ServerHub, serverKey, sessionDestinations, sessionKey, type HubServer } from './lib/hub';
   import { lookup } from './lib/directory';
@@ -324,8 +324,8 @@
   async function shareServer(index: number) {
     const server = servers[index];
     if (!server?.server_id) return;
-    const result = await sendServerLink(serverLink(location.origin, server.server_id), server.server_name);
-    if (result === 'copied') showToast('Link copied. Open it on your other device and sign in with the same GitHub account.');
+    const result = await sendServerLink(serverLink(location.origin, server.server_id), server.server_name, serverCode(server.server_id));
+    if (result === 'copied') showToast('Link and code copied. Open the link on your other device, or paste the code in Add Server in the app, and sign in with the same GitHub account.');
     else if (result === 'failed') showToast('Could not share the link', 'error');
   }
 

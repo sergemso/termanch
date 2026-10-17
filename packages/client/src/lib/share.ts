@@ -16,16 +16,18 @@ const realDeps = (): SendDeps => ({
   copy: copyText,
 });
 
-/** Opens the system share sheet when there is one (AirDrop, Messages, Mail on an iPhone), else copies the link. */
-export async function sendServerLink(link: string, name: string, deps: SendDeps = realDeps()): Promise<SendResult> {
+/** Opens the system share sheet when there is one (AirDrop, Messages, Mail on an iPhone), else copies the link and the code. */
+export async function sendServerLink(link: string, name: string, code = '', deps: SendDeps = realDeps()): Promise<SendResult> {
   if (deps.share) {
     try {
-      await deps.share({ title: 'Termenbox', text: `Open ${name || 'my server'} in Termenbox`, url: link });
+      // On an iPhone a tapped link opens Safari, not the installed app: the text carries the code for Add Server.
+      const how = code ? `. Link not opening the app? In the app choose Add Server and paste: ${code}` : '';
+      await deps.share({ title: 'Termenbox', text: `Open ${name || 'my server'} in Termenbox${how}`, url: link });
       return 'shared';
     } catch (e) {
       // The user closing the sheet is not an error; any other failure falls through to copying.
       if (e instanceof DOMException && e.name === 'AbortError') return 'cancelled';
     }
   }
-  return (await deps.copy(link)) ? 'copied' : 'failed';
+  return (await deps.copy(code ? `${link}\n${code}` : link)) ? 'copied' : 'failed';
 }
