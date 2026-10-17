@@ -73,13 +73,17 @@ export function capacity(width: number): number {
   return Math.max(1, Math.floor((width - ROW_PADDING + KEY_GAP) / (MIN_KEY_WIDTH + KEY_GAP)));
 }
 
-/** Splits the row so no key is narrower than the minimum; when some go to More, the More key takes the last slot. */
-export function splitRow<T>(items: readonly T[], width: number): { shown: T[]; overflow: T[] } {
+/**
+ * Lays the row out across `width`. No key gets narrower than the minimum: when they do not all fit, the tail goes to
+ * More and the More key takes the last slot. `wantsMore` asks for the More key even when everything fits (a key was removed).
+ */
+export function layoutRow<T>(items: readonly T[], width: number, wantsMore = false): { shown: T[]; overflow: T[]; more: boolean } {
   const cap = capacity(width);
-  if (items.length <= cap) return { shown: [...items], overflow: [] };
+  if (items.length + (wantsMore ? 1 : 0) <= cap) return { shown: [...items], overflow: [], more: wantsMore };
   const keep = Math.max(0, cap - 1);
-  return { shown: items.slice(0, keep), overflow: items.slice(keep) };
+  return { shown: items.slice(0, keep), overflow: items.slice(keep), more: true };
 }
+export function splitRow<T>(items: readonly T[], width: number) { return layoutRow(items, width, false); }
 
 /** Compact when a fine pointer (a mouse or trackpad) is the main input and the user has not said otherwise. */
 export function rowMode(mode: DesktopMode, finePointer: boolean): 'full' | 'compact' {
