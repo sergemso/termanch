@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { NativeSelect } from './lib/ui/native-select';
   import AgentIcon from './AgentIcon.svelte';
   import { recentDirs, suggestName, TEMPLATES, validDir, validName } from './lib/newsession';
   import type { HubServer, HubSession } from './lib/hub';
@@ -45,10 +46,10 @@
   <form on:submit|preventDefault={create}>
     <h2>{locked && server ? `New session on ${server.server.server_name || 'Server'}` : 'New session'}</h2>
     {#if servers.length > 1 && !locked}
-      <label>Server <select bind:value={serverId}>{#each servers as s}<option value={s.id}>{s.server.server_name || 'Server'}</option>{/each}</select></label>
+      <label>Server <NativeSelect bind:value={serverId}>{#each servers as s}<option value={s.id}>{s.server.server_name || 'Server'}</option>{/each}</NativeSelect></label>
     {/if}
     {#if server && server.backends.length > 1}
-      <label>Manager <select bind:value={backend}>{#each server.backends as b}<option value={b}>{b}</option>{/each}</select></label>
+      <label>Manager <NativeSelect bind:value={backend}>{#each server.backends as b}<option value={b}>{b}</option>{/each}</NativeSelect></label>
     {/if}
     {#if tmux}
       <div class="templates" role="radiogroup" aria-label="Start with">
@@ -80,7 +81,7 @@
   .templates button.on { border-color: var(--accent); }
   label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.85rem; }
   label.stack { flex-direction: column; align-items: stretch; }
-  input, select, button { min-height: 44px; min-width: 44px; }
+  input, button { min-height: 44px; min-width: 44px; }
   input { width: 100%; }
   .dirs { display: flex; flex-wrap: wrap; gap: 6px; }
   .dirs button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

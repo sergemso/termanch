@@ -2,6 +2,7 @@
   // Settings for the terminal key row: which keys, in what order, presets, reset, and how a desktop shows it.
   // Everything is a button or a select, so it works without dragging.
   import { KEY_BY_ID, type KeyGroup, type KeyProfile } from './lib/keys';
+  import { NativeSelect } from './lib/ui/native-select';
   import {
     DESKTOP_MODES, PRESETS, PRESET_LABEL, added, available, keyRowConfig, moved, presetKeys, removed, resetRow, resolveRow, setDesktopMode, setRow,
     type DesktopMode, type Preset,
@@ -30,9 +31,9 @@
     <button type="button" class={seg + ' flex-1'} aria-pressed={profile === 'tmux'} onclick={() => (profile = 'tmux')}>tmux</button>
   </div>
   <label class="flex items-center justify-between gap-2 text-[13px]">Preset
-    <select class="h-11 min-w-11" value={preset} onchange={(e) => choose(e.currentTarget.value as Preset)}>
+    <NativeSelect class="h-11 min-w-11" value={preset} onchange={(e) => choose(e.currentTarget.value as Preset)}>
       {#each PRESETS as p (p)}<option value={p}>{PRESET_LABEL[p]}</option>{/each}
-    </select>
+    </NativeSelect>
   </label>
 
   <ol class="m-0 flex list-none flex-col gap-2 p-0" aria-label="Keys in the row, in order">
@@ -71,9 +72,9 @@
   <button type="button" class={btn + ' self-start'} onclick={() => resetRow(profile)}>Reset to today's row</button>
 
   <label class="flex items-center justify-between gap-2 text-[13px]">On a desktop
-    <select class="h-11 min-w-11" value={$keyRowConfig.desktop} onchange={(e) => setDesktopMode(e.currentTarget.value as DesktopMode)}>
+    <NativeSelect class="h-11 min-w-11" value={$keyRowConfig.desktop} onchange={(e) => setDesktopMode(e.currentTarget.value as DesktopMode)}>
       {#each DESKTOP_MODES as m (m)}<option value={m}>{MODE_LABEL[m]}</option>{/each}
-    </select>
+    </NativeSelect>
   </label>
   <p class="text-xs text-soft">Auto shows one hint line instead of the row when a mouse or trackpad is the main pointer. Choose Full row to keep the keys on a touch laptop.</p>
 </section>

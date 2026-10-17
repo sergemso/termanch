@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { NativeSelect } from './lib/ui/native-select';
   import { rememberFocus } from './lib/focus';
   import { settings, changeSettings, SKINS, type Skin } from './lib/settings';
   import { canInstall, promptInstall, isIosBrowser } from './lib/pwa';
@@ -47,11 +48,11 @@
     {/if}
     <button class="secondary" aria-expanded={showSettings} on:click={() => showSettings = !showSettings}>Settings</button>
     {#if showSettings}
-      <label>Cache TTL <select value={$settings.cacheTtlMs} on:change={(e) => changeSettings({ cacheTtlMs: Number(e.currentTarget.value) as 300000 | 3600000 })}><option value="300000">5 minutes</option><option value="3600000">1 hour</option></select></label>
+      <label>Cache TTL <NativeSelect value={$settings.cacheTtlMs} onchange={(e) => changeSettings({ cacheTtlMs: Number(e.currentTarget.value) as 300000 | 3600000 })}><option value="300000">5 minutes</option><option value="3600000">1 hour</option></NativeSelect></label>
       <label>Keep warm text <input value={$settings.keepWarm} placeholder="empty hides the button" maxlength="200" autocapitalize="off" on:change={(e) => changeSettings({ keepWarm: e.currentTarget.value })} /></label>
-      <label>Theme <select value={$settings.theme} on:change={(e) => changeSettings({ theme: e.currentTarget.value as 'dark' | 'light' | 'system' })}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></label>
-      <label>Skin <select value={$settings.skin} on:change={(e) => changeSettings({ skin: e.currentTarget.value as Skin })}>{#each SKINS as skin}<option value={skin}>{skin[0].toUpperCase() + skin.slice(1)}</option>{/each}</select></label>
-      <label>Terminal renderer <select value={$settings.renderer} on:change={(e) => changeSettings({ renderer: e.currentTarget.value as 'webgl' | 'dom' })}><option value="webgl">WebGL (fast)</option><option value="dom">Plain (if the screen flickers or goes blank)</option></select></label>
+      <label>Theme <NativeSelect value={$settings.theme} onchange={(e) => changeSettings({ theme: e.currentTarget.value as 'dark' | 'light' | 'system' })}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></NativeSelect></label>
+      <label>Skin <NativeSelect value={$settings.skin} onchange={(e) => changeSettings({ skin: e.currentTarget.value as Skin })}>{#each SKINS as skin}<option value={skin}>{skin[0].toUpperCase() + skin.slice(1)}</option>{/each}</NativeSelect></label>
+      <label>Terminal renderer <NativeSelect value={$settings.renderer} onchange={(e) => changeSettings({ renderer: e.currentTarget.value as 'webgl' | 'dom' })}><option value="webgl">WebGL (fast)</option><option value="dom">Plain (if the screen flickers or goes blank)</option></NativeSelect></label>
       {#if $settings.renderer !== initialRenderer}<p>Applies the next time a session opens.</p>{/if}
       <KeyRowEditor />
     {/if}
@@ -71,7 +72,7 @@
   dialog::backdrop { background: #0008; }
   .menu { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
   .row { display: flex; justify-content: space-between; align-items: center; }
-  button, select { min-height: 44px; min-width: 44px; }
+  button { min-height: 44px; min-width: 44px; }
   button { text-align: left; }
   label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   p { font-size: 0.8rem; color: var(--fg-muted); }

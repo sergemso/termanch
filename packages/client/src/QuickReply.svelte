@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as snippets from './lib/snippets';
+  import { NativeSelect } from './lib/ui/native-select';
   import type { HubSession } from './lib/hub';
   import type { ClientMessage } from './lib/protocol';
   export let sessions: HubSession[];
@@ -17,9 +18,9 @@
 {#if sessions.length}
   <form class="reply" on:submit|preventDefault={() => reply(draft)}>
     <label for="reply-to">Quick reply to</label>
-    <select id="reply-to" value={replyTo} on:change={(e) => target = e.currentTarget.value}>
+    <NativeSelect id="reply-to" value={replyTo} onchange={(e) => target = e.currentTarget.value}>
       {#each sessions as s (s.key)}<option value={s.key}>{s.name} · {s.serverName}</option>{/each}
-    </select>
+    </NativeSelect>
     <div class="snips">
       {#each saved as text}
         <span class="snip"><button type="button" class="s1" on:click={() => reply(text)}>{text}</button><button type="button" class="s2" aria-label={`Delete snippet ${text}`} on:click={() => { saved = snippets.remove(saved, text); snippets.save(saved); }}>×</button></span>
@@ -35,7 +36,7 @@
 <style>
   .reply { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); padding: 12px 0; margin-top: 12px; }
   label { color: var(--fg-muted); font-size: 0.75rem; }
-  select, input, button { min-height: 44px; min-width: 44px; }
+  input, button { min-height: 44px; min-width: 44px; }
   .row, .snips { display: flex; gap: 6px; }
   .snips { flex-wrap: wrap; }
   .snip { display: inline-flex; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }

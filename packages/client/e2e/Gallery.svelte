@@ -1,5 +1,6 @@
 <script lang="ts">
   import BottomBar from '../src/shell/BottomBar.svelte';
+  import { NativeSelect } from '../src/lib/ui/native-select';
   import { StatusChip, AgentBadge, FleetTile, SessionStrip, DecisionCard, OptionButton, QueueItem, Composer, MoreSheet, ChartFrame, EmptyState, STATES, type FleetState } from '../src/lib/ds';
 
   const states = Object.keys(STATES) as FleetState[];
@@ -54,6 +55,11 @@
     <button type="button" class="min-h-12 rounded-control bg-accent text-base text-on-accent" onclick={() => (more = true)}>Open More</button>
   </EmptyState>
 
+  <section aria-label="Select" class="flex flex-col gap-2">
+    <label class="flex items-center gap-3 text-base text-fg">Server
+      <NativeSelect aria-label="Server"><option>alpha</option><option>beta</option></NativeSelect></label>
+    <label class="flex items-center gap-3 text-base text-fg">Sort <NativeSelect aria-label="Sort" disabled><option>Recent</option></NativeSelect></label>
+  </section>
   <section aria-label="Bottom bar"><BottomBar current="sessions" needsYou={2} onnavigate={() => {}} class="rounded-card border" /></section>
 
   <MoreSheet bind:open={more} {groups} />

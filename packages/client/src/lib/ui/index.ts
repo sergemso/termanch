@@ -5,3 +5,4 @@ export { ContextMenu } from './context-menu';
 export { Sidebar } from './sidebar';
 export { Toast } from './toast';
 export { cn } from './utils';
+export { NativeSelect } from './native-select';
