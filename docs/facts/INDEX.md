@@ -40,5 +40,9 @@
 | 0038 | The client has icons for 11 agents, but only Claude Code has a verified event surface | agents, hooks, client | active |
 | 0039 | Android is in the support floor but has never had a real-device check | client, mobile, android | active |
 | 0040 | What each ACP agent really sends and accepts, measured for the tiered session view | agents, protocol, client | active |
+| 0041 | Anthropic Claude model pricing including cache economics | cost, model-routing, governance | active |
+| 0042 | OpenAI model pricing including cached input | cost, model-routing, governance | active |
+| 0043 | Google Gemini API model pricing including context caching | cost, model-routing, governance | active |
+| 0044 | Priced models are grouped into small, medium and large tiers per provider, and each host agent is mapped to the providers whose models it can run | model-routing, cost, host-agents | active |
 
 <!-- bootstrap-generated: true -->
