@@ -147,6 +147,13 @@ pub enum ClientMessage {
         prompt_id: String,
         option: u8,
     },
+    /// Owner-only (U10, decision 0106): the hook state of one agent on this server and what changes it. `action` is
+    /// `status`, `preview` (the exact settings file as `apply` will write it), `apply` or `remove`; the answer is
+    /// `agent_hooks`. Older servers do not answer.
+    AgentHooks {
+        agent: String,
+        action: String,
+    },
     /// A message from a newer client; ignored.
     #[serde(other)]
     Unknown,
@@ -274,6 +281,17 @@ pub enum ServerMessage {
         /// and `t3`, and when `unchanged`; clients that do not know it ignore it.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         timeline: Option<Timeline>,
+    },
+    /// Answers `agent_hooks`: `state` is `connected`, `not_connected`, `unsupported` or `unavailable` (clients read
+    /// any other value as `unavailable`). `preview` is the whole settings file as `apply` will write it.
+    AgentHooks {
+        agent: String,
+        action: String,
+        state: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        preview: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
     },
     Error {
         message: String,
@@ -624,5 +642,31 @@ mod tests {
                 hash: None
             }
         );
+    }
+
+    /// The hook messages are additive: an answer without a preview or an error reads fine, and the reply keeps its
+    /// optional fields off the wire when empty (U10).
+    #[test]
+    fn agent_hooks_messages_round_trip_and_leave_empty_fields_out() {
+        let m: ClientMessage =
+            serde_json::from_str(r#"{"type":"agent_hooks","agent":"claude","action":"apply"}"#)
+                .unwrap();
+        assert_eq!(
+            m,
+            ClientMessage::AgentHooks {
+                agent: "claude".into(),
+                action: "apply".into()
+            }
+        );
+        let reply = ServerMessage::AgentHooks {
+            agent: "claude".into(),
+            action: "status".into(),
+            state: "connected".into(),
+            preview: None,
+            error: None,
+        };
+        let text = serde_json::to_string(&reply).unwrap();
+        assert!(!text.contains("preview") && !text.contains("error"));
+        assert_eq!(serde_json::from_str::<ServerMessage>(&text).unwrap(), reply);
     }
 }

@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import { EmptyState, FleetTile, QueueItem } from './lib/ds';
   import DecisionPanel from './DecisionPanel.svelte';
+  import HookOfferCard from './HookOfferCard.svelte';
+  import type { HookOffer } from './lib/hooks';
   import { decisionFor, type Decision } from './lib/decision';
   import type { FleetState } from './lib/ds/states';
   import type { AgentMap, SessionAgent } from './lib/agents';
@@ -10,25 +12,27 @@
   import { continueTarget, fleetCounts, queueOf, rowOf, Settle, splitQueue, type HomeQueue, type Row } from './lib/home';
 
   /** Home (decision 0100): the oldest waiting decision, the rest of the queue, the four fleet counts and Continue. */
-  let { sessions, agents, servers, now, lastKey, onopen, onanswer, onreply, onservers, onnew }: {
+  let { sessions, agents, servers, now, lastKey, offer, onopen, onanswer, onreply, onservers, onnew, onhook }: {
     sessions: HubSession[]; agents: AgentMap; servers: HubServer[]; now: number; lastKey: string | null;
     onopen: (key: string) => void;
     onanswer: (key: string, choice: number, prompt: NonNullable<SessionAgent['prompt']>) => void;
     onreply: (key: string, text: string) => void;
     onservers: () => void; onnew: (serverId?: string) => void;
+    /** The hook offer to show, if one is due (decision 0106), and what the user chose on it. */
+    offer?: HookOffer; onhook?: (choice: 'enable' | 'later' | 'never', offer: HookOffer) => void;
   } = $props();
 
   const FILTERS = ['needs-you', 'working', 'failed', 'finished'] as const;
   let filter = $state<FleetState | null>(null);
   // The queue moves only when no touch is down and 2 s after a scroll (ui-never-moves-under-the-finger); a beat re-reads it afterwards.
-  const settle = new Settle<HomeQueue & { decision?: Decision }>();
+  const settle = new Settle<HomeQueue & { decision?: Decision; offerKey?: string }>();
   let beat = $state(0);
   onMount(() => { const t = setInterval(() => beat++, 500); return () => clearInterval(t); });
 
   const counts = $derived(fleetCounts(sessions, agents));
   const live = $derived.by(() => {
     const q = splitQueue(queueOf(sessions, agents));
-    return { ...q, decision: q.hero ? decisionFor(q.hero, agents[q.hero.key], now) : undefined };
+    return { ...q, decision: q.hero ? decisionFor(q.hero, agents[q.hero.key], now) : undefined, offerKey: offer ? `${offer.serverId}|${offer.agent}` : undefined };
   });
   const view = $derived.by(() => { beat; return settle.view(live, Date.now()); });
   const connected = $derived(new Set(servers.filter((s) => s.state === 'connected').map((s) => s.id)));
@@ -70,6 +74,11 @@
         {@const d = view.decision}
         <DecisionPanel decision={d} {now} server={h.serverName}
           onpick={(i) => d.prompt && onanswer(h.key, i, d.prompt)} onreply={(text) => onreply(h.key, text)} onopen={() => onopen(h.key)} />
+      {/if}
+
+      <!-- Inserted only when nothing is being touched (it is part of the settled view), so the queue never jumps under a finger. -->
+      {#if offer && view.offerKey === `${offer.serverId}|${offer.agent}`}
+        <HookOfferCard {offer} onenable={() => onhook?.('enable', offer)} onlater={() => onhook?.('later', offer)} onnever={() => onhook?.('never', offer)} />
       {/if}
 
       {#if view.rest.length}
