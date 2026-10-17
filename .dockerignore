@@ -1,0 +1,18 @@
+# The build context is the whole repo (docker/Dockerfile copies Cargo.toml and packages/*); keep out what no
+# image reads, so the context stays small and unrelated edits do not invalidate COPY layers.
+.git
+.claude
+.github
+target
+**/node_modules
+**/dist
+**/.svelte-kit
+docs
+infra
+scripts
+skills-lock.json
+*.md
+!packages/**/README.md
+**/*.log
+.env*
+docker/.env

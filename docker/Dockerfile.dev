@@ -1,0 +1,37 @@
+# Build and test toolchain, not the shipped image (that is docker/Dockerfile). Pinned in one place so a laptop,
+# a fresh VM and CI compile with the same compiler, libraries and tmux. Used through docker/docker-compose.dev.yml;
+# every cache (cargo, target/, pnpm store, Playwright browsers) lives in a named volume, not in the image.
+#
+#   rust  : cargo build/test/clippy for the server (C toolchain, cmake for aws-lc, OpenSSL headers, tmux for the e2e tests)
+#   full  : rust + Node 24 + pnpm 9 + Debian's Chromium, which the e2e scripts use through CHROME_PATH (CI uses
+#           Google Chrome stable; this is the same engine, pinned by the image rather than by the runner)
+FROM rust:1-slim-bookworm AS rust
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake pkg-config libssl-dev tmux git ca-certificates curl musl-tools \
+    && rm -rf /var/lib/apt/lists/* \
+    && rustup component add rustfmt clippy \
+    && rustup target add x86_64-unknown-linux-musl
+# Any uid can run the container (compose passes the host's), so state goes to /cache, which is world-writable;
+# a named volume mounted there inherits that mode.
+ENV CARGO_HOME=/cache/cargo \
+    RUSTUP_HOME=/usr/local/rustup \
+    CARGO_TARGET_DIR=/cache/target \
+    HOME=/cache/home \
+    CARGO_TERM_COLOR=always
+RUN mkdir -p /cache/cargo /cache/target /cache/home && chmod -R 1777 /cache
+VOLUME /cache
+WORKDIR /work
+
+FROM rust AS full
+COPY --from=node:24-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+COPY --from=node:24-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
+    && npm install -g pnpm@9 \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends chromium fonts-dejavu-core fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
+ENV PNPM_HOME=/cache/pnpm \
+    npm_config_store_dir=/cache/pnpm-store \
+    CHROME_PATH=/usr/bin/chromium
+RUN mkdir -p /cache/pnpm /cache/pnpm-store && chmod -R 1777 /cache

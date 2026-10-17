@@ -21,15 +21,11 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Cache cargo
-        uses: actions/cache@v4
+      # Keyed on the lockfile and toolchain with prefix fallback, so a dependency bump reuses the previous build's
+      # artifacts instead of starting cold; stale entries are pruned on save.
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          shared-key: rust
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -149,14 +145,10 @@ jobs:
       - name: Install the musl toolchain (aws-lc-rs compiles C code)
         run: sudo apt-get update && sudo apt-get install -y musl-tools cmake
 
-      - name: Cache cargo
-        uses: actions/cache@v4
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            target/
-          key: static-${{ matrix.arch }}-${{ hashFiles('**/Cargo.lock') }}
+          shared-key: static-${{ matrix.arch }}
+          key: ${{ matrix.target }}
 
       - name: Build
         env:

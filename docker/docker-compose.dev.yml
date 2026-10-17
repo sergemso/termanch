@@ -1,0 +1,24 @@
+# Build and test in containers:  docker compose -f docker/docker-compose.dev.yml run --rm rust cargo test --workspace
+# (scripts/dev.sh wraps this). The repo is bind-mounted; the caches are named volumes that survive `run --rm`, so
+# the second build is incremental. Drop them with `docker compose -f docker/docker-compose.dev.yml down -v`.
+x-dev: &dev
+  working_dir: /work
+  user: "${DEV_UID:-1000}:${DEV_GID:-1000}"
+  volumes:
+    - ..:/work
+    - cache:/cache
+  environment:
+    - TERMENBOX_BIN=/cache/target/release/termenbox-server
+
+services:
+  rust:
+    <<: *dev
+    image: termenbox-dev:rust
+    build: { context: ., dockerfile: Dockerfile.dev, target: rust }
+  full:
+    <<: *dev
+    image: termenbox-dev:full
+    build: { context: ., dockerfile: Dockerfile.dev, target: full }
+
+volumes:
+  cache:
