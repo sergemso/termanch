@@ -225,6 +225,67 @@ try {
   const docked = await page.locator('.session-sheet').boundingBox();
   if (docked.width < 280 || docked.width > 360 || docked.x !== 0) fail(`wide screen did not dock the sidebar: ${JSON.stringify(docked)}`);
   console.log('ok  wide screens keep a docked sessions sidebar');
+
+  // U05: Home on 20 sessions at 390 px (desktop Chromium with mobile emulation: not an iPhone or Android check).
+  const home = await ctx.newPage();
+  home.on('pageerror', (e) => fail(`home page error: ${e.message}`));
+  await home.setViewportSize({ width: 390, height: 844 });
+  await home.goto(`http://127.0.0.1:${srv.address().port}/home.html`);
+  await home.waitForSelector('[data-home-tiles]');
+  // Every state count is visible with no tap and no scroll, in one row inside the screen.
+  const tiles = await home.$$eval('[data-home-tiles] button', (els) => els.map((e) => {
+    const r = e.getBoundingClientRect();
+    return { text: e.textContent.replace(/\s+/g, ' ').trim(), left: r.left, right: r.right, top: r.top, bottom: r.bottom, h: r.height, w: r.width };
+  }));
+  const want = ['3 !Needs you', '6 ●Working', '2 ✕Failed', '4 ✓Finished'];
+  if (JSON.stringify(tiles.map((t) => t.text)) !== JSON.stringify(want)) fail(`fleet tiles read ${JSON.stringify(tiles.map((t) => t.text))}`);
+  if (tiles.some((t) => t.left < 0 || t.right > 390 || t.bottom > 844 || t.h < 43.5 || t.w < 43.5)) fail(`a tile is off screen or under 44 px: ${JSON.stringify(tiles)}`);
+  if (new Set(tiles.map((t) => Math.round(t.top))).size !== 1) fail('the tiles are not in one row');
+  if ((await home.evaluate(() => document.documentElement.scrollWidth - innerWidth)) > 0) fail('Home scrolls sideways');
+  console.log('ok  Home: four state counts (3/6/2/4 of 20 sessions) visible at 0 taps at 390 px, no sideways scroll');
+
+  // The hero is the oldest waiting decision, with one filled primary option.
+  const hero = home.getByRole('region', { name: 'Decision' });
+  if (!(await hero.innerText()).includes('task-4')) fail(`the hero is not the oldest wait: ${await hero.innerText()}`);
+  const filled = await hero.locator('[data-hero-options] button').evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor));
+  if (filled.length !== 3 || new Set(filled).size !== 2 || filled[0] === filled[1] || filled[1] !== filled[2]) fail(`not exactly one filled primary option: ${filled}`);
+  const queue = await home.locator('[data-home-queue] > button').evaluateAll((els) => els.map((e) => e.querySelector('b').textContent));
+  if (JSON.stringify(queue.slice(0, 5)) !== JSON.stringify(['task-1', 'task-8', 'task-2', 'task-3', 'task-10'])) fail(`queue order: ${queue}`);
+  const row = await home.locator('[data-home-queue] > button').first().innerText();
+  if (!/Refactor part 1/.test(row) || !/beta/.test(row) || !/waiting 12 min/.test(row)) fail(`queue row lacks task, server or wait: ${row}`);
+  console.log('ok  Home: oldest wait is the hero with one filled option; queue ordered needs you, failed, finished with task, server and wait');
+
+  // The queue holds still under a touch and for 2 s after a scroll, then follows the data.
+  const heroText = () => home.getByRole('region', { name: 'Decision' }).innerText();
+  const agentOf = (key) => home.evaluate((k) => window.__home.agents()[k], key);
+  const arriving = { ...(await agentOf('beta/s1')), attention: { ...(await agentOf('beta/s1')).attention, id: 'new', raised_at: Date.now() - 60 * 60_000, session: 's0' } };
+  await home.locator('[data-home-queue] > button').first().dispatchEvent('pointerdown', { pointerId: 5, pointerType: 'touch' });
+  await home.evaluate(([k, a]) => window.__home.set(k, a), ['alpha/s0', { ...arriving, prompt: undefined }]);
+  await home.waitForTimeout(1200);
+  if (!(await heroText()).includes('task-4') || (await home.locator('[data-home-queue]').innerText()).includes('task-0')) fail('a new item appeared or the hero changed under a finger');
+  await home.locator('[data-home-queue] > button').first().dispatchEvent('pointerup', { pointerId: 5, pointerType: 'touch' });
+  await home.getByRole('region', { name: 'Decision' }).getByText('task-0').waitFor({ timeout: 3000 }); // oldest wait now: it becomes the hero once released
+  console.log('ok  Home: an arriving item waits for the finger to lift, then takes its place');
+  await home.evaluate(() => document.querySelector('[data-home]').dispatchEvent(new Event('scroll')));
+  await home.evaluate(() => window.__home.set('alpha/s0', null));
+  await home.waitForTimeout(1200);
+  if (!(await heroText()).includes('task-0')) fail('the queue changed 1.2 s after a scroll');
+  await home.getByRole('region', { name: 'Decision' }).getByText('task-4').waitFor({ timeout: 3500 });
+  console.log('ok  Home: after a scroll the queue changes only after 2 s');
+
+  // One tap on the primary option answers the prompt it was read from.
+  await home.evaluate(() => { window.__home.answers.length = 0; });
+  const primary = home.getByRole('region', { name: 'Decision' }).locator('[data-hero-options] button').first();
+  await primary.tap();
+  const answers = await home.evaluate(() => window.__home.answers);
+  if (JSON.stringify(answers) !== JSON.stringify([{ type: 'answer', session: 'alpha/s4', prompt_id: 'p4', seq: 11, choice: 0 }])) fail(`hero answer: ${JSON.stringify(answers)}`);
+  console.log('ok  Home: the hero is answered with one tap, carrying its prompt id and event number');
+
+  // A state tile filters.
+  await home.locator('[data-home-tiles] button', { hasText: 'Failed' }).tap();
+  await home.locator('[data-home-filter]').waitFor();
+  if ((await home.locator('[data-home-filter] > button').count()) !== 2) fail('the Failed tile did not filter to its 2 sessions');
+  console.log('ok  Home: a state tile filters the list');
 } catch (error) {
   fail(error.stack ?? String(error));
 } finally {

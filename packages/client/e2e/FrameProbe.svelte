@@ -57,6 +57,8 @@
   const tabs = $derived(openTabs($sessions, $agents, new Set()));
   const strip = $derived<StripItem[]>($sessions.filter((s) => !activeKey || s.serverId === activeKey.split('/')[0]).map((s) => ({ id: s.key, name: s.name, agent: 'claude', state: fleetOf($agents[s.key]) })));
 
+  // The probe stands in for the session workspace; the real app opens on Home (its own e2e is cards.mjs).
+  destination.set('sessions');
   onMount(() => startRouter());
   const open = (key: string) => { activeKey = key; height = 'closed'; navigate('sessions'); };
   const keydown = (e: KeyboardEvent) => { log.push({ key: e.key, ctrl: e.ctrlKey, prevented: false }); };
