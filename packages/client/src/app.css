@@ -141,7 +141,7 @@
     }
   }
 
-  input, select {
+  input {
     font-family: inherit;
     background: var(--bg-secondary);
     border: 1px solid var(--border);
@@ -151,7 +151,7 @@
     outline: none;
   }
 
-  input:focus, select:focus {
+  input:focus {
     border-color: var(--accent);
   }
 
@@ -173,7 +173,7 @@
 
   /* iOS zooms the page when a field under 16px gets focus. */
   @media (max-width: 720px) {
-    input, select, textarea {
+    input, textarea {
       font-size: 16px;
     }
   }
@@ -192,7 +192,7 @@
   /* Preflight also changes defaults the screens were tuned against on the phone: restore the browser's
      (button and field text 13.33px, normal line height, inline media, default code size). */
   html { line-height: normal; }
-  button, input, select, textarea { font-size: 13.3333px; line-height: normal; }
+  button, input, textarea { font-size: 13.3333px; line-height: normal; }
   img, svg, video, canvas { display: revert; vertical-align: baseline; }
   code, kbd, samp, pre { font-family: revert; font-size: revert; }
   ::placeholder { color: revert; opacity: revert; }

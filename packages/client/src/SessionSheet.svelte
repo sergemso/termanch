@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { NativeSelect } from './lib/ui/native-select';
   import SessionCard from './SessionCard.svelte';
   import ServerStatus from './ServerStatus.svelte';
   import QuickReply from './QuickReply.svelte';
@@ -149,11 +150,11 @@
       <button class="secondary view-button" aria-expanded={controls} on:click={() => controls = !controls}>Group, sort and filter</button>
       {#if controls}
         <div class="controls">
-          <label>Group <select aria-label="Group" value={effectiveView.group} on:change={(e) => change({ group: e.currentTarget.value as SessionView['group'] })}><option value="server">Server</option><option value="agent">Agent</option><option value="status">Status</option><option value="project">Project</option><option value="none">None</option></select></label>
-          <label>Sort <select aria-label="Sort" value={effectiveView.sort} on:change={(e) => change({ sort: e.currentTarget.value as SessionView['sort'] })}><option value="human">Needs you first</option><option value="response">Last response</option><option value="cache">Cache expiry</option><option value="name">Name</option></select></label>
-          <label>Status <select aria-label="Status" value={effectiveView.filter.statuses.length > 1 ? 'multiple' : effectiveView.filter.statuses[0] ?? ''} on:change={(e) => filter({ statuses: e.currentTarget.value ? [e.currentTarget.value as AgentState] : [] })}><option value="">All statuses</option>{#if effectiveView.filter.statuses.length > 1}<option value="multiple" disabled>Multiple statuses</option>{/if}<option value="needs_input">Needs you</option><option value="error">Error</option><option value="working">Working</option><option value="idle">Idle</option><option value="done">Done</option><option value="unknown">No status</option></select></label>
-          <label>Agent <select aria-label="Agent" value={effectiveView.filter.agents[0] ?? ''} on:change={(e) => filter({ agents: e.currentTarget.value ? [e.currentTarget.value] : [] })}><option value="">All agents</option>{#each agentNames as name}<option value={name}>{name}</option>{/each}</select></label>
-          <label>Server <select aria-label="Server" value={effectiveView.filter.servers[0] ?? ''} on:change={(e) => filter({ servers: e.currentTarget.value ? [e.currentTarget.value] : [] })}><option value="">All servers</option>{#each servers as s}<option value={s.id}>{s.server.server_name || 'Server'}</option>{/each}</select></label>
+          <label>Group <NativeSelect aria-label="Group" value={effectiveView.group} onchange={(e) => change({ group: e.currentTarget.value as SessionView['group'] })}><option value="server">Server</option><option value="agent">Agent</option><option value="status">Status</option><option value="project">Project</option><option value="none">None</option></NativeSelect></label>
+          <label>Sort <NativeSelect aria-label="Sort" value={effectiveView.sort} onchange={(e) => change({ sort: e.currentTarget.value as SessionView['sort'] })}><option value="human">Needs you first</option><option value="response">Last response</option><option value="cache">Cache expiry</option><option value="name">Name</option></NativeSelect></label>
+          <label>Status <NativeSelect aria-label="Status" value={effectiveView.filter.statuses.length > 1 ? 'multiple' : effectiveView.filter.statuses[0] ?? ''} on:change={(e) => filter({ statuses: e.currentTarget.value ? [e.currentTarget.value as AgentState] : [] })}><option value="">All statuses</option>{#if effectiveView.filter.statuses.length > 1}<option value="multiple" disabled>Multiple statuses</option>{/if}<option value="needs_input">Needs you</option><option value="error">Error</option><option value="working">Working</option><option value="idle">Idle</option><option value="done">Done</option><option value="unknown">No status</option></NativeSelect></label>
+          <label>Agent <NativeSelect aria-label="Agent" value={effectiveView.filter.agents[0] ?? ''} onchange={(e) => filter({ agents: e.currentTarget.value ? [e.currentTarget.value] : [] })}><option value="">All agents</option>{#each agentNames as name}<option value={name}>{name}</option>{/each}</NativeSelect></label>
+          <label>Server <NativeSelect aria-label="Server" value={effectiveView.filter.servers[0] ?? ''} onchange={(e) => filter({ servers: e.currentTarget.value ? [e.currentTarget.value] : [] })}><option value="">All servers</option>{#each servers as s}<option value={s.id}>{s.server.server_name || 'Server'}</option>{/each}</NativeSelect></label>
           <label>Find <input aria-label="Find" type="search" value={effectiveView.filter.query} on:input={(e) => filter({ query: e.currentTarget.value })} placeholder="Session, server or agent" /></label>
           <label><input type="checkbox" aria-label="Cache expiring only" checked={!!effectiveView.filter.cacheExpiring} on:change={(e) => filter({ cacheExpiring: e.currentTarget.checked })} />Cache expiring only</label>
         </div>
@@ -188,7 +189,7 @@
   .sheet-header { display: flex; align-items: center; gap: 6px; padding: 0 8px 8px; flex-shrink: 0; }
   h2 { flex: 1; font-size: 0.95rem; }
   h3 { font-size: 0.85rem; overflow-wrap: anywhere; }
-  button, select, input { min-height: 44px; min-width: 44px; }
+  button, input { min-height: 44px; min-width: 44px; }
   .sheet-header button { padding: 6px 8px; }
   .content { overflow-y: auto; min-height: 0; flex: 1; overscroll-behavior-y: contain; }
   .peek .content { display: none; }
@@ -200,7 +201,7 @@
   .view-button { width: 100%; margin-bottom: 8px; }
   .controls { display: grid; gap: 6px; margin-bottom: 12px; }
   label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.8rem; }
-  select, input { max-width: 70%; min-width: 0; }
+  input { max-width: 70%; min-width: 0; }
   .group-header { padding: 12px 4px 6px; }
   .plain { display: flex; align-items: center; justify-content: space-between; width: 100%; margin-bottom: 6px; background: var(--bg); color: var(--fg); text-align: left; border: 1px solid var(--border); overflow-wrap: anywhere; }
   .plain.active { border-color: var(--accent); }

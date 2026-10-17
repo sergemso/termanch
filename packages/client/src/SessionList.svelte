@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { NativeSelect } from './lib/ui/native-select';
   import SessionCard from './SessionCard.svelte';
   import type { ClientMessage, SessionInfo } from './lib/protocol';
   import { agents, type AgentMap } from './lib/agents';
@@ -115,9 +116,9 @@
 {#if sessions.length > 0}
   <form class="reply" on:submit|preventDefault={() => sendReply(draft)}>
     <label class="lbl" for="reply-to">Quick reply to</label>
-    <select id="reply-to" value={replyTo} on:change={(e) => (target = e.currentTarget.value)}>
+    <NativeSelect id="reply-to" value={replyTo} onchange={(e) => (target = e.currentTarget.value)}>
       {#each sessions as s}<option value={s.id}>{s.name}</option>{/each}
-    </select>
+    </NativeSelect>
     <div class="snips">
       {#each saved as text}
         <span class="snip">
