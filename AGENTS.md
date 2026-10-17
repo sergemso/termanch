@@ -77,9 +77,9 @@ lint
 
 ## Minimum Browser Support
 
-- iOS Safari 16+ (WebSocket baseline; see FACT-0016)
-- Chrome Android 100+
-- Desktop: Chrome/Firefox/Edge current-2, Safari 16+
+- iOS Safari 16.4+ (DECISION-0112; WebSocket baseline, see FACT-0016)
+- Chrome Android 111+
+- Desktop: Chrome/Firefox/Edge current-2, Safari 16.4+
 
 ## License
 
