@@ -19,7 +19,8 @@ describe('router', () => {
   });
   it('navigate moves the store and writes the hash once', () => {
     const calls: string[] = [];
-    const win = { location: { hash: '', pathname: '/', search: '' }, history: { pushState: (_a: unknown, _b: string, url: string) => { calls.push(url); win.location.hash = url.slice(url.indexOf('#')); } }, addEventListener() {}, removeEventListener() {} } as never;
+    const loc = { hash: '', pathname: '/', search: '' };
+    const win = { location: loc, history: { pushState: (_a: unknown, _b: string, url: string) => { calls.push(url); loc.hash = url.slice(url.indexOf('#')); } }, addEventListener() {}, removeEventListener() {} } as never;
     navigate('activity', win);
     navigate('activity', win);
     expect(get(destination)).toBe('activity');
@@ -27,13 +28,14 @@ describe('router', () => {
   });
   it('startRouter follows the address bar and ignores other hashes', () => {
     const listeners: Record<string, () => void> = {};
-    const win = { location: { hash: '#/settings', pathname: '/', search: '' }, history: {}, addEventListener: (n: string, f: () => void) => { listeners[n] = f; }, removeEventListener() {} } as never;
+    const loc = { hash: '#/settings', pathname: '/', search: '' };
+    const win = { location: loc, history: {}, addEventListener: (n: string, f: () => void) => { listeners[n] = f; }, removeEventListener() {} } as never;
     const stop = startRouter(win);
     expect(get(destination)).toBe('settings');
-    (win as { location: { hash: string } }).location.hash = '#claim=zzz';
+    loc.hash = '#claim=zzz';
     listeners.hashchange();
     expect(get(destination)).toBe('settings');
-    (win as { location: { hash: string } }).location.hash = '#/home';
+    loc.hash = '#/home';
     listeners.popstate();
     expect(get(destination)).toBe('home');
     stop();
