@@ -29,6 +29,10 @@
   import { lookup } from './lib/directory';
   import { deviceKey, publicKeyB64, signChallenge, certExpiry, certUserId, avatarUrl } from './lib/device';
   import AppShell from './AppShell.svelte';
+  import AppFrame from './shell/AppFrame.svelte';
+  import SettingsView from './shell/SettingsView.svelte';
+  import { EmptyState } from './lib/ds';
+  import { destination, navigate, startRouter, type Destination } from './lib/router';
   import ReportDialog from './ReportDialog.svelte';
   import { buildReport, noteError, recentErrors } from './lib/report';
   import { runningBundle } from './lib/update';
@@ -81,6 +85,12 @@
   let activeKey: string | null = null;
   let activeServerId: string | null = null;
   let serversPage = false;
+  let wide = false;
+  let rightOpen = false;
+  let helpOpen = false;
+  /** Off the terminal: another destination, or the servers page (which belongs to Settings). */
+  $: away = serversPage || $destination !== 'sessions';
+  $: if ($destination !== 'settings') serversPage = false;
   const hub = new ServerHub({
     credentials: async () => {
       const pair = await deviceKey();
@@ -97,11 +107,11 @@
     onReady: (id, msg, reconnect) => {
       hub.send(id, { type: 'push_info' });
       if (!reconnect) showToast(`Connected to ${msg.server_name}`); // a reconnect is shown by the status line, not a toast each time
-      if (!reconnect || serversPage || id !== activeServerId || !activeKey) return;
+      if (!reconnect || away || id !== activeServerId || !activeKey) return;
       const key = activeKey;
       // Retry and Resume replace the connection: mount its terminal before accepting a repaint.
       void tick().then(() => {
-        if (!serversPage && id === activeServerId && key === activeKey) hub.sendToSession(key, { type: 'attach', session_id: key });
+        if (!away && id === activeServerId && key === activeKey) hub.sendToSession(key, { type: 'attach', session_id: key });
       });
     },
     onDrop: (_id, reason, upMs) => noteError(`connection lost after ${Math.round(upMs / 1000)} s: ${reason}`),
@@ -173,14 +183,14 @@
   // Tell the servers which session is in front, so a push is not sent for what someone is looking at.
   let reportedFg: { serverId: string; session: string } | null = null;
   function reportForeground() {
-    const s = activeKey && !serversPage && pageVisible ? hub.findSession(activeKey) : undefined;
+    const s = activeKey && !away && pageVisible ? hub.findSession(activeKey) : undefined;
     const next = s ? { serverId: s.serverId, session: s.id } : null;
     if (next?.serverId === reportedFg?.serverId && next?.session === reportedFg?.session) return;
     if (reportedFg && reportedFg.serverId !== next?.serverId) hub.send(reportedFg.serverId, { type: 'foreground', session: null });
     if (next) hub.send(next.serverId, { type: 'foreground', session: next.session });
     reportedFg = next;
   }
-  $: activeKey, serversPage, pageVisible, reportForeground();
+  $: activeKey, away, pageVisible, reportForeground();
   let actionKey: string | null = null;
   let cardExpanded = false;
   $: actionSession = $allSessions.find(s => s.key === actionKey);
@@ -196,7 +206,7 @@
     const s = hub.findSession(key);
     if (s) hub.send(s.serverId, m);
   }
-  $: if (activeKey && !serversPage) {
+  $: if (activeKey && !away) {
     for (const id of attentionToAck($allAgents[activeKey], true, pageVisible, acked)) {
       acked.add(id);
       sendAttention(activeKey, { type: 'ack', attention_id: id });
@@ -261,7 +271,7 @@
     const same = (s: ServerListItem) => (server.server_id ? s.server_id === server.server_id : !s.server_id && s.server_url === server.server_url);
     saveServers([...servers.filter((s) => !same(s)), server]);
     hub.add(server);
-    serversPage = false;
+    showWorkspace();
   }
 
   async function handleOAuthCallback() {
@@ -320,7 +330,7 @@
   const LAST_KEY = 'termenbox_last_session';
   // The start screen picks up where the last visit left off, unless the user has already chosen something.
   let resumable: string | null = localStorage.getItem(LAST_KEY);
-  $: if (resumable && !activeKey && !serversPage && $allSessions.some(s => s.key === resumable) && $hubServers.find(s => s.id === hub.findSession(resumable!)?.serverId)?.state === 'connected') {
+  $: if (resumable && !activeKey && !away && $allSessions.some(s => s.key === resumable) && $hubServers.find(s => s.id === hub.findSession(resumable!)?.serverId)?.state === 'connected') {
     const key = resumable;
     resumable = null;
     void attach(key);
@@ -337,9 +347,11 @@
     }
     crumb('open session tab');
     sheetHeight = 'closed';
+    prevAway = false; // this open sends its own attach below; the away/back watcher must not send a second
     if (hidden.has(key)) { hidden.delete(key); hidden = new Set(hidden); saveHidden(hidden); }
     if (activeServerId && activeServerId !== session.serverId) hub.send(activeServerId, { type: 'detach' });
     serversPage = false;
+    navigate('sessions');
     preview = key === activeKey ? null : snapshots.text(key);
     activeKey = key;
     activeServerId = session.serverId;
@@ -431,21 +443,49 @@
     activeServerId = null;
   }
 
+  /** Back to the sessions destination (the servers page belongs to Settings). Coming back from away re-attaches (syncAway). */
   function showWorkspace() {
-    const wasServersPage = serversPage;
     serversPage = false;
-    if (!wasServersPage || !activeKey) return;
-    const key = activeKey;
-    void tick().then(() => {
-      if (!serversPage && activeKey === key && connState === 'connected') hub.sendToSession(key, { type: 'attach', session_id: key });
-    });
+    navigate('sessions');
   }
 
+  /** The servers page is part of Settings; leaving the screen detaches the open session (syncAway). */
   function leaveServer() {
     resumable = null;
-    if (activeServerId) hub.send(activeServerId, { type: 'detach' });
     serversPage = true;
+    navigate('settings');
     sheetHeight = 'closed';
+  }
+
+  function go(dest: Destination) {
+    if (dest !== 'settings') serversPage = false;
+    navigate(dest);
+  }
+
+  /** Away from the terminal (another destination or the servers page): detach; back: attach again. */
+  let prevAway = false;
+  $: syncAway(away);
+  function syncAway(now: boolean) {
+    if (now === prevAway) return;
+    prevAway = now;
+    if (now) { if (activeServerId) hub.send(activeServerId, { type: 'detach' }); }
+    else if (activeKey) {
+      const key = activeKey;
+      void tick().then(() => {
+        if (!away && activeKey === key && connState === 'connected') hub.sendToSession(key, { type: 'attach', session_id: key });
+      });
+    }
+  }
+
+  function openServer(id: string) {
+    const first = $allSessions.find(s => s.serverId === id);
+    if (first) void attach(first.key); else leaveServer();
+  }
+  function runAction(id: string) {
+    const [name, arg] = id.split(':');
+    if (name === 'new-session') newSession();
+    else if (name === 'pause' && arg) hub.pause(arg);
+    else if (name === 'resume' && arg) hub.resume(arg);
   }
 
   onMount(() => {
@@ -456,6 +496,7 @@
     media();
     mq.addEventListener('change', media);
     watchForUpdates();
+    const stopRouter = startRouter();
     const clock = setInterval(() => {
       now = Date.now();
       const c = connection;
@@ -486,6 +527,7 @@
     window.addEventListener('unhandledrejection', report);
     return () => {
       clearInterval(clock);
+      stopRouter();
       document.removeEventListener("visibilitychange", visible);
       vv?.removeEventListener('resize', kb);
       stopTheme();
@@ -575,8 +617,13 @@
       </div>
     </div>
   {:else}
+    <AppFrame current={$destination} onnavigate={go} servers={$hubServers} sessions={$allSessions} agents={$allAgents} {activeKey} chrome={servers.length > 0} inSession={!!activeKey && !away} {keyboardOpen}
+      canCreate={sessionDestinations($hubServers, selected).length > 0} bind:wide bind:rightOpen bind:helpOpen onopen={attach} onserver={openServer} onaction={runAction}
+      onback={() => { showWorkspace(); sheetHeight = 'half'; }}>
+    {#if $destination === 'sessions' || servers.length === 0}
     <NavigationBar sessions={tabSessions} agents={$allAgents} servers={$hubServers} windows={$allWindows} {expiring} {link} {activeKey} held={!!actionSession || !!menuSession || cardExpanded || sheetHeld} onopen={attach} onpeek={peek} ontabmenu={openWindowMenu} onactions={(key) => { actionConfirm = false; actionKey = key; }}
-      onlink={() => link && showToast(link.text, link.ok ? 'success' : 'error')} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { crumb('sessions sheet toggled'); showWorkspace(); sheetHeight = sheetHeight === 'closed' ? 'half' : 'closed'; }} />
+      onlink={() => link && showToast(link.text, link.ok ? 'success' : 'error')} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { if (wide) { rightOpen = !rightOpen; return; } crumb('sessions sheet toggled'); showWorkspace(); sheetHeight = sheetHeight === 'closed' ? 'half' : 'closed'; }} />
+    {/if}
     <NeedsYouBanner {waiting} {now} collapsed={keyboardOpen} onopen={attach} ondismiss={(key, id) => sendAttention(key, { type: 'dismiss', attention_id: id })} onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} />
 
     {#if iosHint && !selectedServer}
@@ -601,6 +648,12 @@
       {#if serversPage || servers.length === 0}
         {#if servers.length > 0}<button class="secondary" on:click={showWorkspace}>← Sessions</button>{/if}
         <ServerList {servers} states={$hubServers} onpause={(id) => { hub.pause(id); }} onresume={(id) => hub.resume(id)} onretry={(id) => hub.retry(id)} onadd={() => { addPrefill = null; showAddServer = true; }} onremove={removeServer} onshare={shareServer} />
+      {:else if $destination === 'home'}
+        <EmptyState title="Home" body="What needs you will gather here. Until then, Sessions has every session." />
+      {:else if $destination === 'activity'}
+        <EmptyState title="Activity" body="What your agents did, and what it cost, will appear here." />
+      {:else if $destination === 'settings'}
+        <SettingsView user={user ?? ''} {serverVersion} onservers={leaveServer} onmenu={() => { titleTapped(); menuOpen = true; }} onshortcuts={() => (helpOpen = true)} onreport={openReport} onlogout={logout} />
       {:else}
         <div class="workspace" class:mobile={narrow}>
           <div class="terminal-pane">
@@ -610,12 +663,19 @@
               <div class="card" style="margin: auto;">{activeKey ? 'This server is paused. Resume it in Servers.' : 'Choose a session to open its terminal.'}<button class="secondary" on:click={leaveServer}>Servers</button></div>
             {/if}
           </div>
-          <SessionSheet sessions={$allSessions} agents={$allAgents} servers={$hubServers} windows={$allWindows} onpeek={peek} onwarm={keepWarm} {activeKey} mobile={narrow} bind:height={sheetHeight} held={!!actionSession}
-            onexpanded={(open) => cardExpanded = open} onheld={(held) => sheetHeld = held} onopen={attach} onnew={newSession} onrefresh={() => { for (const s of $hubServers) hub.send(s.id, { type: 'list_sessions' }); }} onretry={(id) => hub.retry(id)} send={sendSession} />
+          {#if !wide}
+            <SessionSheet sessions={$allSessions} agents={$allAgents} servers={$hubServers} windows={$allWindows} onpeek={peek} onwarm={keepWarm} {activeKey} mobile={narrow} bind:height={sheetHeight} held={!!actionSession}
+              onexpanded={(open) => cardExpanded = open} onheld={(held) => sheetHeld = held} onopen={attach} onnew={newSession} onrefresh={() => { for (const s of $hubServers) hub.send(s.id, { type: 'list_sessions' }); }} onretry={(id) => hub.retry(id)} send={sendSession} />
+          {/if}
         </div>
       {/if}
       </svelte:boundary>
     </main>
+    {#snippet right()}
+      <SessionSheet sessions={$allSessions} agents={$allAgents} servers={$hubServers} windows={$allWindows} onpeek={peek} onwarm={keepWarm} {activeKey} mobile={false} bind:height={sheetHeight} held={!!actionSession}
+        onexpanded={(open) => cardExpanded = open} onheld={(held) => sheetHeld = held} onopen={attach} onnew={newSession} onrefresh={() => { for (const s of $hubServers) hub.send(s.id, { type: 'list_sessions' }); }} onretry={(id) => hub.retry(id)} send={sendSession} />
+    {/snippet}
+    </AppFrame>
   {/if}
 
   {#if menuOpen && user}<MenuSheet {user} {avatar} {serverVersion} onservers={leaveServer} onreport={openReport} onlogout={logout} onclose={() => menuOpen = false} unread={unreadCount($inbox)} oninbox={() => inboxOpen = true} push={pushView} onpush={togglePush} />{/if}

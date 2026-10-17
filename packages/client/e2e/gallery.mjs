@@ -68,7 +68,7 @@ for (const skin of ['navy', 'graphite', 'teal']) for (const theme of ['dark', 'l
   await page.goto(url);
   await page.evaluate(([s, t]) => { document.documentElement.dataset.skin = s; document.documentElement.dataset.theme = t; }, [skin, theme]);
   await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(100);
+  await page.waitForTimeout(400); // the global 150 ms button background transition must finish before contrast is read
   const r = await page.evaluate(probe);
   const tag = `${skin}/${theme}`;
   r.small.forEach((m) => add('DR1 target under 44 pt', `${tag} ${m}`));

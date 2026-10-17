@@ -1,0 +1,73 @@
+// The real App.svelte (built by `vite build` into dist/) signed in with a forged local certificate and one server that is
+// not reachable: no server binary is needed. Checks that the four destinations, the Servers page (part of Settings), the
+// palette and the address bar work in the whole app, at a phone and a desktop width, without a page error.
+// Usage: node e2e/app.mjs (after: pnpm run e2e:build)
+import { chromium } from 'playwright-core';
+import { createServer } from 'node:http';
+import { readFileSync, existsSync, statSync } from 'node:fs';
+import { join, extname } from 'node:path';
+
+const dist = join(import.meta.dirname, '../dist');
+const mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png' };
+const srv = createServer((req, res) => {
+ let f = join(dist, req.url.split('?')[0].split('#')[0]);
+ if (!f.startsWith(dist) || !existsSync(f) || statSync(f).isDirectory()) f = join(dist, 'index.html');
+ res.writeHead(200, { 'Content-Type': mime[extname(f)] ?? 'application/octet-stream' }).end(readFileSync(f));
+});
+await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+const origin = `http://127.0.0.1:${srv.address().port}/`;
+const browser = await chromium.launch({ ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'chrome' }), args: ['--no-sandbox'] });
+let failed = false;
+const fail = (m) => { failed = true; console.error(`FAIL: ${m}`); };
+const check = (c, m) => { if (!c) fail(m); };
+const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
+const cert = `${b64({ exp: Math.floor(Date.now() / 1000) + 86400, sub: 1 })}.sig`;
+
+for (const [name, opts] of [['phone 390', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }], ['desktop 1280', { viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false }]]) {
+ const ctx = await browser.newContext(opts);
+ await ctx.addInitScript(([c]) => {
+   localStorage.setItem('termenbox_auth', JSON.stringify({ cert: c, login: 'tester' }));
+   localStorage.setItem('termenbox_servers', JSON.stringify([{ server_id: 'one', server_name: 'one', server_url: 'ws://127.0.0.1:9/ws', registered_at: 0 }]));
+   localStorage.setItem('termenbox_ios_hint', '1');
+ }, [cert]);
+ const page = await ctx.newPage();
+ const errors = [];
+ page.on('pageerror', (e) => errors.push(String(e)));
+ await page.goto(origin);
+ const wide = opts.viewport.width >= 1024;
+ const nav = page.getByRole('navigation', { name: 'Main' });
+ await nav.waitFor();
+ const go = async (id, heading) => {
+   await nav.locator(`[data-destination=${id}]`).click();
+   await page.getByRole('heading', { name: heading, exact: true }).waitFor();
+   check(new URL(page.url()).hash === `#/${id}`, `${name}: address bar is ${new URL(page.url()).hash}, not #/${id}`);
+ };
+ await go('home', 'Home');
+ await go('activity', 'Activity');
+ await go('settings', 'Settings');
+ // The Servers page belongs to Settings and Back leaves it.
+ await page.getByRole('button', { name: /^Servers/ }).first().click();
+ await page.getByText('Add server', { exact: false }).first().waitFor({ timeout: 5000 }).catch(() => fail(`${name}: the Servers page did not open from Settings`));
+ await nav.locator('[data-destination=home]').click();
+ await page.getByRole('heading', { name: 'Home', exact: true }).waitFor();
+ await nav.locator('[data-destination=sessions]').click();
+ check((await page.getByRole('heading', { name: 'Home', exact: true }).count()) === 0, `${name}: Sessions still shows Home`);
+ check((await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 0, `${name}: horizontal overflow`);
+ check((await page.locator('[data-shell=sidebar]').count()) === (wide ? 1 : 0), `${name}: sidebar presence is wrong`);
+ check((await page.locator('[data-shell=bottom-bar]').count()) === (wide ? 0 : 1), `${name}: bottom bar presence is wrong`);
+ // The palette opens from the keyboard and jumps to a destination.
+ await page.keyboard.press('Control+k');
+ await page.getByRole('combobox', { name: 'Search' }).waitFor();
+ await page.keyboard.type('activity');
+ await page.keyboard.press('Enter');
+ await page.getByRole('heading', { name: 'Activity', exact: true }).waitFor();
+ await page.goBack();
+ await page.getByRole('heading', { name: 'Activity', exact: true }).waitFor({ state: 'detached' });
+ check(errors.length === 0, `${name}: page errors: ${errors.slice(0, 3).join(' | ')}`);
+ console.log(`ok  ${name}: the whole app moves between all four destinations, the Servers page and the palette`);
+ await ctx.close();
+}
+await browser.close();
+srv.close();
+if (failed) process.exit(1);
+console.log('PASS');

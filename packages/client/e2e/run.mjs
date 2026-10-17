@@ -298,8 +298,13 @@ try {
     );
     await page.reload();
     if (await page.getByText('Your Servers').count()) fail('saved servers opened the old Connect screen');
-    await page.getByRole('button', { name: 'Menu', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Menu', exact: true }).getByRole('button', { name: 'Servers', exact: true }).click();
+    // Servers and Report a problem live in Settings now (U04): the bar's Settings, then the row.
+    const openServers = async () => {
+      await page.locator('[data-shell=bottom-bar] [data-destination=home]').click();
+      await page.locator('[data-shell=bottom-bar] [data-destination=settings]').click();
+      await page.getByRole('button', { name: 'Servers', exact: true }).click();
+    };
+    await openServers();
     // Add Server: where sessions run. The container is the default; the host modes show a warning and need consent.
     await page.getByRole('button', { name: 'Add Server' }).first().click();
     const cmd = () => page.locator('pre.command').first().textContent();
@@ -322,7 +327,8 @@ try {
       window.__opened = [];
       window.open = (u) => (window.__opened.push(String(u)), null);
     });
-    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.locator('[data-shell=bottom-bar] [data-destination=home]').click(); // off the servers page
+    await page.locator('[data-shell=bottom-bar] [data-destination=settings]').click();
     await page.getByRole('button', { name: 'Report a problem', exact: true }).click();
     const reportText = await page.locator('[role=dialog][aria-label="Report a problem"] textarea.diagnostics').inputValue();
     if (!reportText.includes('app:') || !reportText.includes('window: 390x')) fail(`report text is missing diagnostics: ${reportText.slice(0, 120)}`);
@@ -331,12 +337,13 @@ try {
     if (!opened.startsWith('https://github.com/termenbox/termenbox/issues/new?template=problem.yml&diagnostics=')) fail(`unexpected report URL: ${opened.slice(0, 120)}`);
     if (await page.locator('[role=dialog][aria-label="Report a problem"]').count()) fail('the report dialog stayed open');
     // Removing a server asks first; declining keeps it.
+    await openServers();
     page.once('dialog', (d) => d.dismiss());
     await page.getByRole('button', { name: 'Remove server' }).click();
     if (!(await page.getByText('e2e-server').isVisible())) fail('the server was removed without confirmation');
     for (let lap = 1; lap <= 3; lap++) {
       await page.getByRole('button', { name: '← Sessions', exact: true }).click();
-      await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+      await page.locator('.sessions-button').click();
       await page.locator('.session-sheet').getByRole('button', { name: /^s1(\s|$)/ }).first().click(); // a tab now reads as the directory
       await page.locator('.dot.ok').waitFor({ timeout: 20000 }).catch(async (e) => {
         console.log('page errors:', errors, '\n', (await page.locator('body').innerText()).slice(0, 400));
@@ -360,7 +367,7 @@ try {
       if (lay.font < 16) fail(`the terminal input is ${lay.font}px: iOS would zoom the page when it gets focus`);
       if (lay.scale !== 1) fail(`the page is zoomed (${lay.scale}) after connecting`);
       if (lay.scrolled) fail('a box around the terminal is scrolled after connecting');
-      await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+      await page.locator('.sessions-button').click();
       const heights = await page.evaluate(() => [...document.querySelectorAll('.sheet-header button.icon')].map((b) => Math.round(b.getBoundingClientRect().height)));
       if (heights.length !== 2 || heights[0] !== heights[1]) fail(`Refresh and New differ in size: ${heights}`);
       if (!(await page.getByText(/server 0\.1\.\d+\+/).count())) fail('the sidebar does not show the server version');
@@ -554,7 +561,7 @@ try {
           window.dispatchEvent(new Event('termenbox-debug'));
         });
       }
-      await page.getByRole('button', { name: 'Sessions', exact: true }).click();
+      await page.locator('.sessions-button').click();
       await page.getByRole('button', { name: 'Menu', exact: true }).click();
       await page.getByRole('dialog', { name: 'Menu', exact: true }).getByRole('button', { name: 'Servers', exact: true }).click();
       await page.getByText('Your Servers').waitFor({ timeout: 5000 });
