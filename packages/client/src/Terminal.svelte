@@ -612,7 +612,8 @@
     {/if}
   </div>
   <KeyRow bind:mods bind:prefixArmed {profile} prefixLabel={prefixLabel(prefix)} onnewline={() => sendKey(newline.seq)} newlineHint={newline.hint} onkey={sendKey} {fnOpen}
-    onfn={() => keyboard.toggleFn()} onkeyboard={() => keyboard.toggleSystem()} voiceSupported={!!voice} {listening} onvoice={toggleVoice} {voiceLang} onvoicelang={cycleVoiceLang} onfont={(d) => setFont(fontSize + d)} />
+    onfn={() => keyboard.toggleFn()} onkeyboard={() => keyboard.toggleSystem()} voiceSupported={!!voice} {listening} onvoice={toggleVoice} {voiceLang} onvoicelang={cycleVoiceLang} onfont={(d) => setFont(fontSize + d)}
+    onpaste={paste} oncopy={copy} onselect={openSelect} {bell} onbell={toggleBell} />
   {#if fnOpen}<FnKeyboard bind:mods onkey={typed} onback={() => keyboard.closeFn()} {profile} {bell} onbell={toggleBell} oncombo={combo} onpaste={paste} oncopy={copy} onselect={openSelect} />{/if}
   {#if pasteDraft !== null}<PasteSheet text={pasteDraft} onsend={(t) => { pasteDraft = null; sendPaste(t); term?.focus(); }} onclose={() => { pasteDraft = null; term?.focus(); }} />{/if}
   {#if selectText !== null}<SelectView text={selectText} onclose={() => { selectText = null; term?.focus(); }} />{/if}

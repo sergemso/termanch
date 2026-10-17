@@ -135,3 +135,65 @@ export const TMUX_COMBOS: [label: string, key: string][] = [
   ['Copy mode', '['],
   ['Detach', 'd'],
 ];
+
+// ---- The key catalogue (U07c): every key the row and the Fn panel offer, with its accessible name and what it sends.
+
+export type KeyGroup = 'Row' | 'Control' | 'Navigation' | 'Function' | 'Symbols';
+/** `send` writes bytes; `mod` is a sticky modifier or toggle with a pressed state; `action` runs something in the terminal. */
+export type KeyKind = 'send' | 'mod' | 'action';
+export interface KeyDef {
+  id: string;
+  /** What is printed on the keycap (some are replaced at run time: the prefix, the dictation state). */
+  label: string;
+  /** The accessible name. */
+  name: string;
+  group: KeyGroup;
+  kind: KeyKind;
+  /** The bytes a `send` key writes. */
+  seq?: string;
+  /** Smaller type on the keycap (the text-size and dictation-language keys). */
+  small?: boolean;
+  /** Only offered for this profile (the tmux prefix). */
+  profile?: KeyProfile;
+  /** Only offered when the browser can do it (dictation). */
+  needs?: 'voice';
+}
+
+const send = (id: string, label: string, name: string, seq: string, group: KeyGroup): KeyDef => ({ id, label, name, group, kind: 'send', seq });
+const SYMBOL_CHARS = [...SYMBOLS, '|', '~', '-'];
+
+export const KEY_CATALOGUE: readonly KeyDef[] = [
+  { id: 'prefix', label: 'Prefix', name: 'tmux prefix', group: 'Row', kind: 'mod', profile: 'tmux' },
+  send('slash', '/', 'Slash', '/', 'Row'),
+  send('ctrlC', '^C', 'Control C', KEYS.ctrlC, 'Control'),
+  send('esc', '⎋', 'Escape', KEYS.esc, 'Control'),
+  { id: 'newline', label: '↵', name: 'New line without sending', group: 'Row', kind: 'action' },
+  { id: 'ctrl', label: '⌃', name: 'Ctrl', group: 'Control', kind: 'mod' },
+  { id: 'alt', label: '⌥', name: 'Alt', group: 'Control', kind: 'mod' },
+  { id: 'shift', label: '⇧', name: 'Shift', group: 'Control', kind: 'mod' },
+  send('tab', '⇥', 'Tab', KEYS.tab, 'Control'),
+  { id: 'fn', label: 'Fn', name: 'Fn', group: 'Row', kind: 'mod' },
+  send('up', '↑', 'Arrow up', KEYS.up, 'Navigation'),
+  send('down', '↓', 'Arrow down', KEYS.down, 'Navigation'),
+  { id: 'keyboard', label: '⌨', name: 'Show or hide the keyboard', group: 'Row', kind: 'action' },
+  { id: 'voice', label: '🎤', name: 'Dictate', group: 'Row', kind: 'mod', needs: 'voice' },
+  { id: 'voicelang', label: '🌐', name: 'Dictation language', group: 'Row', kind: 'action', small: true, needs: 'voice' },
+  { id: 'fontDown', label: 'A−', name: 'Smaller text', group: 'Row', kind: 'action', small: true },
+  { id: 'fontUp', label: 'A+', name: 'Larger text', group: 'Row', kind: 'action', small: true },
+  send('left', '←', 'Arrow left', KEYS.left, 'Navigation'),
+  send('right', '→', 'Arrow right', KEYS.right, 'Navigation'),
+  send('home', 'Home', 'Home', KEYS.home, 'Navigation'),
+  send('end', 'End', 'End', KEYS.end, 'Navigation'),
+  send('pgup', 'PgUp', 'Page up', '\x1b[5~', 'Navigation'),
+  send('pgdn', 'PgDn', 'Page down', '\x1b[6~', 'Navigation'),
+  send('ins', 'Ins', 'Insert', '\x1b[2~', 'Navigation'),
+  send('del', 'Del', 'Delete', '\x1b[3~', 'Navigation'),
+  send('enter', '⏎', 'Enter', '\r', 'Control'),
+  send('backspace', '⌫', 'Backspace', '\x7f', 'Control'),
+  send('space', 'space', 'Space', ' ', 'Control'),
+  send('ctrlD', '^D', 'Control D', KEYS.ctrlD, 'Control'),
+  ...FN_KEYS.filter(([l]) => /^F\d+$/.test(l)).map(([l, seq]) => send(l.toLowerCase(), l, l, seq, 'Function')),
+  ...SYMBOL_CHARS.map((c) => send(`sym-${c.codePointAt(0)!.toString(16)}`, c, `Symbol ${c}`, c, 'Symbols')),
+];
+
+export const KEY_BY_ID: ReadonlyMap<string, KeyDef> = new Map(KEY_CATALOGUE.map((k) => [k.id, k]));

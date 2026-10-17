@@ -1,5 +1,6 @@
 <script lang="ts">
   import { KEYS, TMUX_COMBOS, type KeyProfile, type Mods } from './lib/keys';
+  import { press } from './lib/press';
 
   export let mods: Mods;
   export let onkey: (data: string) => void;
@@ -15,11 +16,6 @@
 
   /** Two pages of a grid, so it fits where the system keyboard was. */
   let page: 'nav' | 'sym' | 'more' = 'nav';
-
-  const tap = (fn: () => void) => (e: PointerEvent) => {
-    e.preventDefault(); // keeps focus in the terminal's input
-    fn();
-  };
 
   type Key = [label: string, seq: string, wide?: boolean];
   const NAV: Key[][] = [
@@ -43,38 +39,38 @@
 
 <div class="fnkb" role="group" aria-label="Function keyboard">
   <div class="tabs">
-    <button class="k tab" class:on={page === 'nav'} on:pointerdown={tap(() => (page = 'nav'))}>Keys</button>
-    <button class="k tab" class:on={page === 'sym'} on:pointerdown={tap(() => (page = 'sym'))}>Symbols</button>
-    <button class="k tab" class:on={page === 'more'} on:pointerdown={tap(() => (page = 'more'))}>More</button>
+    <button class="k tab" class:on={page === 'nav'} aria-pressed={page === 'nav'} use:press={() => (page = 'nav')}>Keys</button>
+    <button class="k tab" class:on={page === 'sym'} aria-pressed={page === 'sym'} use:press={() => (page = 'sym')}>Symbols</button>
+    <button class="k tab" class:on={page === 'more'} aria-pressed={page === 'more'} use:press={() => (page = 'more')}>More</button>
   </div>
   <div class="grid">
     {#if page === 'more'}
       <!-- Reading the clipboard needs a click: iOS does not count a pointerdown as the user's tap. -->
       <button class="k" on:pointerdown|preventDefault on:click={() => onpaste()}>Paste</button>
-      <button class="k" on:pointerdown={tap(oncopy)}>Copy</button>
-      <button class="k" on:pointerdown={tap(onselect)}>Select</button>
-      <button class="k" aria-label={bell ? 'Mute bell' : 'Unmute bell'} aria-pressed={bell} on:pointerdown={tap(onbell)}>{bell ? '🔔' : '🔕'}</button>
-      <button class="k" on:pointerdown={tap(() => onkey(CTRL_D[1]))}>{CTRL_D[0]}</button>
+      <button class="k" use:press={oncopy}>Copy</button>
+      <button class="k" use:press={onselect}>Select</button>
+      <button class="k" aria-label={bell ? 'Mute bell' : 'Unmute bell'} aria-pressed={bell} use:press={onbell}>{bell ? '🔔' : '🔕'}</button>
+      <button class="k" use:press={() => onkey(CTRL_D[1])}>{CTRL_D[0]}</button>
       {#if profile === 'tmux'}
         {#each TMUX_COMBOS as [label, key]}
-          <button class="k" on:pointerdown={tap(() => oncombo(key))}>{label}</button>
+          <button class="k" use:press={() => oncombo(key)}>{label}</button>
         {/each}
       {/if}
     {:else}
       {#each rows as row}
         {#each row as [label, seq]}
-          <button class="k" class:sym={page === 'sym'} on:pointerdown={tap(() => onkey(seq))}>{label}</button>
+          <button class="k" class:sym={page === 'sym'} use:press={() => onkey(seq)}>{label}</button>
         {/each}
       {/each}
     {/if}
   </div>
   <div class="bottom">
-    <button class="k" on:pointerdown={tap(onback)} aria-label="Back to the system keyboard">ABC</button>
-    <button class="k" class:on={mods.ctrl} aria-pressed={mods.ctrl} on:pointerdown={tap(() => (mods.ctrl = !mods.ctrl))}>Ctrl</button>
-    <button class="k" class:on={mods.alt} aria-pressed={mods.alt} on:pointerdown={tap(() => (mods.alt = !mods.alt))}>Alt</button>
-    <button class="k space" on:pointerdown={tap(() => onkey(' '))}>space</button>
-    <button class="k" on:pointerdown={tap(() => onkey('\x7f'))} aria-label="Backspace">⌫</button>
-    <button class="k" on:pointerdown={tap(() => onkey('\r'))} aria-label="Enter">⏎</button>
+    <button class="k" use:press={onback} aria-label="Back to the system keyboard">ABC</button>
+    <button class="k" class:on={mods.ctrl} aria-pressed={mods.ctrl} use:press={() => (mods.ctrl = !mods.ctrl)}>Ctrl</button>
+    <button class="k" class:on={mods.alt} aria-pressed={mods.alt} use:press={() => (mods.alt = !mods.alt)}>Alt</button>
+    <button class="k space" use:press={() => onkey(' ')}>space</button>
+    <button class="k" use:press={() => onkey('\x7f')} aria-label="Backspace">⌫</button>
+    <button class="k" use:press={() => onkey('\r')} aria-label="Enter">⏎</button>
   </div>
 </div>
 
@@ -117,6 +113,10 @@
   .k.sym {
     font-family: monospace;
     font-size: 1.1rem;
+  }
+  .k:focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: -2px;
   }
   .k.on {
     background: var(--accent);
