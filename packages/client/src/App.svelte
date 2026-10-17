@@ -651,7 +651,8 @@
         <ServerList {servers} states={$hubServers} onpause={(id) => { hub.pause(id); }} onresume={(id) => hub.resume(id)} onretry={(id) => hub.retry(id)} onadd={() => { addPrefill = null; showAddServer = true; }} onremove={removeServer} onshare={shareServer} />
       {:else if $destination === 'home'}
         <Home sessions={$allSessions} agents={$allAgents} servers={$hubServers} {now} {lastKey} onopen={attach} onservers={leaveServer} onnew={newSession}
-          onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} />
+          onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })}
+          onreply={(key, text) => sendSession({ type: 'reply', session: key, text })} />
       {:else if $destination === 'activity'}
         <EmptyState title="Activity" body="What your agents did, and what it cost, will appear here." />
       {:else if $destination === 'settings'}
@@ -683,7 +684,7 @@
   {/if}
 
   {#if menuOpen && user}<MenuSheet {user} {avatar} {serverVersion} onservers={leaveServer} onreport={openReport} onlogout={logout} onclose={() => menuOpen = false} unread={unreadCount($inbox)} oninbox={() => inboxOpen = true} push={pushView} onpush={togglePush} />{/if}
-  {#if inboxOpen}<InboxSheet items={$inbox} {now} onopen={attach} onhome={() => go('home')} onread={() => inbox.update(markAllRead)} onclear={() => inbox.set([])} onclose={() => { inboxOpen = false; inbox.update(markAllRead); }} />{/if}
+  {#if inboxOpen}<InboxSheet items={$inbox} {now} agents={$allAgents} onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} onreply={(key, text) => sendSession({ type: 'reply', session: key, text })} onopen={attach} onhome={() => go('home')} onread={() => inbox.update(markAllRead)} onclear={() => inbox.set([])} onclose={() => { inboxOpen = false; inbox.update(markAllRead); }} />{/if}
   {#if actionSession}<SessionActions session={actionSession} canClose={backendOf(actionSession) === 'tmux'} confirmFirst={actionConfirm} ondetach={() => detach(actionSession.key)} onclosesession={() => closeSession(actionSession.key)} onclose={() => actionKey = null} />{/if}
   {#if menuSession && menuKey}
     <WindowMenu session={menuSession} data={$allWindows[menuSession.key]} supported={backendOf(menuSession) === 'tmux'}
