@@ -1,11 +1,16 @@
-# Claude Code (the first T2 profile; U07 adds the rest). Schema: see the top of src/profile.rs.
+# Claude Code. Schema: see the top of src/profile.rs. Measured on v2.1.302 (see fact 0038).
 agent = "claude"
 
 [prompt]
 # Claude asks "Do you want to ..." above a numbered list; the list is what gets parsed.
+# AskUserQuestion screens ("Which colour do you like?" with "Type something.") are deliberately not matched:
+# a digit on its free-text row only moves the cursor, so a tap cannot answer it. The tail and the terminal do.
 question = ["do you want to", "would you like to"]
 numbered = true
 
 [markers]
-working = ["esc to interrupt"]
-idle = ["? for shortcuts", "auto mode on"]
+# v2.1.302 has no "esc to interrupt" hint while working: the spinner line reads "Manifesting… (3s · thinking)"
+# and later "(15s · ↓ 2.7k tokens · thought for 13s)". The verb changes, the tail of that line does not.
+working = ["esc to interrupt", "thinking)", "tokens ·", "tokens)"]
+# "← for agents" is on the idle footer only; "auto mode on" is on every screen, so it is not a marker.
+idle = ["← for agents", "? for shortcuts", "worked for"]

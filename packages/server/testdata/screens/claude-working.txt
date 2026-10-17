@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.302
+▝▜██████▀  Haiku 5.5 · Claude Pro
+ ▝▝   ▝▝   /…/8f7dce61-66c5-45d8-8ec9-8ef5cbe78e22/scratchpad/cl
+
+  Sonnet 5.5 is here, and it's faster and excels at well-scoped tasks. Opus 5.5 is still your
+  default. Switch with /model.
+
+❯ Write a 40 line poem into poem.txt, one line at a time using separate tool calls
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+· Manifesting… (3s · thinking)
+  tmux detected · scroll with PgUp/PgDn · or add 'set -g mouse on' to ~/.tmux.conf for wheel scro…
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  Haiku 5.5 (x0.1) | (no context data) | 53% 1h 29m / 5h | 31% 5d 16h / 7d
+  ⏵⏵ auto mode on (shift+tab to cycle)

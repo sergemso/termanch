@@ -161,7 +161,7 @@ Web search 2026-10-16 found no statement about ACP adapters themselves. For Clau
 | Compaction / reset | opencode `compaction_update`; others none | screen |
 | Resume after crash | new process, `initialize`, `session/load` (replays) or `session/resume` where advertised (no replay; goose has no resume) | n/a |
 
-Gaps that remain for the screen/process scan: kilo questions, claude and copilot questions, compaction in every agent but opencode, plan progress for everything but kilo, and every cell marked unmeasured (cursor-agent needs a login; codex is in its own section).
+Gaps that remain for the screen/process scan (T2 screen profiles exist for claude, opencode and kilo, fact 0038; claude's AskUserQuestion screen is recorded but not parsed): kilo questions, claude and copilot questions, compaction in every agent but opencode, plan progress for everything but kilo, and every cell marked unmeasured (cursor-agent needs a login; codex is in its own section).
 
 ## Codex
 

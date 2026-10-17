@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.302
+▝▜██████▀  Haiku 5.5 · Claude Pro
+ ▝▝   ▝▝   /…/8f7dce61-66c5-45d8-8ec9-8ef5cbe78e22/scratchpad/cl
+
+  Sonnet 5.5 is here, and it's faster and excels at well-scoped tasks. Opus 5.5 is still your
+  default. Switch with /model.
+
+❯ Write a 40 line poem into poem.txt, one line at a time using separate tool calls
+
+  Writing line 1 of poem.txt, creating the file
+  ⎿  $ printf '%s\n' 'a lamp was lit in the window glass,' >> /tmp/claude-1000/-home-ubuntu-projects
+     -termenbox-termenbox/8f7dce61-66c5-45d8-8ec9-8ef5cbe78e22/scratchpad/cl/poem.txt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+✽ Manifesting… (18s · ↓ 3.2k tokens)
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  Haiku 5.5 (x0.1) | ▒░░░░ 4% (1M) | cache 59m 57s 80% | 54% 1h 29m / 5h | 31% 5d 16h / 7d
+  ⏵⏵ auto mode on (shift+tab to cycle)

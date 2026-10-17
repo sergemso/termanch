@@ -1,0 +1,7 @@
+# kilo. Schema: see the top of src/profile.rs. Measured on the screens in testdata/screens/kilo-* (see fact 0038).
+# Recorded: an error screen and a blank idle capture. No working indicator, permission or question screen has
+# been recorded, so there are no working markers or prompt rules.
+agent = "kilo"
+
+[markers]
+idle = ["tab agents"]

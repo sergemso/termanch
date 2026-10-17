@@ -1,0 +1,10 @@
+# opencode. Schema: see the top of src/profile.rs. Measured on v2.0.31 (see fact 0038).
+# No permission or question screen has been recorded, so there are no prompt rules: a prompt stays in the tail
+# and the terminal. Add them only from a recorded screen.
+agent = "opencode"
+
+[markers]
+working = ["esc interrupt"]
+# The home screen and the after-task footer both show "ctrl+p commands"; a working screen shows it too, which
+# is why the engine reports idle only when the screen is not working.
+idle = ["ask anything", "ctrl+p commands"]
