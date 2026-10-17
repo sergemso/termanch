@@ -21,7 +21,7 @@
   import { announce, waitingList } from './lib/notify';
   import { attentionToAck } from './lib/agents';
   import { cacheRemaining, expiringSoon } from './lib/cache';
-  import { settings, applyTheme } from './lib/settings';
+  import { settings, applyTheme, type Skin } from './lib/settings';
   import type { ServerListItem } from './lib/protocol';
   import { parseClaim, parseServerLink, serverLink } from './lib/onboard';
   import { sendServerLink } from './lib/share';
@@ -467,8 +467,9 @@
     vv?.addEventListener('resize', kb); kb();
     const themeMedia = window.matchMedia('(prefers-color-scheme: light)');
     let currentTheme = 'dark' as 'dark' | 'light' | 'system';
-    const themeChanged = () => applyTheme(currentTheme, themeMedia.matches);
-    const stopTheme = settings.subscribe(value => { currentTheme = value.theme; themeChanged(); });
+    let currentSkin = 'navy' as Skin;
+    const themeChanged = () => applyTheme(currentTheme, themeMedia.matches, currentSkin);
+    const stopTheme = settings.subscribe(value => { currentTheme = value.theme; currentSkin = value.skin; themeChanged(); });
     themeMedia.addEventListener('change', themeChanged);
     const stopUsage = startUsageMeter(() => !!selectedServer && connState === 'connected' && !!activeSessionId);
     // Last line of defence: an error nobody caught must not leave a dead screen without a word.

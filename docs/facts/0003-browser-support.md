@@ -16,3 +16,5 @@ date: 2026-10-09
 WebTransport fallback to WebSocket ensures functional baseline on all targets.
 
 > Correction (0016): WebTransport availability by Safari version is unverified; WebSocket is the baseline.
+
+> Update (0112, 2026-10-17): the minimums are now iOS Safari 16.4, Chrome Android 111 and Safari macOS 16.4, because Tailwind v4 needs them. The versions listed above are the earlier floor.

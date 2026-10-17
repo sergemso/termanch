@@ -114,3 +114,4 @@
 0109-state-first-and-the-terminal-is-first-class,"The product aims for users never needing the terminal, and the terminal is still a first-class, super-convenient surface","client, mobile, agents, terminal, roadmap",active
 0110-skins-are-themeable-through-tokens,"The UI is skinnable: components are styled only through design tokens, and several skins ship and are user-selectable","client, design, theming, roadmap",active
 0111-acp-sessions-use-one-event-model-and-per-agent-quirk-profiles,"ACP sessions (tier T0) map into the existing agent event model, with per-agent quirk profiles as data","agents, protocol, architecture, roadmap",active
+0112-browser-floor-ios-16-4-chrome-111,"The minimum browsers are iOS Safari 16.4 and Chrome Android 111, so Tailwind v4 stays","client, browser-support, design, roadmap",active
