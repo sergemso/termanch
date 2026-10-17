@@ -33,6 +33,8 @@ pub struct SessionManager {
     tmux_version: String,
     control_mode: bool,
     prefix: String,
+    /// Bounded readers of the transcripts hooks named (tier 1, decision 0103).
+    transcripts: Arc<crate::transcript::Transcripts>,
 }
 
 impl SessionManager {
@@ -48,7 +50,22 @@ impl SessionManager {
             tmux_version: String::new(),
             control_mode: false,
             prefix: String::new(),
+            transcripts: Arc::default(),
         }
+    }
+
+    /// The transcript timeline for a session whose hooks named one (tier 1). The path is the hook's, so it is
+    /// opened only if it resolves under the user's Claude config directory; the read is bounded and runs off the
+    /// async threads. Nothing from it is logged.
+    async fn timeline(&self, session: &str) -> Option<termenbox_core::protocol::Timeline> {
+        let path = self.events.as_ref()?.transcript(session)?;
+        let root = crate::transcript::claude_root()?;
+        let readers = self.transcripts.clone();
+        let session = session.to_string();
+        tokio::task::spawn_blocking(move || readers.timeline(&root, &session, &path))
+            .await
+            .ok()
+            .flatten()
     }
 
     /// The session managers a client may pick from when it creates a session.
@@ -465,11 +482,13 @@ impl SessionManager {
                     .events
                     .as_ref()
                     .and_then(|h| session_agent(h, &session));
+                let timeline = self.timeline(&session).await;
                 let reply = session_view(
                     self.backend.as_ref(),
                     &session,
                     agent.as_deref(),
                     hash.as_deref(),
+                    timeline,
                 )
                 .await;
                 send_r(tx, &reply).await?;
@@ -726,11 +745,18 @@ pub async fn session_view(
     session: &str,
     agent: Option<&str>,
     known: Option<&str>,
+    timeline: Option<termenbox_core::protocol::Timeline>,
 ) -> ServerMessage {
     use crate::profile::Profiles;
     use sha2::{Digest, Sha256};
     use termenbox_core::protocol::{ViewOption, ViewPrompt};
     let (profile, tier) = Profiles::builtin().for_agent(agent);
+    // The transcript timeline is tier 1; the screen profile still reads prompts and the tail.
+    let tier = if timeline.is_some() {
+        crate::profile::Tier::T1
+    } else {
+        tier
+    };
     let screen = backend.capture(session).await.unwrap_or_default();
     let view = profile.read(&screen);
     let prompt = view.prompt.as_ref().map(|p| ViewPrompt {
@@ -759,6 +785,9 @@ pub async fn session_view(
             .unwrap_or("")
             .as_bytes(),
     );
+    if let Some(t) = &timeline {
+        h.update(serde_json::to_string(t).unwrap_or_default().as_bytes());
+    }
     let hash: String = h.finalize()[..8]
         .iter()
         .map(|b| format!("{b:02x}"))
@@ -773,6 +802,7 @@ pub async fn session_view(
         unchanged,
         task: if unchanged { None } else { view.task },
         prompt: if unchanged { None } else { prompt },
+        timeline: if unchanged { None } else { timeline },
     }
 }
 
@@ -934,7 +964,7 @@ mod answer_tests {
     async fn the_session_view_lists_labels_only_and_a_tap_sends_the_profiles_keys() {
         let (b, _, _, _) = setup(Confidence::High, SCREEN);
         let (tier, tail, hash, unchanged, prompt) =
-            view_of(session_view(&b, "s", None, None).await);
+            view_of(session_view(&b, "s", None, None, None).await);
         assert_eq!((tier.as_str(), unchanged), ("t3", false));
         assert!(tail.iter().any(|l| l.contains("Do you want to proceed?")));
         let prompt = prompt.expect("a numbered Yes/No list is a prompt");
@@ -943,7 +973,7 @@ mod answer_tests {
         assert_eq!(prompt.options.len(), 3);
         // a known hash answers `unchanged` with nothing else
         let (_, tail2, _, unchanged, prompt2) =
-            view_of(session_view(&b, "s", None, Some(&hash)).await);
+            view_of(session_view(&b, "s", None, Some(&hash), None).await);
         assert!(unchanged && tail2.is_empty() && prompt2.is_none());
         for (option, keys) in [(0u8, "1"), (1, "2"), (2, "3")] {
             session_answer(&b, "s", None, &prompt.id, option)
@@ -954,9 +984,43 @@ mod answer_tests {
     }
 
     #[tokio::test]
+    async fn a_timeline_makes_the_view_tier_one_and_without_one_it_stays_t2_or_t3() {
+        use termenbox_core::protocol::{Timeline, TimelineEntry};
+        let (b, _, _, _) = setup(Confidence::High, SCREEN);
+        let tl = Timeline {
+            entries: vec![TimelineEntry {
+                kind: "prompt".into(),
+                name: None,
+                text: "fix it".into(),
+            }],
+            ..Timeline::default()
+        };
+        let (tier, _, hash, _, _) =
+            view_of(session_view(&b, "s", None, None, Some(tl.clone())).await);
+        assert_eq!(tier, "t1");
+        let (_, tail, _, unchanged, _) =
+            view_of(session_view(&b, "s", None, Some(&hash), Some(tl.clone())).await);
+        assert!(unchanged && tail.is_empty());
+        // a new step is a new hash
+        let mut more = tl;
+        more.entries.push(TimelineEntry {
+            kind: "tool".into(),
+            name: Some("Bash".into()),
+            text: "ls".into(),
+        });
+        let (_, _, _, unchanged, _) =
+            view_of(session_view(&b, "s", None, Some(&hash), Some(more)).await);
+        assert!(!unchanged);
+        let (tier, ..) = view_of(session_view(&b, "s", Some("claude"), None, None).await);
+        assert_eq!(tier, "t2");
+        let (tier, ..) = view_of(session_view(&b, "s", None, None, None).await);
+        assert_eq!(tier, "t3");
+    }
+
+    #[tokio::test]
     async fn a_session_answer_for_another_prompt_or_option_sends_nothing() {
         let (b, _, _, _) = setup(Confidence::High, SCREEN);
-        let (_, _, _, _, prompt) = view_of(session_view(&b, "s", None, None).await);
+        let (_, _, _, _, prompt) = view_of(session_view(&b, "s", None, None, None).await);
         let id = prompt.unwrap().id;
         for (pid, option) in [
             ("v-000000000000", 0u8),
@@ -969,7 +1033,7 @@ mod answer_tests {
         *b.screen.lock().unwrap() = "$ ls\nfile\n".into();
         assert!(session_answer(&b, "s", None, &id, 0).await.is_err());
         assert!(b.sent.lock().unwrap().is_empty());
-        let (_, _, _, _, prompt) = view_of(session_view(&b, "s", None, None).await);
+        let (_, _, _, _, prompt) = view_of(session_view(&b, "s", None, None, None).await);
         assert!(
             prompt.is_none(),
             "a screen where nothing should match gives no prompt"

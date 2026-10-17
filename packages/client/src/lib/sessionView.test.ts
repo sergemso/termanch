@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { render } from 'svelte/server';
 import SessionView from '../SessionView.svelte';
 import { cleanText, viewFrom, merge, answerFor, requestView, TAIL_LINES, LINE_CHARS } from './sessionView';
@@ -81,5 +82,31 @@ describe('session view for an agent with no profile (T3)', () => {
   });
   it('names the profile tier when a profile parsed the screen', () => {
     expect(html({ name: 'api', view: viewFrom(msg({ tier: 't2' })) })).toContain('Profile view');
+  });
+});
+
+describe('the T1 timeline from a recorded transcript', () => {
+  // The file the server's transcript test writes from the recorded Claude Code transcript fixture.
+  const recorded = JSON.parse(readFileSync(new URL('../../../server/testdata/transcripts/claude-session.view.json', import.meta.url), 'utf8')) as SessionViewMessage;
+
+  it('renders the steps, plan progress, changed files and last message', () => {
+    const out = html({ name: 'api', agent: 'claude', view: viewFrom(recorded) });
+    for (const t of ['data-testid="timeline"', 'Fix the failing parser test', 'cargo test -p parser', 'Plan · 1 of 3 done', 'Fixing the parser', 'lib.rs, main.rs', 'all tests pass', 'Structured view']) expect(out).toContain(t);
+    expect(out.indexOf('data-testid="timeline"')).toBeLessThan(out.indexOf('aria-label="Send a line"'));
+  });
+  it('shows no timeline below T1 or when the server sends none (no hooks: no regression)', () => {
+    expect(html({ name: 'api', view: viewFrom({ ...recorded, tier: 't2' }) })).not.toContain('data-testid="timeline"');
+    expect(html({ name: 'api', view: viewFrom({ ...recorded, timeline: undefined }) })).not.toContain('data-testid="timeline"');
+    expect(html({ name: 'api', view: viewFrom({ ...recorded, tier: 't3', timeline: undefined }) })).toContain('Generic view');
+  });
+  it('cleans and caps transcript text again and renders markup as text', () => {
+    const v = viewFrom({ ...recorded, timeline: { entries: [{ kind: 'prompt', text: '\u001b[31m<img src=x onerror=alert(1)>' + 'x'.repeat(500) }, ...Array.from({ length: 60 }, () => ({ kind: 'tool', name: 'Bash', text: 'ls' }))], files: Array.from({ length: 50 }, (_, i) => `f${i}`) } })!;
+    expect(v.timeline!.entries.length).toBe(30);
+    expect(v.timeline!.files.length).toBe(20);
+    const out = html({ name: 'api', view: viewFrom({ ...recorded, timeline: { entries: [{ kind: 'prompt', text: '<img src=x onerror=alert(1)>' }] } }) });
+    expect(out).not.toContain('<img');
+  });
+  it('an old message without a timeline field still parses', () => {
+    expect(viewFrom({ type: 'session_view', session: 's', tier: 't1', tail: [], hash: 'h' })!.timeline).toBeUndefined();
   });
 });

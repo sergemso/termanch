@@ -31,7 +31,12 @@
   import AppShell from './AppShell.svelte';
   import AppFrame from './shell/AppFrame.svelte';
   import SettingsView from './shell/SettingsView.svelte';
-  import { EmptyState } from './lib/ds';
+  import { EmptyState, Segmented } from './lib/ds';
+  import SessionView from './SessionView.svelte';
+  import { merge as mergeView, requestView, type ViewModel } from './lib/sessionView';
+  import { loadPaneModes, withPaneMode, type PaneMode } from './lib/paneMode';
+  import { rowOf } from './lib/home';
+  import { stepOf } from './lib/decision';
   import Home from './Home.svelte';
   import SessionGroups from './SessionGroups.svelte';
   import { destination, navigate, startRouter, type Destination } from './lib/router';
@@ -122,6 +127,7 @@
       const id = _id;
       if (msg.type === 'snapshot') snapshots.apply(sessionKey(_id, msg.session), msg);
       else if (msg.type === 'session_attached') preview = null;
+      else if (msg.type === 'session_view') { if (id === activeServerId && msg.session === activeSessionId) heldView = mergeView(heldView, msg); }
       else if (msg.type === 'sessions') openPending(_id, msg.sessions);
       else if (msg.type === 'attention') inbox.update(l => mergeAttention(l, _id, msg.items, s => sessionKey(_id, s), s => hub.findSession(sessionKey(_id, s))?.name ?? s));
       else if (msg.type === 'push_info') pushInfos = { ...pushInfos, [_id]: msg };
@@ -130,6 +136,18 @@
     },
   });
   const snapshots = new SnapshotStore();
+  // The in-session screen: Terminal (default) or Decision, kept per session on this device. The terminal stays mounted
+  // in both (hidden, never rebuilt), so a switch cannot lose its state or its focus rules.
+  let paneModes = loadPaneModes();
+  $: paneMode = (activeKey && paneModes[activeKey]) || 'terminal' as PaneMode;
+  function setPaneMode(m: string) { if (activeKey) paneModes = withPaneMode(paneModes, activeKey, m === 'decision' ? 'decision' : 'terminal'); }
+  let heldView: ViewModel | null = null;
+  $: activeKey, (heldView = null);
+  $: viewPolling = !!activeKey && !away && pageVisible && paneMode === 'decision' && connState === 'connected';
+  let viewPoll: ReturnType<typeof setInterval> | undefined;
+  function requestSessionView() { if (activeKey) hub.sendToSession(activeKey, requestView(activeSessionId ?? '', heldView)); }
+  $: { activeKey; if (viewPoll) clearInterval(viewPoll); viewPoll = undefined; if (viewPolling) { requestSessionView(); viewPoll = setInterval(requestSessionView, 2000); } }
+  $: activeRow = activeSession ? rowOf(activeSession, $allAgents[activeSession.key]) : null;
   /** The last screen seen for the session being opened, dimmed in the terminal until the live repaint replaces it. */
   let preview: string | null = null;
   const hubServers = hub.servers;
@@ -663,7 +681,22 @@
             {#if !activeKey}
               <SessionGroups sessions={$allSessions} agents={$allAgents} {now} onopen={attach} onnew={newSession} />
             {:else if connection && connState !== 'paused'}
-              {#key identityOf(connection)}<Terminal {connection} {activeSessionId} {connState} {profile} prefix={selected?.prefix || 'C-b'} {preview} />{/key}
+              {#if !(keyboardOpen && paneMode === 'terminal')}
+                <div class="pane-switch"><Segmented label="Session view" value={paneMode} onchange={setPaneMode} options={[{ value: 'decision', label: 'Decision' }, { value: 'terminal', label: 'Terminal' }]} /></div>
+              {/if}
+              <div class="pane-body" data-pane-body>
+                <div class="pane-terminal" class:pane-hidden={paneMode === 'decision'} inert={paneMode === 'decision'} data-pane="terminal">
+                  {#key identityOf(connection)}<Terminal {connection} {activeSessionId} {connState} {profile} prefix={selected?.prefix || 'C-b'} {preview} />{/key}
+                </div>
+                {#if paneMode === 'decision' && activeSession && activeRow}
+                  <div class="pane-decision" data-pane="decision">
+                    <SessionView name={activeSession.name} agent={activeRow.agent} fleet={activeRow.state} task={activeRow.title} startedAt={$allAgents[activeSession.key]?.task?.started_at}
+                      waitingSince={activeRow.since} step={stepOf($allAgents[activeSession.key])} {now} view={heldView}
+                      onreply={(line) => sendSession({ type: 'reply', session: activeSession.key, text: line })}
+                      onanswer={(m) => hub.sendToSession(activeSession.key, m)} onterminal={() => setPaneMode('terminal')} />
+                  </div>
+                {/if}
+              </div>
             {:else}
               <div class="card" style="margin: auto;">{activeKey ? 'This server is paused. Resume it in Servers.' : 'Choose a session to open its terminal.'}<button class="secondary" on:click={leaveServer}>Servers</button></div>
             {/if}
@@ -715,6 +748,12 @@
   .workspace { display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative; }
   .workspace.mobile { flex-direction: column; }
   .terminal-pane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .pane-switch { padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--bg); }
+  .pane-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .pane-terminal { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  /* Hidden, not detached and not resized: xterm keeps its size, its buffer and its connection. */
+  .pane-terminal.pane-hidden { visibility: hidden; pointer-events: none; }
+  .pane-decision { position: absolute; inset: 0; background: var(--bg); }
   .connection-notice { padding: 8px; font-size: 0.8rem; overflow-wrap: anywhere; }
 
   .auth-screen {

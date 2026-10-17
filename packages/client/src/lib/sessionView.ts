@@ -12,7 +12,28 @@ export const MAX_OPTIONS = 9;
 
 export interface ViewOption { label: string }
 export interface ViewPrompt { id: string; question: string; kind: 'choice' | 'yes_no'; options: ViewOption[] }
-export interface ViewModel { session: string; tier: Tier; agent?: string; task?: string; tail: string[]; hash: string; prompt?: ViewPrompt }
+export const TIMELINE_ENTRIES = 30;
+export const TIMELINE_TEXT_CHARS = 200;
+export const TIMELINE_FILES = 20;
+export const TIMELINE_PLAN = 20;
+export interface TimelineEntryView { kind: 'prompt' | 'tool' | 'message'; name?: string; text: string }
+export interface TimelineView { entries: TimelineEntryView[]; plan: { text: string; status: string }[]; files: string[]; lastMessage?: string }
+export interface ViewModel { session: string; tier: Tier; agent?: string; task?: string; tail: string[]; hash: string; prompt?: ViewPrompt; timeline?: TimelineView }
+
+/** The transcript timeline, cleaned and capped again here (it is untrusted text); null when there is nothing to show. */
+export function timelineFrom(t: SessionViewMessage['timeline']): TimelineView | undefined {
+  if (!t || !Array.isArray(t.entries)) return undefined;
+  const entries = t.entries.slice(-TIMELINE_ENTRIES).map((e): TimelineEntryView => ({
+    kind: e?.kind === 'prompt' || e?.kind === 'tool' ? e.kind : 'message',
+    name: e?.name ? cleanText(e.name, 40) : undefined,
+    text: cleanText(e?.text, TIMELINE_TEXT_CHARS),
+  })).filter((e) => e.text || e.name);
+  const plan = (Array.isArray(t.plan) ? t.plan : []).slice(0, TIMELINE_PLAN)
+    .map((p) => ({ text: cleanText(p?.text, TIMELINE_TEXT_CHARS), status: cleanText(p?.status, 20) })).filter((p) => p.text);
+  const files = (Array.isArray(t.files) ? t.files : []).slice(-TIMELINE_FILES).map((f) => cleanText(f, 80)).filter(Boolean);
+  const lastMessage = t.last_message ? cleanText(t.last_message, 400) : undefined;
+  return entries.length || plan.length || lastMessage ? { entries, plan, files, lastMessage } : undefined;
+}
 
 /** Escape sequences, control characters, bidi overrides and zero-width characters out; the rest is kept. */
 export function cleanText(input: unknown, max = LINE_CHARS): string {
@@ -59,6 +80,7 @@ export function viewFrom(msg: SessionViewMessage | null | undefined): ViewModel 
     tail,
     hash: typeof msg.hash === 'string' ? msg.hash : '',
     prompt,
+    timeline: timelineFrom(msg.timeline),
   };
 }
 

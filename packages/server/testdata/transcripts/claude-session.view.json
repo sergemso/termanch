@@ -1,0 +1,73 @@
+{
+  "type": "session_view",
+  "session": "s",
+  "tier": "t1",
+  "agent": "claude",
+  "tail": [
+    "$"
+  ],
+  "hash": "h1",
+  "unchanged": false,
+  "timeline": {
+    "entries": [
+      {
+        "kind": "prompt",
+        "text": "Fix the failing parser test and keep the public API"
+      },
+      {
+        "kind": "tool",
+        "name": "TodoWrite",
+        "text": "3 tasks"
+      },
+      {
+        "kind": "tool",
+        "name": "Bash",
+        "text": "cargo test -p parser"
+      },
+      {
+        "kind": "tool",
+        "name": "Read",
+        "text": "/home/user/project/src/lib.rs"
+      },
+      {
+        "kind": "tool",
+        "name": "Edit",
+        "text": "/home/user/project/src/lib.rs"
+      },
+      {
+        "kind": "tool",
+        "name": "Write",
+        "text": "/home/user/project/src/main.rs"
+      },
+      {
+        "kind": "tool",
+        "name": "Grep",
+        "text": "fn parse"
+      },
+      {
+        "kind": "tool",
+        "name": "Bash",
+        "text": "cargo test -p parser"
+      }
+    ],
+    "plan": [
+      {
+        "text": "Run the tests",
+        "status": "completed"
+      },
+      {
+        "text": "Fixing the parser",
+        "status": "in_progress"
+      },
+      {
+        "text": "Run the tests again",
+        "status": "pending"
+      }
+    ],
+    "files": [
+      "lib.rs",
+      "main.rs"
+    ],
+    "last_message": "Fixed the empty-input case; all tests pass."
+  }
+}

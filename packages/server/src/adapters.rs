@@ -23,7 +23,7 @@ fn text<'a>(v: &'a Value, key: &str) -> &'a str {
 }
 
 /// What a tool call is about, without the whole input: a command's first line, or a file path.
-fn tool_summary(name: &str, input: &Value) -> String {
+pub(crate) fn tool_summary(name: &str, input: &Value) -> String {
     let pick = |k: &str| text(input, k).lines().next().unwrap_or("").to_string();
     match name {
         "Bash" => pick("command"),

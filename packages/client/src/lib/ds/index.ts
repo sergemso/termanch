@@ -9,6 +9,7 @@ export { default as QueueItem } from './QueueItem.svelte';
 export { default as Composer } from './Composer.svelte';
 export { default as MoreSheet } from './MoreSheet.svelte';
 export type { MoreGroup } from './MoreSheet.svelte';
+export { default as Segmented } from './Segmented.svelte';
 export { default as ChartFrame } from './ChartFrame.svelte';
 export { default as EmptyState } from './EmptyState.svelte';
 export { STATES, type FleetState } from './states';

@@ -65,6 +65,15 @@ export interface SessionViewMessage {
   unchanged?: boolean;
   task?: string;
   prompt?: { id: string; question: string; kind: 'choice' | 'yes_no' | string; options: { label: string }[] };
+  /** Tier 1 only (decision 0103): the steps read from the agent's transcript. Older servers never send it. */
+  timeline?: TimelineMessage;
+}
+
+export interface TimelineMessage {
+  entries: { kind: 'prompt' | 'tool' | 'message' | string; name?: string; text: string }[];
+  plan?: { text: string; status: string }[];
+  files?: string[];
+  last_message?: string;
 }
 
 export interface SessionInfo {

@@ -270,6 +270,10 @@ pub enum ServerMessage {
         task: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         prompt: Option<ViewPrompt>,
+        /// The structured timeline read from the agent's transcript (tier `t1`, decision 0103). Absent for `t2`
+        /// and `t3`, and when `unchanged`; clients that do not know it ignore it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        timeline: Option<Timeline>,
     },
     Error {
         message: String,
@@ -278,6 +282,34 @@ pub enum ServerMessage {
     /// A message from a newer server; ignored.
     #[serde(other)]
     Unknown,
+}
+
+/// What an agent's transcript says about the session so far (decision 0103, tier 1). Every text is untrusted:
+/// the server has already stripped, capped and scrubbed it, and clients render it as plain text only.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+pub struct Timeline {
+    /// The most recent steps, oldest first.
+    pub entries: Vec<TimelineEntry>,
+    /// The agent's own task list, when it keeps one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plan: Vec<crate::events::PlanItem>,
+    /// File names the agent changed, most recent last.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<String>,
+    /// The agent's last message to the user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_message: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct TimelineEntry {
+    /// `prompt`, `tool` or `message`; clients read any other value as `message`.
+    pub kind: String,
+    /// The tool's name, for `tool`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The prompt, the tool's one-line summary or the message.
+    pub text: String,
 }
 
 /// A decision the screen is waiting on. The options carry labels only: the keys stay on the server.
