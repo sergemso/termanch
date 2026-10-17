@@ -28,15 +28,15 @@ One roadmap file per step (the old numbering `U.n` equals `Un` with a zero pad: 
 | Step | Title | Platform | Needs | Status |
 |---|---|---|---|---|
 | [U01](roadmap/archive/U01.md) | Design spike: three directions, owner picks one | both | none | done (PR #150) |
-| [U02](roadmap/U02.md) | Codify the design system | both | none | pending |
+| [U02](roadmap/archive/U02.md) | Codify the design system | both | none | done (PR #158) |
 | [U03](roadmap/archive/U03.md) | Measure which agents expose what; set the T2 priority list | n/a | none | done (PRs #153, #154, #155) |
-| [U04](roadmap/U04.md) | App shell: bottom bar, sidebar, palette, four destinations | both | U02 | pending |
-| [U05](roadmap/U05.md) | Home: Needs you queue, fleet summary, Continue | both | U04 | pending |
-| [U06](roadmap/U06.md) | Session-view framework: T3 view, composer, profile engine | both | U02 | pending |
+| [U04](roadmap/archive/U04.md) | App shell: bottom bar, sidebar, palette, four destinations | both | U02 | done (PR #159) |
+| [U05](roadmap/archive/U05.md) | Home: Needs you queue, fleet summary, Continue | both | U04 | done (PR #161) |
+| [U06](roadmap/archive/U06.md) | Session-view framework: T3 view, composer, profile engine | both | U02 | done (PRs #160, #165) |
 | [U07](roadmap/U07.md) | T2 profiles for the priority agents | n/a | U03, U06 | pending |
 | [U07a](roadmap/U07a.md) | ACP backend: agents termenbox starts itself | n/a | U03, U06 | pending |
 | [U07b](roadmap/U07b.md) | ACP session view: a general TUI we render | both | U07a, U02, U06 | pending |
-| [U07c](roadmap/U07c.md) | Configurable key row | both | U02 | pending |
+| [U07c](roadmap/archive/U07c.md) | Configurable key row | both | U02 | done (PR #162) |
 | [U08](roadmap/U08.md) | Decision card: context, options, composer, dictation | both | U05, U06 | pending |
 | [U09](roadmap/U09.md) | Claude Code T1 view: timeline from the transcript | both | U06 | pending |
 | [U10](roadmap/U10.md) | Hook offer card and enable button | both | U05 | pending |
