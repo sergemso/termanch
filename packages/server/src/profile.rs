@@ -276,9 +276,11 @@ impl Profile {
                 .filter(|t| !t.is_empty())
                 .map(|t| t.chars().take(crate::events::TASK_CHARS).collect())
         });
+        let working = has(&self.markers.working);
         ScreenView {
-            working: has(&self.markers.working),
-            idle: has(&self.markers.idle),
+            working,
+            // A screen is not idle while it is working: some footers (opencode's) are on both.
+            idle: !working && has(&self.markers.idle),
             prompt: self.prompt_in(scan),
             tail,
             task,
@@ -354,7 +356,11 @@ numbered_labels = ["yes", "no"]
 yes_no = ["(y/n)", "[y/n]", "(yes/no)"]
 "#;
 
-const BUILTIN: &[&str] = &[include_str!("../profiles/claude.toml")];
+const BUILTIN: &[&str] = &[
+    include_str!("../profiles/claude.toml"),
+    include_str!("../profiles/opencode.toml"),
+    include_str!("../profiles/kilo.toml"),
+];
 
 pub struct Profiles {
     generic: Profile,
@@ -416,9 +422,108 @@ mod tests {
         assert!(v.tail.len() <= TAIL_LINES);
     }
 
+    fn view(agent: &str, name: &str) -> ScreenView {
+        let (p, tier) = profiles().for_agent(Some(agent));
+        assert_eq!(tier, Tier::T2, "{agent}");
+        p.read(&screen(name))
+    }
+
+    #[test]
+    fn claude_states_over_the_recorded_screens() {
+        // (screen, working, idle)
+        for (name, working, idle) in [
+            ("claude-idle", false, true),
+            ("claude-working", true, false),
+            ("claude-working-tool", true, false),
+            ("claude-finished", false, true),
+            ("claude-permission", false, false),
+        ] {
+            let v = view("claude", name);
+            assert_eq!((v.working, v.idle), (working, idle), "{name}");
+            assert_eq!(v.prompt.is_some(), name == "claude-permission", "{name}");
+        }
+    }
+
+    #[test]
+    fn claude_free_text_questions_are_left_to_the_terminal() {
+        // A digit on "Type something." only moves the cursor, so the profile offers no tap for these screens.
+        for name in ["claude-question", "claude-question-freetext"] {
+            let v = view("claude", name);
+            assert_eq!(v.prompt, None, "{name}");
+            assert!(
+                v.tail
+                    .iter()
+                    .any(|l| l.contains("Which colour do you like?")),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn claude_trust_screen_and_unrelated_output_match_nothing() {
+        assert_eq!(view("claude", "claude-trust").prompt, None);
+        let v = profiles()
+            .for_agent(Some("claude"))
+            .0
+            .read("Which one?\n1. a\n2. b\n");
+        assert_eq!(v.prompt, None);
+    }
+
+    #[test]
+    fn opencode_states_over_the_recorded_screens() {
+        // `opencode-permission` was recorded while the agent was working (its footer shows "esc interrupt"); no
+        // permission prompt has been captured.
+        for (name, working, idle) in [
+            ("opencode-idle", false, true),
+            ("opencode-permission", true, false),
+            ("opencode-after", false, true),
+            ("opencode-working", false, true),
+        ] {
+            let v = view("opencode", name);
+            assert_eq!((v.working, v.idle), (working, idle), "{name}");
+            assert_eq!(v.prompt, None, "{name}");
+        }
+        assert!(!view("opencode", "kilo-error").working);
+        assert_eq!(view("opencode", "claude-permission").prompt, None);
+    }
+
+    #[test]
+    fn kilo_reads_the_recorded_screens_without_inventing_a_state() {
+        for name in ["kilo-working", "kilo-error", "kilo-idle"] {
+            let v = view("kilo", name);
+            assert_eq!((v.working, v.prompt), (false, None), "{name}");
+        }
+        let err = view("kilo", "kilo-error");
+        assert!(err.idle);
+        assert!(err.tail.iter().any(|l| l.contains("Nemotron 3 Ultra")));
+        assert!(
+            view("kilo", "kilo-idle").tail.is_empty(),
+            "the blank capture has no tail"
+        );
+    }
+
+    #[test]
+    fn agents_without_a_profile_stay_t3() {
+        for a in [
+            "codex",
+            "copilot",
+            "gemini",
+            "aider",
+            "cursor-agent",
+            "amp",
+            "goose",
+            "qwen",
+        ] {
+            assert_eq!(profiles().for_agent(Some(a)).1, Tier::T3, "{a}");
+        }
+        for a in ["claude", "opencode", "kilo"] {
+            assert_eq!(profiles().for_agent(Some(a)).1, Tier::T2, "{a}");
+        }
+    }
+
     #[test]
     fn an_agent_without_a_profile_gets_the_generic_rules() {
-        let (g, tier) = profiles().for_agent(Some("opencode"));
+        let (g, tier) = profiles().for_agent(Some("codex"));
         assert_eq!((tier, g.agent.as_str() == "generic"), (Tier::T3, true));
         assert_eq!(profiles().for_agent(None).1, Tier::T3);
         let v = g.read(&screen("shell-yn"));
