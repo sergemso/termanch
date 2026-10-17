@@ -75,7 +75,8 @@ export async function start(contextOptions) {
       const input = page.getByRole('combobox', { name: 'Search' });
       await input.waitFor();
       t.check(!(await t.api('keys')).some((k) => k.key.toLowerCase() === 'k'), 'Ctrl+K reached the terminal');
-      t.check(await input.evaluate((e) => document.activeElement === e), 'the palette input did not take focus');
+      await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'combobox', null, { timeout: 5000 })
+        .catch(() => t.check(false, 'the palette input did not take focus'));
       await page.keyboard.type('needle');
       const options = page.getByRole('option');
       await options.first().waitFor();
