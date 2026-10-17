@@ -109,13 +109,13 @@ The attach command runs in a PTY. It must repaint the session when it starts and
 
 ## Notifications
 
-When a Claude Code session asks for you, finishes or fails, the server raises an item the app shows in the banner, the tab title, the app badge and the Inbox (Menu → Inbox). To also get a notification on a phone that is not looking at the app, set up Web Push once:
+When a Claude Code session asks for you, finishes or fails, the server raises an item the app shows in the banner, the tab title, the app badge and the Inbox (Settings → Appearance, notifications and more → Inbox). To also get a notification on a phone that is not looking at the app, set up Web Push once:
 
 ```
 termenbox-server --setup-push     # writes the key to connectors.env (mode 0600) next to the server's other state
 ```
 
-Restart the server, then Menu → Turn on notifications (on iPhone the app must be added to the Home Screen first, iOS 16.4+). A notification is sent about 5 seconds after the item appears, unless a device is showing that session. It names the session and what happened and never carries anything the agent wrote. A phone follows one server at a time.
+Restart the server, then Settings → Appearance, notifications and more → Turn on notifications (on iPhone the app must be added to the Home Screen first, iOS 16.4+). A notification is sent about 5 seconds after the item appears, unless a device is showing that session. It names the session and what happened and never carries anything the agent wrote. A phone follows one server at a time.
 
 ## Agent events
 
