@@ -25,7 +25,11 @@ export type ClientMessage =
   /** The session this device shows in the foreground now, or null (hidden, or on the list): no push for it. */
   | { type: 'foreground'; session: string | null }
   | { type: 'ack'; attention_id: string }
-  | { type: 'dismiss'; attention_id: string };
+  | { type: 'dismiss'; attention_id: string }
+  /** Decision 0103: asks for the session view (cleaned tail, parsed prompt, tier); `hash` is the one already held. */
+  | { type: 'session_view'; session: string; hash?: string }
+  /** Taps option `option` (0-based) of prompt `prompt_id`; the server sends the keys its profile lists for it, never more. */
+  | { type: 'session_answer'; session: string; prompt_id: string; option: number };
 
 export type ServerMessage =
   | { type: 'challenge'; nonce: string; server_id: string }
@@ -43,10 +47,25 @@ export type ServerMessage =
   | { type: 'agent_events'; events: AgentEvent[] }
   | { type: 'activity'; sessions: SessionActivity[] }
   | { type: 'attention'; items: Attention[] }
+  | SessionViewMessage
   | { type: 'push_info'; configured: boolean; public_key: string; devices: number; subscribed: boolean }
   | { type: 'agent_event'; event: AgentEventType; agent: string; session_id: string }
   | { type: 'error'; message: string }
   | { type: 'pong' };
+
+/** Decision 0103. Unknown tiers and prompt kinds are read as `t3` and `choice`; extra fields are ignored. Options carry no keys. */
+export interface SessionViewMessage {
+  type: 'session_view';
+  session: string;
+  tier: 't1' | 't2' | 't3' | string;
+  agent?: string;
+  /** The cleaned screen tail, at most 30 lines. Empty with `unchanged` when the client's copy is current. */
+  tail: string[];
+  hash: string;
+  unchanged?: boolean;
+  task?: string;
+  prompt?: { id: string; question: string; kind: 'choice' | 'yes_no' | string; options: { label: string }[] };
+}
 
 export interface SessionInfo {
   id: string;
