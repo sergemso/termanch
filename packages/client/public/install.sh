@@ -8,7 +8,8 @@
 #   (none)      an isolated Docker container (installs Docker if missing)
 #   host-user   directly on this machine as a dedicated unprivileged user `termenbox`, as a systemd service
 #   host-me     directly on this machine as the user who runs this command: sessions open on their behalf, in their
-#               home, with their repositories, keys and agent logins. No user is created.
+#               home, with their repositories, keys and agent logins. No user is created. No root is needed: it is a
+#               user systemd service (decision 0113); what would need root is printed at the end, not run.
 #   host        directly on this machine as root, as a systemd service
 # The host modes give the owner's browser a shell on the machine itself and need no Docker.
 #
@@ -52,17 +53,25 @@ if [ "$SECRET" != "-" ]; then
   [ "${#SECRET}" -eq 43 ] || die "the claim secret has the wrong length"
 fi
 
-# Root is needed for services, users and the firewall. Re-run this script under sudo; it was piped in, so fetch it again.
-# host-me needs to know who asked: the name is read before the switch to root, then sudo hands it on as SUDO_USER.
-if [ "$MODE" = "host-me" ] && [ "$(id -u)" -eq 0 ] && { [ -z "${SUDO_USER:-}" ] || [ "$SUDO_USER" = root ]; }; then
-  die "host-me runs sessions as the user who runs this command, but this is root. Run it as your own user (it asks for sudo itself), or use host / host-user."
-fi
-if [ "$(id -u)" -ne 0 ]; then
-  command -v sudo >/dev/null 2>&1 || die "run this as root (or install sudo)"
-  exec sudo env TERMENBOX_IMAGE="$IMAGE" TERMENBOX_CONTAINER="$NAME" TERMENBOX_DATA="$ROOT" \
-    TERMENBOX_SKIP_FIREWALL="${TERMENBOX_SKIP_FIREWALL:-}" TERMENBOX_DRY_RUN="${TERMENBOX_DRY_RUN:-}" \
-    TERMENBOX_FORCE="${TERMENBOX_FORCE:-}" TERMENBOX_RELEASE_URL="${TERMENBOX_RELEASE_URL:-}" TERMENBOX_RELEASE_KEYS="${TERMENBOX_RELEASE_KEYS:-}" \
-    sh -c "$(curl -fsSL "$ORIGIN/install.sh")" termenbox-install "$SECRET" "$ORIGIN" "$MODE"
+# host-me needs no root (decision 0113): it runs as the user who ran this command, as a user service. A machine that already
+# has the system-service install of decision 0078 keeps the old route.
+LEGACY_SYSTEM=""
+[ "$MODE" = host-me ] && [ -f /etc/systemd/system/termenbox.service ] && LEGACY_SYSTEM=1
+if [ "$MODE" = host-me ] && [ -z "$LEGACY_SYSTEM" ]; then
+  [ "$(id -u)" -ne 0 ] || die "host-me runs sessions as the user who runs this command and needs no root. Run it as your own user, without sudo (or use host / host-user for a system service)."
+else
+  # Root is needed for services, users and the firewall. Re-run this script under sudo; it was piped in, so fetch it again.
+  # host-me needs to know who asked: the name is read before the switch to root, then sudo hands it on as SUDO_USER.
+  if [ "$MODE" = "host-me" ] && [ "$(id -u)" -eq 0 ] && { [ -z "${SUDO_USER:-}" ] || [ "$SUDO_USER" = root ]; }; then
+    die "host-me runs sessions as the user who runs this command, but this is root. Run it as your own user (it asks for sudo itself), or use host / host-user."
+  fi
+  if [ "$(id -u)" -ne 0 ]; then
+    command -v sudo >/dev/null 2>&1 || die "run this as root (or install sudo)"
+    exec sudo env TERMENBOX_IMAGE="$IMAGE" TERMENBOX_CONTAINER="$NAME" TERMENBOX_DATA="$ROOT" \
+      TERMENBOX_SKIP_FIREWALL="${TERMENBOX_SKIP_FIREWALL:-}" TERMENBOX_DRY_RUN="${TERMENBOX_DRY_RUN:-}" \
+      TERMENBOX_FORCE="${TERMENBOX_FORCE:-}" TERMENBOX_RELEASE_URL="${TERMENBOX_RELEASE_URL:-}" TERMENBOX_RELEASE_KEYS="${TERMENBOX_RELEASE_KEYS:-}" \
+      sh -c "$(curl -fsSL "$ORIGIN/install.sh")" termenbox-install "$SECRET" "$ORIGIN" "$MODE"
+  fi
 fi
 
 # One UDP port for the WebRTC connection. The client learns it from the server's signed record, so any
@@ -162,7 +171,7 @@ JOURNAL=/var/lib/termenbox-root
 native_claim() {
   _env="TERMENBOX_CONFIG_DIR=$STATE TERMENBOX_CLIENT_URL=$ORIGIN TERMENBOX_UDP_PORT=$1"
   # shellcheck disable=SC2086 # _env is a list of NAME=value words
-  if [ "$RUN_USER" = root ]; then _run="env $_env"; else _run="runuser -u $RUN_USER -- env $_env"; fi
+  if [ "$RUN_USER" = root ] || [ "$RUN_USER" = "$(id -un)" ]; then _run="env $_env"; else _run="runuser -u $RUN_USER -- env $_env"; fi
   if [ "$SECRET" = "-" ]; then
     # shellcheck disable=SC2086
     OUT="$($_run "$BIN" --register --qr)"
@@ -242,6 +251,32 @@ WantedBy=multi-user.target"
   fi
 }
 
+# The release: a signed manifest first, then a binary that matches the hash in it. Sets VERSION, SHA and JBIN.
+fetch_release() {
+  say "Checking the latest release..."
+  curl -fsSL --retry 3 -o "$TMP/manifest.json" "$RELEASE_URL/manifest.json" || die "could not download the release manifest"
+  curl -fsSL --retry 3 -o "$TMP/manifest.json.sig" "$RELEASE_URL/manifest.json.sig" || die "could not download the release signature"
+  printf '%s\n' "$RELEASE_KEYS" | awk 'NF >= 3 { print "termenbox-release " $2 " " $3 }' > "$TMP/allowed_signers"
+  ssh-keygen -Y verify -f "$TMP/allowed_signers" -I termenbox-release -n termenbox-release \
+    -s "$TMP/manifest.json.sig" < "$TMP/manifest.json" >/dev/null 2>&1 \
+    || die "the release signature is not valid, so nothing was installed"
+  grep -q '"freeze": *true' "$TMP/manifest.json" && die "new installs are paused by the maintainers (a signed freeze); try again later"
+  VERSION="$(sed -n 's/.*"version": *"\([0-9.]*\)".*/\1/p' "$TMP/manifest.json" | head -1)"
+  SHA="$(awk -v arch="$ARCH" '
+    $0 ~ "\"" arch "\": *[{]" { inside = 1; next }
+    inside && /"sha256":/ { gsub(/.*"sha256": *"/, ""); gsub(/".*/, ""); print; exit }
+    inside && /[}]/ { inside = 0 }' "$TMP/manifest.json")"
+  case "$SHA" in
+    *[!0-9a-f]*|"") die "the release has no $ARCH binary" ;;
+  esac
+  [ "${#SHA}" -eq 64 ] || die "the release has no valid $ARCH hash"
+  curl -fsSL --retry 3 -o "$TMP/termenbox-server" "$RELEASE_URL/termenbox-server-$ARCH-linux" || die "could not download the server"
+  echo "$SHA  $TMP/termenbox-server" | sha256sum -c - >/dev/null 2>&1 || die "the downloaded server does not match the signed hash, so nothing was installed"
+  chmod 755 "$TMP/termenbox-server"
+  "$TMP/termenbox-server" --help >/dev/null 2>&1 || die "the downloaded server does not run on this machine"
+  JBIN="$TMP/termenbox-server"
+}
+
 install_native() {
   [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1 \
     || die "this machine does not run systemd, which the host install needs. Use the isolated container install instead (leave out host / host-user)."
@@ -286,29 +321,7 @@ install_native() {
     return
   fi
 
-  # 1. The release: a signed manifest first, then a binary that matches the hash in it.
-  say "Checking the latest release..."
-  curl -fsSL --retry 3 -o "$TMP/manifest.json" "$RELEASE_URL/manifest.json" || die "could not download the release manifest"
-  curl -fsSL --retry 3 -o "$TMP/manifest.json.sig" "$RELEASE_URL/manifest.json.sig" || die "could not download the release signature"
-  printf '%s\n' "$RELEASE_KEYS" | awk 'NF >= 3 { print "termenbox-release " $2 " " $3 }' > "$TMP/allowed_signers"
-  ssh-keygen -Y verify -f "$TMP/allowed_signers" -I termenbox-release -n termenbox-release \
-    -s "$TMP/manifest.json.sig" < "$TMP/manifest.json" >/dev/null 2>&1 \
-    || die "the release signature is not valid, so nothing was installed"
-  grep -q '"freeze": *true' "$TMP/manifest.json" && die "new installs are paused by the maintainers (a signed freeze); try again later"
-  VERSION="$(sed -n 's/.*"version": *"\([0-9.]*\)".*/\1/p' "$TMP/manifest.json" | head -1)"
-  SHA="$(awk -v arch="$ARCH" '
-    $0 ~ "\"" arch "\": *[{]" { inside = 1; next }
-    inside && /"sha256":/ { gsub(/.*"sha256": *"/, ""); gsub(/".*/, ""); print; exit }
-    inside && /[}]/ { inside = 0 }' "$TMP/manifest.json")"
-  case "$SHA" in
-    *[!0-9a-f]*|"") die "the release has no $ARCH binary" ;;
-  esac
-  [ "${#SHA}" -eq 64 ] || die "the release has no valid $ARCH hash"
-  curl -fsSL --retry 3 -o "$TMP/termenbox-server" "$RELEASE_URL/termenbox-server-$ARCH-linux" || die "could not download the server"
-  echo "$SHA  $TMP/termenbox-server" | sha256sum -c - >/dev/null 2>&1 || die "the downloaded server does not match the signed hash, so nothing was installed"
-  chmod 755 "$TMP/termenbox-server"
-  "$TMP/termenbox-server" --help >/dev/null 2>&1 || die "the downloaded server does not run on this machine"
-  JBIN="$TMP/termenbox-server"
+  fetch_release
 
   # 2. What will change. Everything below is recorded in the journal first.
   PORT="$(pick_port udp_in_use 4443 "$JOURNAL/udp_port")"
@@ -422,7 +435,203 @@ install_native() {
   native_claim "$PORT"
 }
 
+# ---------------------------------------------------------------------------------------------------------
+# This host, as you, without root (decision 0113): a user systemd service
+# ---------------------------------------------------------------------------------------------------------
+# Everything lives in the home of the user who ran the command and is recorded in a journal there. What would need
+# root (lingering when it is denied, a firewall rule) is printed at the end, never run.
+install_user() {
+  ME="$(id -un)"
+  RUN_USER="$ME"
+  case "${HOME:-}" in /*) ;; *) die "HOME is not set" ;; esac
+  case "$HOME" in *[!A-Za-z0-9._/-]*) die "the home directory path has characters the installer does not handle: $HOME" ;; esac
+  BIN="$HOME/.local/bin/termenbox-server"
+  STATE="$HOME/.config/termenbox"
+  JOURNAL="$HOME/.local/state/termenbox"
+  UNIT_DIR="$HOME/.config/systemd/user"
+  command -v curl >/dev/null 2>&1 || die "curl is needed"
+  command -v sha256sum >/dev/null 2>&1 || die "sha256sum is needed"
+  command -v ssh-keygen >/dev/null 2>&1 || die "ssh-keygen is needed to check the release signature (install openssh-client) and nothing was changed"
+  command -v tmux >/dev/null 2>&1 || die "tmux is needed (sessions are tmux sessions) and installing it takes root. Install it, for example: sudo apt-get install -y tmux   (or dnf, pacman, apk), then run this command again. Nothing was changed."
+  case "$(uname -m)" in
+    x86_64|amd64) ARCH=x86_64 ;;
+    aarch64|arm64) ARCH=aarch64 ;;
+    *) die "unsupported processor $(uname -m); the host install supports x86_64 and aarch64" ;;
+  esac
+  # A user service needs the user's own systemd. Over ssh it is there; after `su` or `sudo -u` it may need these two.
+  export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+  command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1 \
+    || die "no systemd user manager runs for $ME in this session (log in again, for example over ssh), or this machine has no systemd. Use the isolated container install instead, or host-user, which uses a system service."
+
+  TMP="$(mktemp -d)"
+  trap 'rm -rf "$TMP"' EXIT
+
+  SERVICE=termenbox.service
+  # Already installed here: refresh the claim only. TERMENBOX_FORCE=1 reinstalls.
+  if [ -x "$BIN" ] && [ -f "$UNIT_DIR/$SERVICE" ] && [ -z "${TERMENBOX_FORCE:-}" ]; then
+    say "Termenbox is already installed for $ME."
+    systemctl --user is-active --quiet "$SERVICE" || systemctl --user start "$SERVICE"
+    JBIN="$BIN"
+    install_user_helper_units
+    PORT="$(cat "$JOURNAL/udp_port")"
+    native_claim "$PORT"
+    return
+  fi
+
+  fetch_release
+  PORT="$(pick_port udp_in_use 4443 "$JOURNAL/udp_port")"
+  HTTP_PORT="$(pick_port tcp_in_use 8080 "$JOURNAL/http_port")"
+  [ -n "$PORT" ] && [ -n "$HTTP_PORT" ] || die "could not find free ports"
+  say ""
+  say "Termenbox $VERSION will be installed for $ME, with no root (sessions run as $ME):"
+  say "  - the server  $BIN"
+  say "  - state       $STATE"
+  say "  - a user service $SERVICE, and a daily update check (signed releases only), in $UNIT_DIR"
+  say "  - UDP port    $PORT"
+  say "Every change is recorded in $JOURNAL; undo them with: termenbox-server --journal-dir $JOURNAL --revert --dry-run, then --revert"
+  say ""
+  [ -z "${TERMENBOX_DRY_RUN:-}" ] || { say "(dry run: nothing was changed)"; return; }
+
+  mkdir -p "$JOURNAL" "$UNIT_DIR"
+  chmod 700 "$JOURNAL"
+  echo "$PORT" > "$JOURNAL/udp_port"
+  echo "$HTTP_PORT" > "$JOURNAL/http_port"
+
+  mkdir -p "$(dirname "$BIN")"
+  if [ -e "$BIN" ]; then
+    mkdir -p "$JOURNAL/backups"
+    BACKUP="$JOURNAL/backups/termenbox-server.$(date +%s)"
+    cp -p "$BIN" "$BACKUP"
+    journal file_replaced "path=$BIN" "backup=$BACKUP" "sha256=$SHA"
+  else
+    journal file_created "path=$BIN" "sha256=$SHA"
+  fi
+  install -m 0755 "$TMP/termenbox-server" "$BIN"
+
+  [ -d "$STATE" ] || journal dir_created "path=$STATE"
+  mkdir -p "$STATE"
+  chmod 700 "$STATE"
+
+  journal unit_installed "name=$SERVICE" "path=$UNIT_DIR/$SERVICE"
+  cat > "$UNIT_DIR/$SERVICE" <<UNIT
+[Unit]
+Description=Termenbox terminal server
+After=network-online.target
+
+[Service]
+WorkingDirectory=$HOME
+Environment=TERMENBOX_RUN=native
+Environment=TERMENBOX_RUN_USER=$ME
+Environment=TERMENBOX_CONFIG_DIR=$STATE
+Environment=TERMENBOX_JOURNAL_DIR=$JOURNAL
+Environment=TERMENBOX_REQUESTS_DIR=$STATE/requests
+Environment=TERMENBOX_HOST=127.0.0.1
+Environment=TERMENBOX_PORT=$HTTP_PORT
+Environment=TERMENBOX_UDP_PORT=$PORT
+Environment=TERMENBOX_CLIENT_URL=$ORIGIN
+ExecStart=$BIN
+Restart=on-failure
+RestartSec=2
+# The tmux sessions the server starts must outlive a restart or an update of the server.
+KillMode=process
+
+[Install]
+WantedBy=default.target
+UNIT
+  systemctl --user daemon-reload
+  systemctl --user enable --now "$SERVICE" >/dev/null 2>&1 || die "could not start the service; see: journalctl --user -u termenbox"
+
+  i=0
+  until curl -fs "http://127.0.0.1:$HTTP_PORT/health" >/dev/null 2>&1; do
+    i=$((i + 1))
+    [ "$i" -lt 30 ] || die "the server did not start; see: journalctl --user -u termenbox"
+    sleep 1
+  done
+
+  # Starting at boot, not only at login, needs lingering. systemd lets a user switch it on for themselves.
+  LINGER=yes
+  if [ -n "${TERMENBOX_SKIP_LINGER:-}" ]; then
+    LINGER=skipped
+  elif [ "$(loginctl show-user "$ME" -p Linger --value 2>/dev/null)" != yes ]; then
+    journal linger_enabled "user=$ME"
+    loginctl enable-linger "$ME" >/dev/null 2>&1 || LINGER=no
+  fi
+
+  install_user_helper_units
+  native_claim "$PORT"
+
+  # What would have needed root, and was not done. Optional: the server works without it.
+  _opt=""
+  if [ "$LINGER" = no ]; then
+    _opt="$_opt
+  - to start at boot, not only after you log in, run as root:  loginctl enable-linger $ME"
+  fi
+  if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+    _opt="$_opt
+  - the firewall ufw is active; to allow connections run as root:  ufw allow $PORT/udp"
+  elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+    _opt="$_opt
+  - the firewall firewalld is active; to allow connections run as root:  firewall-cmd --permanent --add-port=$PORT/udp && firewall-cmd --reload"
+  fi
+  [ -z "$_opt" ] || say "Optional, needs root (not done):$_opt"
+}
+
+# The updater timer and the request handler as user units (decisions 0076, 0077, 0113). They run the installed binary as
+# you, never as root. Idempotent: only what is missing is added, each unit journaled first.
+install_user_helper_units() {
+  if [ ! -d "$STATE/requests" ]; then
+    journal dir_created "path=$STATE/requests"
+    mkdir -p "$STATE/requests"
+    chmod 700 "$STATE/requests"
+  fi
+  _added=""
+  add_user_unit() { # name, content
+    [ -f "$UNIT_DIR/$1" ] && return 0
+    journal unit_installed "name=$1" "path=$UNIT_DIR/$1"
+    printf '%s\n' "$2" > "$UNIT_DIR/$1"
+    _added=1
+  }
+  add_user_unit termenbox-update.service "[Unit]
+Description=Termenbox updater
+
+[Service]
+Type=oneshot
+Environment=TERMENBOX_BINARY=$BIN
+ExecStart=$BIN --root-helper update --user-helper --journal-dir $JOURNAL"
+  add_user_unit termenbox-update.timer "[Unit]
+Description=Check for a new Termenbox release every day
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=3600
+Persistent=true
+
+[Install]
+WantedBy=timers.target"
+  add_user_unit termenbox-request.service "[Unit]
+Description=Termenbox helper (requests from the server)
+
+[Service]
+Type=oneshot
+Environment=TERMENBOX_BINARY=$BIN
+ExecStart=$BIN --root-helper requests --user-helper --journal-dir $JOURNAL --requests-dir $STATE/requests"
+  add_user_unit termenbox-request.path "[Unit]
+Description=Watch for requests from the Termenbox server
+
+[Path]
+PathExistsGlob=$STATE/requests/*.json
+
+[Install]
+WantedBy=default.target"
+  if [ -n "$_added" ]; then
+    systemctl --user daemon-reload
+    systemctl --user enable --now termenbox-update.timer termenbox-request.path >/dev/null 2>&1 || die "could not start the updater; see: systemctl --user status termenbox-update.timer"
+  fi
+}
+
 case "$MODE" in
   container) install_container ;;
-  host|host-user|host-me) install_native ;;
+  host-me) if [ -n "$LEGACY_SYSTEM" ]; then install_native; else install_user; fi ;;
+  host|host-user) install_native ;;
 esac

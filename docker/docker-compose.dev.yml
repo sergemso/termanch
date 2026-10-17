@@ -9,6 +9,7 @@ x-dev: &dev
     - cache:/cache
   environment:
     - TERMENBOX_BIN=/cache/target/release/termenbox-server
+    - CI=true                  # pnpm must not wait for a prompt in a container without a terminal
 
 services:
   rust:

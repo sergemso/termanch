@@ -186,6 +186,11 @@ struct Args {
     #[arg(long)]
     root_helper: Option<String>,
 
+    /// With --root-helper: this is the no-root install (decision 0113). The helper runs as the user who owns the
+    /// service, never as root, and restarts it with `systemctl --user`.
+    #[arg(long, default_value = "false")]
+    user_helper: bool,
+
     /// Where the unprivileged server leaves requests for the root helper.
     #[arg(
         long,
@@ -490,6 +495,7 @@ async fn main() -> anyhow::Result<()> {
         let setup = helper::Setup {
             root_dir: args.journal_dir.clone(),
             requests_dir: args.requests_dir.clone(),
+            user: args.user_helper,
         };
         match helper::run(action, &setup).await {
             Ok(status) => std::process::exit(status),

@@ -192,6 +192,8 @@ impl Fetch for HttpFetch {
 
 pub struct Systemd {
     pub unit: String,
+    /// The unit belongs to the running user's own manager (`systemctl --user`), as in the no-root install.
+    pub user: bool,
     pub health_url: String,
     pub http: reqwest::Client,
 }
@@ -199,10 +201,11 @@ pub struct Systemd {
 #[async_trait]
 impl Service for Systemd {
     async fn restart(&self) -> Result<()> {
-        let out = tokio::process::Command::new("systemctl")
-            .args(["restart", &self.unit])
-            .output()
-            .await?;
+        let mut cmd = tokio::process::Command::new("systemctl");
+        if self.user {
+            cmd.arg("--user");
+        }
+        let out = cmd.args(["restart", &self.unit]).output().await?;
         if out.status.success() {
             Ok(())
         } else {

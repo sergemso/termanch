@@ -2,6 +2,7 @@
 # Termenbox uninstaller. Served by the client at /uninstall.sh.
 #
 #   curl -fsSL https://app.termenbox.dev/uninstall.sh | sudo sh                 shows what would be removed, changes nothing
+#   (an install made for your own user without root is removed without sudo: curl ... | sh -s -- --yes)
 #   curl -fsSL https://app.termenbox.dev/uninstall.sh | sudo sh -s -- --yes     removes it
 #
 # Options (after --yes): --delete-home  also delete the home of the `termenbox` user, only if the installer created it
@@ -23,7 +24,34 @@ done
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'termenbox: %s\n' "$*" >&2; exit 1; }
-[ "$(id -u)" -eq 0 ] || die "run this as root: curl -fsSL <client>/uninstall.sh | sudo sh"
+# An install that needed no root (decision 0113) lives in the home of the user who made it and is removed by that user.
+if [ "$(id -u)" -ne 0 ]; then
+  UBIN="$HOME/.local/bin/termenbox-server"
+  UJOURNAL="$HOME/.local/state/termenbox"
+  USTATE="$HOME/.config/termenbox"
+  if [ ! -x "$UBIN" ] && [ ! -d "$UJOURNAL" ]; then
+    die "run this as root, or as the user the server was installed for: curl -fsSL <client>/uninstall.sh | sudo sh"
+  fi
+  say "Install for $(id -un), no root:"
+  if [ -x "$UBIN" ] && [ -d "$UJOURNAL" ]; then
+    "$UBIN" --journal-dir "$UJOURNAL" --revert --dry-run | sed 's/^/  /'
+  fi
+  [ -n "$KEEP_STATE" ] || say "  - the server's state   $USTATE (keys, owner)"
+  if [ -z "$YES" ]; then say ""; say "Nothing was changed. Run again with --yes to remove it."; exit 0; fi
+  export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  export DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}"
+  systemctl --user disable --now termenbox-update.timer termenbox-request.path termenbox.service >/dev/null 2>&1 || true
+  if [ -x "$UBIN" ] && [ -d "$UJOURNAL" ]; then
+    "$UBIN" --journal-dir "$UJOURNAL" --revert || die "some changes could not be undone; see the lines above. The server's state was kept."
+  elif [ -d "$UJOURNAL" ]; then
+    die "$UBIN is missing, so the journaled changes in $UJOURNAL cannot be undone. Nothing was removed."
+  fi
+  [ -n "$KEEP_STATE" ] || rm -rf "$USTATE"
+  rm -rf "$UJOURNAL"
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+  say "Removed. Sessions already running in tmux were not stopped (list them with: tmux ls)."
+  exit 0
+fi
 
 NAME="${TERMENBOX_CONTAINER:-termenbox}"
 ROOT="${TERMENBOX_DATA:-/opt/termenbox}"

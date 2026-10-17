@@ -37,6 +37,8 @@ pub enum Change {
     UnitInstalled { name: String, path: String },
     /// A firewall rule we added (`rule` like `4443/udp`).
     FirewallRuleAdded { tool: String, rule: String },
+    /// Lingering we switched on for a user, so their service starts at boot without a login (the no-root install).
+    LingerEnabled { user: String },
 }
 
 impl Change {
@@ -49,6 +51,7 @@ impl Change {
             Change::PackageInstalled { .. } => "package_installed",
             Change::UnitInstalled { .. } => "unit_installed",
             Change::FirewallRuleAdded { .. } => "firewall_rule_added",
+            Change::LingerEnabled { .. } => "linger_enabled",
         }
     }
 
@@ -96,6 +99,7 @@ impl Change {
                 tool: get("tool")?,
                 rule: get("rule")?,
             },
+            "linger_enabled" => Change::LingerEnabled { user: get("user")? },
             other => bail!("unknown change kind `{other}`"),
         })
     }
@@ -146,6 +150,7 @@ pub trait Ops {
     fn remove_package(&mut self, manager: &str, name: &str) -> Result<()>;
     fn remove_unit(&mut self, name: &str, path: &Path) -> Result<()>;
     fn remove_firewall_rule(&mut self, tool: &str, rule: &str) -> Result<()>;
+    fn disable_linger(&mut self, user: &str) -> Result<()>;
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -357,7 +362,25 @@ fn apply_revert(ops: &mut dyn Ops, change: &Change, opts: &RevertOptions) -> Res
             }
             Ok(Outcome::Done)
         }
+        Change::LingerEnabled { user } => {
+            check_name(user)?;
+            if !dry {
+                ops.disable_linger(user)?;
+            }
+            Ok(Outcome::Done)
+        }
     }
+}
+
+/// Where a unit file may be removed from: `Some(false)` for the system directory, `Some(true)` for the running user's
+/// own `~/.config/systemd/user`, `None` for anywhere else. A corrupted entry must not reach outside these.
+fn unit_scope(path: &Path, home: Option<&Path>) -> Option<bool> {
+    if path.starts_with("/etc/systemd/system") {
+        return Some(false);
+    }
+    let home = home.filter(|h| h.is_absolute())?;
+    path.starts_with(home.join(".config/systemd/user"))
+        .then_some(true)
 }
 
 /// Paths in a journal entry must be absolute and free of `..`; a corrupted entry must not reach outside.
@@ -451,14 +474,39 @@ impl Ops for RealOps {
     }
 
     fn remove_unit(&mut self, name: &str, path: &Path) -> Result<()> {
-        if !path.starts_with("/etc/systemd/system") {
-            bail!("refusing to remove a unit outside /etc/systemd/system");
-        }
-        let _ = run("systemctl", &["disable", "--now", "--", name]); // may already be stopped
+        let home = std::env::var_os("HOME").map(PathBuf::from);
+        let Some(user_scope) = unit_scope(path, home.as_deref()) else {
+            bail!("refusing to remove a unit outside /etc/systemd/system or this user's systemd directory");
+        };
+        // A user unit is stopped and forgotten by that user's own manager, never by the system one.
+        let sctl = |rest: &[&str]| {
+            let mut args: Vec<&str> = if user_scope {
+                vec!["--user"]
+            } else {
+                Vec::new()
+            };
+            args.extend_from_slice(rest);
+            run("systemctl", &args)
+        };
+        let _ = sctl(&["disable", "--now", "--", name]); // may already be stopped
         if path.exists() {
             std::fs::remove_file(path)?;
         }
-        run("systemctl", &["daemon-reload"])
+        sctl(&["daemon-reload"])
+    }
+
+    fn disable_linger(&mut self, user: &str) -> Result<()> {
+        // The change is journaled before it is tried, and systemd may have refused it: only switch off what is on.
+        let on = std::process::Command::new("loginctl")
+            .args(["show-user", user, "-p", "Linger", "--value"])
+            .output()
+            .is_ok_and(|o| {
+                o.status.success() && String::from_utf8_lossy(&o.stdout).trim() == "yes"
+            });
+        if !on {
+            return Ok(());
+        }
+        run("loginctl", &["disable-linger", user])
     }
 
     fn remove_firewall_rule(&mut self, tool: &str, rule: &str) -> Result<()> {
@@ -534,6 +582,10 @@ mod tests {
         }
         fn remove_firewall_rule(&mut self, tool: &str, rule: &str) -> Result<()> {
             self.calls.push(format!("fw {tool} {rule}"));
+            Ok(())
+        }
+        fn disable_linger(&mut self, user: &str) -> Result<()> {
+            self.calls.push(format!("unlinger {user}"));
             Ok(())
         }
     }
@@ -843,5 +895,54 @@ mod tests {
                 & 0o777,
             0o600
         );
+    }
+
+    #[test]
+    fn units_are_removed_only_from_the_system_directory_or_the_users_own() {
+        let home = Path::new("/home/me");
+        assert_eq!(
+            unit_scope(
+                Path::new("/etc/systemd/system/termenbox.service"),
+                Some(home)
+            ),
+            Some(false)
+        );
+        assert_eq!(
+            unit_scope(
+                Path::new("/home/me/.config/systemd/user/termenbox.service"),
+                Some(home)
+            ),
+            Some(true)
+        );
+        for bad in [
+            "/home/other/.config/systemd/user/x.service",
+            "/home/me/.config/other/x.service",
+            "/usr/lib/systemd/system/x.service",
+            "/home/me/.config/systemd/userx/x.service",
+        ] {
+            assert_eq!(unit_scope(Path::new(bad), Some(home)), None, "{bad}");
+        }
+        assert_eq!(
+            unit_scope(Path::new("/home/me/.config/systemd/user/x.service"), None),
+            None
+        );
+        assert_eq!(
+            unit_scope(
+                Path::new("relative/.config/systemd/user/x.service"),
+                Some(Path::new("relative"))
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn lingering_we_enabled_is_switched_off_again_by_a_revert() {
+        let (j, _dir) = journal();
+        j.record(Change::from_fields("linger_enabled", &[("user".into(), "me".into())]).unwrap())
+            .unwrap();
+        let mut ops = Fake::default();
+        let report = j.revert(&mut ops, &RevertOptions::default()).unwrap();
+        assert_eq!(ops.calls, vec!["unlinger me".to_string()]);
+        assert_eq!(report.reverted.len(), 1);
     }
 }
