@@ -47,6 +47,8 @@
   import { DEBUG_KEY, tapCounter, viewportReading } from './lib/viewport';
   import { crumb, crumbText } from './lib/breadcrumbs';
   import { identityOf } from './lib/identity';
+  import { HookOffers } from './lib/hookOffer';
+  import { applyHookReply, hookQueries, hookRows, markBusy, pendingOffer, waitingOnPrompt, type HookMap, type HookOffer, type HookRow } from './lib/hooks';
   import { watchForUpdates } from './lib/update';
   import { isIosBrowser } from './lib/pwa';
 
@@ -113,6 +115,7 @@
     onSaved: server => saveServers(servers.map(s => serverKey(s) === serverKey(server) ? server : s)),
     onReady: (id, msg, reconnect) => {
       hub.send(id, { type: 'push_info' });
+      for (const q of hookQueries()) hub.send(id, q);
       if (!reconnect) showToast(`Connected to ${msg.server_name}`); // a reconnect is shown by the status line, not a toast each time
       if (!reconnect || away || id !== activeServerId || !activeKey) return;
       const key = activeKey;
@@ -131,11 +134,46 @@
       else if (msg.type === 'sessions') openPending(_id, msg.sessions);
       else if (msg.type === 'attention') inbox.update(l => mergeAttention(l, _id, msg.items, s => sessionKey(_id, s), s => hub.findSession(sessionKey(_id, s))?.name ?? s));
       else if (msg.type === 'push_info') pushInfos = { ...pushInfos, [_id]: msg };
+      else if (msg.type === 'agent_hooks') {
+        hookMap = applyHookReply(hookMap, _id, msg);
+        // After a removal the next Enable needs the exact change again.
+        if (msg.action === 'remove' && !msg.error) hub.send(_id, { type: 'agent_hooks', agent: msg.agent, action: 'preview' });
+      }
       if (msg.type === 'error') showToast(msg.message, 'error');
       else if (msg.type === 'agent_event') showToast(`Agent ${msg.agent} ${msg.event} in ${msg.session_id}`);
     },
   });
   const snapshots = new SnapshotStore();
+  // The hook offer (decision 0106): what each server says about each agent's hooks, and this device's answers to the offer.
+  const hookOffers = new HookOffers();
+  let hookMap: HookMap = {};
+  let offerTick = 0;
+  $: hookOffer = (offerTick, now, pendingOffer($hubServers, $allSessions, $allAgents, hookMap, hookOffers));
+  $: hookSettings = (offerTick, hookRows($hubServers, hookMap, hookOffers));
+  function enableHooks(serverId: string, agent: string) {
+    hookOffers.clear(serverId, agent);
+    hookMap = markBusy(hookMap, serverId, agent, 'apply');
+    hub.send(serverId, { type: 'agent_hooks', agent, action: 'apply' });
+    offerTick++;
+  }
+  function homeHook(choice: 'enable' | 'later' | 'never', o: HookOffer) {
+    if (choice === 'enable') enableHooks(o.serverId, o.agent);
+    else { if (choice === 'later') hookOffers.notNow(o.serverId, o.agent); else hookOffers.never(o.serverId, o.agent); offerTick++; }
+  }
+  function settingsHook(choice: 'preview' | 'enable' | 'remove' | 'again', row: HookRow) {
+    if (choice === 'enable') enableHooks(row.serverId, row.agent);
+    else if (choice === 'preview') hub.send(row.serverId, { type: 'agent_hooks', agent: row.agent, action: 'preview' });
+    else if (choice === 'remove') { hookMap = markBusy(hookMap, row.serverId, row.agent, 'remove'); hub.send(row.serverId, { type: 'agent_hooks', agent: row.agent, action: 'remove' }); offerTick++; }
+    else { hookOffers.clear(row.serverId, row.agent); offerTick++; }
+  }
+  /** Keys went to the open session: while its agent waits on a prompt that is the user answering by hand. */
+  function typedByHand() {
+    const a = activeKey ? $allAgents[activeKey] : undefined;
+    const s = activeKey ? hub.findSession(activeKey) : undefined;
+    if (!a?.agent || !s || !waitingOnPrompt(a)) return;
+    hookOffers.manualAnswer(s.serverId, a.agent);
+    offerTick++;
+  }
   // The in-session screen: Terminal (default) or Decision, kept per session on this device. The terminal stays mounted
   // in both (hidden, never rebuilt), so a switch cannot lose its state or its focus rules.
   let paneModes = loadPaneModes();
@@ -668,13 +706,13 @@
         {#if servers.length > 0}<button class="secondary" on:click={showWorkspace}>← Sessions</button>{/if}
         <ServerList {servers} states={$hubServers} onpause={(id) => { hub.pause(id); }} onresume={(id) => hub.resume(id)} onretry={(id) => hub.retry(id)} onadd={() => { addPrefill = null; showAddServer = true; }} onremove={removeServer} onshare={shareServer} />
       {:else if $destination === 'home'}
-        <Home sessions={$allSessions} agents={$allAgents} servers={$hubServers} {now} {lastKey} onopen={attach} onservers={leaveServer} onnew={newSession}
+        <Home sessions={$allSessions} agents={$allAgents} servers={$hubServers} {now} {lastKey} offer={hookOffer} onhook={homeHook} onopen={attach} onservers={leaveServer} onnew={newSession}
           onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })}
           onreply={(key, text) => sendSession({ type: 'reply', session: key, text })} />
       {:else if $destination === 'activity'}
         <EmptyState title="Activity" body="What your agents did, and what it cost, will appear here." />
       {:else if $destination === 'settings'}
-        <SettingsView user={user ?? ''} {serverVersion} onservers={leaveServer} onmenu={() => { titleTapped(); menuOpen = true; }} onshortcuts={() => (helpOpen = true)} onreport={openReport} onlogout={logout} />
+        <SettingsView user={user ?? ''} {serverVersion} hooks={hookSettings} onhook={settingsHook} onservers={leaveServer} onmenu={() => { titleTapped(); menuOpen = true; }} onshortcuts={() => (helpOpen = true)} onreport={openReport} onlogout={logout} />
       {:else}
         <div class="workspace" class:mobile={narrow}>
           <div class="terminal-pane">
@@ -686,7 +724,7 @@
               {/if}
               <div class="pane-body" data-pane-body>
                 <div class="pane-terminal" class:pane-hidden={paneMode === 'decision'} inert={paneMode === 'decision'} data-pane="terminal">
-                  {#key identityOf(connection)}<Terminal {connection} {activeSessionId} {connState} {profile} prefix={selected?.prefix || 'C-b'} {preview} />{/key}
+                  {#key identityOf(connection)}<Terminal {connection} {activeSessionId} {connState} ontyped={typedByHand} {profile} prefix={selected?.prefix || 'C-b'} {preview} />{/key}
                 </div>
                 {#if paneMode === 'decision' && activeSession && activeRow}
                   <div class="pane-decision" data-pane="decision">

@@ -168,6 +168,7 @@ impl ServerClient {
             | ServerMessage::Snapshot { .. }
             | ServerMessage::WindowList { .. }
             | ServerMessage::SessionView { .. }
+            | ServerMessage::AgentHooks { .. }
             | ServerMessage::Unknown => {}
             ServerMessage::Error { message } => {
                 info!("Server error: {}", message);

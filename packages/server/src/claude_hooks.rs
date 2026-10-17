@@ -111,14 +111,106 @@ fn journal_path(dir: &Path) -> PathBuf {
 
 pub struct Outcome(pub String);
 
+/// What the file looks like to the offer (U10): all of our entries are there, or they are not.
+pub fn is_connected(settings: &Path) -> bool {
+    let Ok(text) = std::fs::read_to_string(settings) else {
+        return false;
+    };
+    let Ok(root) = serde_json::from_str::<Value>(&text) else {
+        return false;
+    };
+    EVENTS.iter().all(|e| {
+        root["hooks"][*e]
+            .as_array()
+            .is_some_and(|l| l.iter().any(is_ours))
+    })
+}
+
+/// The whole settings file as `connect(apply = true)` will write it: this one text is both what the owner is
+/// shown and what ends up on disk, so the preview cannot drift from the change.
+pub fn planned_text(settings: &Path, binary: &str) -> Result<String> {
+    let text = std::fs::read(settings)
+        .ok()
+        .map(|b| String::from_utf8_lossy(&b).into_owned())
+        .unwrap_or_default();
+    merge(&text, binary)
+}
+
+/// Where a control request from a client points: the settings file, the binary the entries call, and the
+/// directory of the backup and the journal.
+#[derive(Clone, Debug)]
+pub struct Target {
+    pub settings: PathBuf,
+    pub binary: String,
+    pub state_dir: PathBuf,
+}
+
+/// The answer to an `agent_hooks` request (U10, decisions 0079 and 0106).
+#[derive(Debug, PartialEq, Eq)]
+pub struct Reply {
+    /// `connected`, `not_connected`, `unsupported` (no verified hook surface) or `unavailable`.
+    pub state: &'static str,
+    pub preview: Option<String>,
+    pub error: Option<String>,
+}
+
+/// Only Claude Code has a verified hook surface (fact 0038).
+pub fn supported(agent: &str) -> bool {
+    agent == "claude"
+}
+
+/// Handles one `status`, `preview`, `apply` or `remove` for `agent`. File contents never leave this function
+/// except as the preview the owner asked for; callers log the event only.
+pub fn respond(target: Option<&Target>, agent: &str, action: &str) -> Reply {
+    if !supported(agent) {
+        return Reply {
+            state: "unsupported",
+            preview: None,
+            error: None,
+        };
+    }
+    let Some(t) = target else {
+        return Reply {
+            state: "unavailable",
+            preview: None,
+            error: None,
+        };
+    };
+    let state = |t: &Target| {
+        if is_connected(&t.settings) {
+            "connected"
+        } else {
+            "not_connected"
+        }
+    };
+    let (preview, error) = match action {
+        "status" => (None, None),
+        "preview" => match planned_text(&t.settings, &t.binary) {
+            Ok(text) => (Some(text), None),
+            Err(e) => (None, Some(e.to_string())),
+        },
+        "apply" => match connect(&t.settings, &t.binary, &t.state_dir, true) {
+            Ok(_) => (None, None),
+            Err(e) => (None, Some(e.to_string())),
+        },
+        "remove" if !t.settings.exists() => (None, None),
+        "remove" => match disconnect(&t.settings, &t.state_dir) {
+            Ok(_) => (None, None),
+            Err(e) => (None, Some(e.to_string())),
+        },
+        _ => (None, Some("unknown action".to_string())),
+    };
+    Reply {
+        state: state(t),
+        preview,
+        error,
+    }
+}
+
 /// With `apply == false` only the preview is returned (the dry run the guardrail asks for).
 pub fn connect(settings: &Path, binary: &str, state_dir: &Path, apply: bool) -> Result<Outcome> {
     let before = std::fs::read(settings).ok();
-    let text = before
-        .as_deref()
-        .map(|b| String::from_utf8_lossy(b).into_owned())
-        .unwrap_or_default();
-    let merged = merge(&text, binary)?;
+    let merged = planned_text(settings, binary)?;
     if !apply {
         return Ok(Outcome(format!(
             "Would add these hooks to {} (nothing else changes; a backup is kept):\n{}\nRun again with --yes to apply.",
@@ -276,6 +368,51 @@ mod tests {
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
         assert_eq!(v["model"], "sonnet");
         assert!(!serde_json::to_string(&v).unwrap().contains(MARKER));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn connect_preview_equals_what_apply_writes_and_remove_restores() {
+        let d = tmpdir("p");
+        let settings = d.join("settings.json");
+        std::fs::write(&settings, MINE).unwrap();
+        let t = Target {
+            settings: settings.clone(),
+            binary: BIN.into(),
+            state_dir: d.join("state"),
+        };
+        assert_eq!(respond(Some(&t), "claude", "status").state, "not_connected");
+        let shown = respond(Some(&t), "claude", "preview").preview.unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&settings).unwrap(),
+            MINE,
+            "a preview changes nothing"
+        );
+        assert_eq!(respond(Some(&t), "claude", "apply").state, "connected");
+        assert_eq!(
+            std::fs::read_to_string(&settings).unwrap(),
+            shown,
+            "the file holds exactly the preview"
+        );
+        assert!(shown.contains("my-linter") && shown.contains("\"model\": \"opus\""));
+        assert_eq!(respond(Some(&t), "claude", "remove").state, "not_connected");
+        assert_eq!(std::fs::read(&settings).unwrap(), MINE.as_bytes());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn connect_requests_for_other_agents_or_without_a_target_touch_nothing() {
+        let d = tmpdir("q");
+        let t = Target {
+            settings: d.join("settings.json"),
+            binary: BIN.into(),
+            state_dir: d.join("state"),
+        };
+        assert_eq!(respond(Some(&t), "codex", "apply").state, "unsupported");
+        assert_eq!(respond(None, "claude", "apply").state, "unavailable");
+        assert!(respond(Some(&t), "claude", "frobnicate").error.is_some());
+        assert!(!t.settings.exists());
+        assert_eq!(respond(Some(&t), "claude", "remove").state, "not_connected");
         let _ = std::fs::remove_dir_all(&d);
     }
 

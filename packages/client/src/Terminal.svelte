@@ -37,6 +37,8 @@
   export let connection: HubConnection;
   export let activeSessionId: string | null = null;
   export let connState: ServerState = 'connected';
+  /** Called when keys are sent to the session, so the app can tell the user answered a prompt by hand. */
+  export let ontyped: (() => void) | undefined = undefined;
   /** `tmux` adds the Prefix key to the key row; `prefix` is tmux's own notation for it (`C-b`). */
   export let profile: KeyProfile = 'shell';
   export let prefix = 'C-b';
@@ -118,7 +120,7 @@
   }
 
   const batch = new InputBatcher((data) => {
-    if (activeSessionId) connection.send({ type: 'input', data: textToB64(data) });
+    if (activeSessionId) { connection.send({ type: 'input', data: textToB64(data) }); ontyped?.(); }
   });
   /** Not connected (or the server is not answering): keys are not queued, so the user is told instead of typing into the void. */
   $: offline = connState !== 'connected';

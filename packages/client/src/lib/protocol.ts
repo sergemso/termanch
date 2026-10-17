@@ -29,7 +29,9 @@ export type ClientMessage =
   /** Decision 0103: asks for the session view (cleaned tail, parsed prompt, tier); `hash` is the one already held. */
   | { type: 'session_view'; session: string; hash?: string }
   /** Taps option `option` (0-based) of prompt `prompt_id`; the server sends the keys its profile lists for it, never more. */
-  | { type: 'session_answer'; session: string; prompt_id: string; option: number };
+  | { type: 'session_answer'; session: string; prompt_id: string; option: number }
+  /** U10: the hook state of one agent on this server. `preview` answers with the exact settings file `apply` will write. */
+  | { type: 'agent_hooks'; agent: string; action: 'status' | 'preview' | 'apply' | 'remove' };
 
 export type ServerMessage =
   | { type: 'challenge'; nonce: string; server_id: string }
@@ -50,6 +52,7 @@ export type ServerMessage =
   | SessionViewMessage
   | { type: 'push_info'; configured: boolean; public_key: string; devices: number; subscribed: boolean }
   | { type: 'agent_event'; event: AgentEventType; agent: string; session_id: string }
+  | { type: 'agent_hooks'; agent: string; action: string; state: 'connected' | 'not_connected' | 'unsupported' | 'unavailable' | string; preview?: string; error?: string }
   | { type: 'error'; message: string }
   | { type: 'pong' };
 

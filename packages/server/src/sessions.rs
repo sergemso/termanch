@@ -35,6 +35,8 @@ pub struct SessionManager {
     prefix: String,
     /// Bounded readers of the transcripts hooks named (tier 1, decision 0103).
     transcripts: Arc<crate::transcript::Transcripts>,
+    /// Where the owner can enable Claude Code's hooks from the app (U10).
+    hooks: Option<crate::claude_hooks::Target>,
 }
 
 impl SessionManager {
@@ -51,6 +53,7 @@ impl SessionManager {
             control_mode: false,
             prefix: String::new(),
             transcripts: Arc::default(),
+            hooks: None,
         }
     }
 
@@ -66,6 +69,12 @@ impl SessionManager {
             .await
             .ok()
             .flatten()
+    }
+
+    /// Lets the owner enable and remove Claude Code's hooks from the app (U10); without it the state is `unavailable`.
+    pub fn with_claude_hooks(mut self, target: crate::claude_hooks::Target) -> Self {
+        self.hooks = Some(target);
+        self
     }
 
     /// The session managers a client may pick from when it creates a session.
@@ -511,6 +520,34 @@ impl SessionManager {
                 )
                 .await?;
                 info!(target: "audit", event = "session_answer_sent", github_id = identity.id, session = %session, option);
+            }
+            ClientMessage::AgentHooks { agent, action } => {
+                let target = self.hooks.clone();
+                let (a, act) = (agent.clone(), action.clone());
+                let reply = tokio::task::spawn_blocking(move || {
+                    crate::claude_hooks::respond(target.as_ref(), &a, &act)
+                })
+                .await?;
+                // Only the event is logged (who, applied or removed), never the settings file.
+                if reply.error.is_none() && (action == "apply" || action == "remove") {
+                    let event = if action == "apply" {
+                        "agent_hooks_applied"
+                    } else {
+                        "agent_hooks_removed"
+                    };
+                    info!(target: "audit", event, github_id = identity.id, login = %identity.login, agent = %agent);
+                }
+                send_r(
+                    tx,
+                    &ServerMessage::AgentHooks {
+                        agent,
+                        action,
+                        state: reply.state.into(),
+                        preview: reply.preview,
+                        error: reply.error,
+                    },
+                )
+                .await?;
             }
             ClientMessage::Unknown => {}
             ClientMessage::ListSessions => {

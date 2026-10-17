@@ -648,6 +648,14 @@ async fn main() -> anyhow::Result<()> {
             .with_prefix(tmux_prefix.clone())
             .with_push(push.clone())
             .with_events(hub.clone())
+            .with_claude_hooks(claude_hooks::Target {
+                settings: args
+                    .claude_settings
+                    .clone()
+                    .unwrap_or_else(claude_hooks::default_settings_path),
+                binary: std::env::current_exe()?.display().to_string(),
+                state_dir: args.config_dir.clone(),
+            })
             .with_uninstall(
                 args.server_name.clone(),
                 Arc::new(|| {
