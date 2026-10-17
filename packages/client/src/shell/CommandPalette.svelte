@@ -12,6 +12,7 @@
   let query = $state('');
   let value = $state('');
   let ran = false;
+  let inputEl = $state<HTMLInputElement | null>(null);
   const results = $derived(searchEntries(entries, query));
   $effect(() => { if (!open) { query = ''; } });
   $effect(() => { value = results[0]?.id ?? ''; });
@@ -37,11 +38,11 @@
 
 <Dialog.Root bind:open>
   <Dialog.Overlay class="absolute inset-0 z-[100] bg-black/60" />
-  <Dialog.Content data-shell="palette" onCloseAutoFocus={closeFocus} class="absolute top-[10%] left-1/2 z-[101] flex max-h-[80%] w-[min(560px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-card border border-line bg-panel shadow-sheet">
+  <Dialog.Content data-shell="palette" onOpenAutoFocus={(ev) => { ev.preventDefault(); inputEl?.focus({ preventScroll: true }); }} onCloseAutoFocus={closeFocus} class="absolute top-[10%] left-1/2 z-[101] flex max-h-[80%] w-[min(560px,calc(100%-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-card border border-line bg-panel shadow-sheet">
     <Dialog.Title class="sr-only">Command palette</Dialog.Title>
     <Dialog.Description class="sr-only">Type to find a session, server, destination or action. Up and Down choose, Enter opens, Escape closes.</Dialog.Description>
     <Command.Root shouldFilter={false} loop label="Search" bind:value class="flex min-h-0 flex-1 flex-col">
-      <Command.Input bind:value={query} oninput={typed} onkeydowncapture={enter} placeholder="Jump to a session, server or action"
+      <Command.Input bind:ref={inputEl} bind:value={query} oninput={typed} onkeydowncapture={enter} placeholder="Jump to a session, server or action"
         class="h-14 w-full shrink-0 border-0 border-b border-line bg-transparent px-4 text-input text-fg outline-none placeholder:text-muted" />
       <Command.List class="min-h-0 flex-1 overflow-y-auto p-2">
         <Command.Viewport>

@@ -37,21 +37,26 @@ await t.paletteOpensSessionByName();
 await t.escapeRestoresFocus();
 
 // 4. The palette also takes destinations, servers and actions, and opens from the sidebar's Search button.
-await side.getByRole('button', { name: /^Search/ }).click();
 const input = page.getByRole('combobox', { name: 'Search' });
-await input.waitFor();
+// Typing before the input has focus loses the first letters, so wait for the focus, not only for the box to show.
+const openPalette = async () => {
+  await side.getByRole('button', { name: /^Search/ }).click();
+  await input.waitFor();
+  await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'combobox', null, { timeout: 5000 });
+};
+await openPalette();
 await page.keyboard.type('activity');
 await page.keyboard.press('Enter');
 t.check((await t.destination()) === 'activity', 'the palette did not go to Activity');
-await side.getByRole('button', { name: /^Search/ }).click();
+await openPalette();
 await page.keyboard.type('pause alpha');
 await page.keyboard.press('Enter');
 t.check((await t.api('actions')).includes('pause:alpha'), 'the palette did not run "Pause server alpha"');
-await side.getByRole('button', { name: /^Search/ }).click();
+await openPalette();
 await page.keyboard.type('beta job-3');
 await page.keyboard.press('Enter');
 t.check((await t.api('active')) === 'beta/job-3', 'a server name plus a session name did not find the session');
-await side.getByRole('button', { name: /^Search/ }).click();
+await openPalette();
 await page.keyboard.type('zzzzzz');
 await page.getByText('Nothing matches').waitFor();
 await page.keyboard.press('Escape');
