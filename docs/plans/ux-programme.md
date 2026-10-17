@@ -37,9 +37,9 @@ One roadmap file per step (the old numbering `U.n` equals `Un` with a zero pad: 
 | [U07a](roadmap/U07a.md) | ACP backend: agents termenbox starts itself | n/a | U03, U06 | pending |
 | [U07b](roadmap/U07b.md) | ACP session view: a general TUI we render | both | U07a, U02, U06 | pending |
 | [U07c](roadmap/archive/U07c.md) | Configurable key row | both | U02 | done (PR #162) |
-| [U08](roadmap/U08.md) | Decision card: context, options, composer, dictation | both | U05, U06 | pending |
-| [U09](roadmap/U09.md) | Claude Code T1 view: timeline from the transcript | both | U06 | pending |
-| [U10](roadmap/U10.md) | Hook offer card and enable button | both | U05 | pending |
+| [U08](roadmap/archive/U08.md) | Decision card: context, options, composer, dictation | both | U05, U06 | done (PR #176; dictation moved to U16) |
+| [U09](roadmap/archive/U09.md) | Claude Code T1 view: timeline from the transcript | both | U06 | done (PR #179) |
+| [U10](roadmap/archive/U10.md) | Hook offer card and enable button | both | U05 | done (PR #178) |
 | [U11](roadmap/U11.md) | Escalation ladder | both | U08 | pending |
 | [U12](roadmap/U12.md) | History store, Activity timeline and daily digest | both | U04, R08 | pending |
 | [U13](roadmap/U13.md) | Usage and cost view | both | U12 | pending |
