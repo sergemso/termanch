@@ -147,6 +147,15 @@ pub fn sanitize_text(input: &str, max: usize) -> String {
     collapsed.chars().take(max).collect()
 }
 
+/// An option id is echoed back to the agent unchanged, so it is kept exact or dropped: never rewritten.
+fn sanitize_option_id(id: &str) -> String {
+    if id.len() <= 80 && !id.chars().any(|c| c.is_control()) {
+        id.to_string()
+    } else {
+        String::new()
+    }
+}
+
 /// Cleans every text field of an event and enforces the plan limits.
 pub fn sanitize_kind(kind: EventKind) -> EventKind {
     match kind {
@@ -176,6 +185,7 @@ pub fn sanitize_kind(kind: EventKind) -> EventKind {
             id,
             prompt_kind,
             choices,
+            decision,
         } => EventKind::Prompt {
             id: sanitize_text(&id, 40),
             prompt_kind: sanitize_text(&prompt_kind, 20),
@@ -183,6 +193,37 @@ pub fn sanitize_kind(kind: EventKind) -> EventKind {
                 .iter()
                 .take(6)
                 .map(|c| sanitize_text(c, 40))
+                .collect(),
+            decision: decision.map(|d| termenbox_core::events::Decision {
+                // Only the two one-time kinds ever reach a client (decision 0104).
+                options: d
+                    .options
+                    .into_iter()
+                    .filter(|o| o.kind == "allow_once" || o.kind == "reject_once")
+                    .take(4)
+                    .map(|o| termenbox_core::events::DecisionOption {
+                        id: sanitize_option_id(&o.id),
+                        kind: o.kind,
+                        name: sanitize_text(&o.name, 40),
+                    })
+                    .collect(),
+                detail: d.detail.map(|t| sanitize_text(&t, SUMMARY_CHARS)),
+            }),
+        },
+        EventKind::Title { title } => EventKind::Title {
+            title: sanitize_text(&title, TASK_CHARS),
+        },
+        EventKind::Thought { summary } => EventKind::Thought {
+            summary: sanitize_text(&summary, SUMMARY_CHARS),
+        },
+        EventKind::Mode { mode } => EventKind::Mode {
+            mode: sanitize_text(&mode, 40),
+        },
+        EventKind::Commands { names } => EventKind::Commands {
+            names: names
+                .iter()
+                .take(40)
+                .map(|n| sanitize_text(n, 40))
                 .collect(),
         },
         EventKind::Task { title } => EventKind::Task {
@@ -212,7 +253,7 @@ struct Ring {
 /// Hook and Codex report facts; screen and scan only suspect. Lower index wins.
 fn tier(source: Source) -> Option<usize> {
     match source {
-        Source::Hook | Source::Codex => Some(0),
+        Source::Hook | Source::Codex | Source::Acp => Some(0),
         Source::Screen => Some(1),
         Source::Scan => Some(2),
         Source::Unknown => None,

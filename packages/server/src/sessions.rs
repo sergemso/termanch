@@ -960,6 +960,7 @@ mod answer_tests {
                 id: id.clone(),
                 prompt_kind: "choice".into(),
                 choices: vec![],
+                decision: None,
             },
             2,
         );

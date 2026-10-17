@@ -14,6 +14,7 @@ use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
+mod acp;
 mod adapters;
 mod agentwatch;
 mod auth;
@@ -392,6 +393,19 @@ fn build_backend(
                 .with_events(env)
                 .with_event_prefix(prefix),
         )),
+        // ACP agents the server starts itself (decision 0111): only those in the owner's allowlist file.
+        "acp" => {
+            let config = acp::AcpConfig::load(&args.config_dir.join("acp-agents.toml"))?;
+            let backend = Arc::new(
+                acp::AcpBackend::new(config)
+                    .with_events(env.hub.clone())
+                    .with_state_file(args.config_dir.join("acp-sessions.json"))
+                    .with_event_prefix(prefix),
+            );
+            let restoring = backend.clone();
+            tokio::spawn(async move { restoring.restore().await });
+            Ok(backend)
+        }
         "command" => {
             let need = |v: &Option<String>, name: &str| {
                 v.clone()
@@ -406,7 +420,7 @@ fn build_backend(
             )?))
         }
         other => Err(anyhow::anyhow!(
-            "unknown TERMENBOX_BACKEND `{other}` (tmux, command or auto)"
+            "unknown TERMENBOX_BACKEND `{other}` (tmux, command, acp or auto)"
         )),
     }
 }
