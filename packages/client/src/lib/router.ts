@@ -9,8 +9,8 @@ export const DESTINATIONS = [
   { id: 'settings', label: 'Settings' },
 ] as const;
 export type Destination = (typeof DESTINATIONS)[number]['id'];
-/** The app still opens where it always did (the last session); Home is a placeholder until its content lands. */
-export const DEFAULT_DESTINATION: Destination = 'sessions';
+/** The app opens on Home (decision 0100); the session last used is offered there as the Continue card. */
+export const DEFAULT_DESTINATION: Destination = 'home';
 
 export const isDestination = (v: unknown): v is Destination => DESTINATIONS.some((d) => d.id === v);
 

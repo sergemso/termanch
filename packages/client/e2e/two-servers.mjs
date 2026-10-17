@@ -179,6 +179,7 @@ try {
   await page.reload();
 
   // 1. Three sessions in one repo, each running an agent, get distinct tabs; the second server's session is there too.
+  await page.locator('[data-shell=bottom-bar] [data-destination=sessions]').click(); // the app opens on Home (U05); the strip is on Sessions
   const tabs = page.getByRole('tab');
   await waitFor(async () => (await tabs.count()) === 4, 'four tabs (3 + 1 on two servers)', 30000);
   const labels = await tabs.evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));

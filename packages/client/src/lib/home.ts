@@ -1,0 +1,139 @@
+// Home (decision 0100): the Needs-you queue, the four fleet counts and the Continue card, as pure functions so the
+// ordering, the settle rule and the Continue rule are tested without a browser. Text from agents (task titles,
+// prompts) is plain text: nothing here builds markup.
+import type { AgentMap, SessionAgent } from './agents';
+import { bannerChoices } from './notify';
+import type { HubSession } from './hub';
+import type { AttentionKind } from './protocol';
+import type { FleetState } from './ds/states';
+
+export type QueueKind = Exclude<AttentionKind, 'unknown'>;
+
+export interface Row {
+  key: string;
+  name: string;
+  serverId: string;
+  serverName: string;
+  agent?: string;
+  state: FleetState;
+  /** The open Attention kind, when the session is in the queue. */
+  kind?: QueueKind;
+  /** When the wait began (ms). */
+  since?: number;
+  /** The task title. */
+  title?: string;
+  /** The prompt a one-tap answer is attached to, captured when the row was built (an answer carries the prompt it was read from). */
+  prompt?: NonNullable<SessionAgent['prompt']>;
+  /** The question of a needs_input, when the server sent one. */
+  question?: string;
+}
+
+const KIND_RANK: Record<QueueKind, number> = { needs_input: 0, failed: 1, finished_unseen: 2 };
+const KIND_STATE: Record<QueueKind, FleetState> = { needs_input: 'needs-you', failed: 'failed', finished_unseen: 'finished' };
+
+/** The open item of a session: the server's Attention, else (an older server) the raw state. */
+export function kindOf(a: SessionAgent | undefined): QueueKind | undefined {
+  if (!a) return undefined;
+  const k = a.attention?.kind;
+  if (k && k !== 'unknown') return k;
+  if (a.serverStatus) return undefined;
+  return a.state === 'needs_input' ? 'needs_input' : a.state === 'error' ? 'failed' : undefined;
+}
+
+export function fleetState(a: SessionAgent | undefined): FleetState {
+  const kind = kindOf(a);
+  if (kind) return KIND_STATE[kind];
+  return a?.state === 'working' ? 'working' : 'idle';
+}
+
+export function rowOf(s: HubSession, a: SessionAgent | undefined): Row {
+  const kind = kindOf(a);
+  return {
+    key: s.key, name: s.name, serverId: s.serverId, serverName: s.serverName, agent: a?.agent,
+    state: fleetState(a), kind,
+    since: kind ? a?.attention?.raised_at ?? a?.waitingSince ?? a?.ts : undefined,
+    title: a?.attention?.task?.title ?? a?.task?.title,
+    prompt: kind === 'needs_input' ? a?.prompt : undefined,
+    question: kind === 'needs_input' ? a?.attention?.prompt : undefined,
+  };
+}
+
+/** Every open item across all servers: needs_input, then failed, then finished_unseen; the oldest wait first inside a kind. */
+export function queueOf(sessions: HubSession[], agents: AgentMap): Row[] {
+  return sessions.map((s, i) => ({ r: rowOf(s, agents[s.key]), i }))
+    .filter((x) => x.r.kind)
+    .sort((a, b) => KIND_RANK[a.r.kind!] - KIND_RANK[b.r.kind!] || (a.r.since ?? 0) - (b.r.since ?? 0) || a.i - b.i)
+    .map((x) => x.r);
+}
+
+export interface HomeQueue {
+  /** The oldest waiting decision, when one needs an answer. */
+  hero?: Row;
+  /** Everything else in the queue, in order. */
+  rest: Row[];
+}
+
+export function splitQueue(queue: Row[]): HomeQueue {
+  const hero = queue[0]?.kind === 'needs_input' ? queue[0] : undefined;
+  return { hero, rest: hero ? queue.slice(1) : queue };
+}
+
+export type FleetCounts = Record<'needs-you' | 'working' | 'failed' | 'finished', number>;
+
+export function fleetCounts(sessions: HubSession[], agents: AgentMap): FleetCounts {
+  const c: FleetCounts = { 'needs-you': 0, working: 0, failed: 0, finished: 0 };
+  for (const s of sessions) {
+    const st = fleetState(agents[s.key]);
+    if (st !== 'idle') c[st]++;
+  }
+  return c;
+}
+
+/** The options the data already provides for the hero: a prompt the agent's own hook confirmed, at most three, never stale. */
+export function heroChoices(row: Row, a: SessionAgent | undefined, now: number): string[] {
+  return a && row.prompt ? bannerChoices(a, now) : [];
+}
+
+const GROUPS: { state: FleetState; title: string }[] = [
+  { state: 'needs-you', title: 'Needs you' },
+  { state: 'failed', title: 'Failed' },
+  { state: 'working', title: 'Working' },
+  { state: 'finished', title: 'Finished' },
+  { state: 'idle', title: 'Idle' },
+];
+
+/** The Sessions destination: every session, grouped by state, oldest wait first in the groups that wait. Empty groups are left out. */
+export function sessionGroups(sessions: HubSession[], agents: AgentMap): { state: FleetState; title: string; rows: Row[] }[] {
+  const rows = sessions.map((s) => rowOf(s, agents[s.key]));
+  return GROUPS.map((g) => ({
+    ...g,
+    rows: rows.map((r, i) => ({ r, i })).filter((x) => x.r.state === g.state)
+      .sort((a, b) => (a.r.since ?? 0) - (b.r.since ?? 0) || a.i - b.i).map((x) => x.r),
+  })).filter((g) => g.rows.length > 0);
+}
+
+/** The Continue card: the session last used, offered only when nothing needs a decision and its server is connected. */
+export function continueTarget(lastKey: string | null, sessions: HubSession[], connected: Set<string>, queue: Row[]): HubSession | null {
+  if (!lastKey || queue.some((r) => r.kind === 'needs_input')) return null;
+  const s = sessions.find((x) => x.key === lastKey);
+  return s && connected.has(s.serverId) ? s : null;
+}
+
+/**
+ * Holds the queue still while it could move under a finger (ui-never-moves-under-the-finger): while a touch is down
+ * and for `holdMs` after a scroll. Otherwise it follows the data. The first value is taken at once.
+ */
+export class Settle<T> {
+  private shown: T | undefined;
+  private pointers = new Set<number>();
+  private lastScroll = -Infinity;
+  constructor(private holdMs = 2000) {}
+  touchDown(id: number) { this.pointers.add(id); }
+  touchUp(id: number) { this.pointers.delete(id); }
+  scrolled(nowMs: number) { this.lastScroll = nowMs; }
+  frozen(nowMs: number): boolean { return this.pointers.size > 0 || nowMs - this.lastScroll < this.holdMs; }
+  view(next: T, nowMs: number): T {
+    if (this.shown === undefined || !this.frozen(nowMs)) this.shown = next;
+    return this.shown;
+  }
+}

@@ -7,6 +7,7 @@
   export let items: InboxItem[];
   export let now: number;
   export let onopen: (key: string) => void;
+  export let onhome: () => void = () => {};
   export let onread: () => void;
   export let onclear: () => void;
   export let onclose: () => void;
@@ -17,6 +18,7 @@
   // Words, never colour alone; the task title is text from the agent and is shown as text only.
   const WORDS = { needs_input: 'needs you', finished_unseen: 'finished', failed: 'failed', unknown: '' } as const;
   function open(key: string) { onclose(); onopen(key); }
+  function home() { onclose(); onhome(); }
 </script>
 
 <dialog bind:this={dialog} aria-label="Inbox" on:cancel|preventDefault={onclose} on:click={(e) => { if (e.target === dialog) onclose(); }}>
@@ -25,7 +27,7 @@
     {#if items.length === 0}
       <p>Nothing yet. A session that needs you, finishes or fails shows up here.</p>
     {:else}
-      <div class="row"><button class="secondary" on:click={onread}>Mark all read</button><button class="secondary" on:click={onclear}>Clear</button></div>
+      <div class="row"><button class="secondary" on:click={home}>Open Home</button><button class="secondary" on:click={onread}>Mark all read</button><button class="secondary" on:click={onclear}>Clear</button></div>
       <ul>
         {#each items as it (it.id)}
           <li>

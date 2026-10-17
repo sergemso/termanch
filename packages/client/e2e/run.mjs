@@ -343,8 +343,13 @@ try {
     if (!(await page.getByText('e2e-server').isVisible())) fail('the server was removed without confirmation');
     for (let lap = 1; lap <= 3; lap++) {
       await page.getByRole('button', { name: '← Sessions', exact: true }).click();
-      await page.locator('.sessions-button').click();
-      await page.locator('.session-sheet').getByRole('button', { name: /^s1(\s|$)/ }).first().click(); // a tab now reads as the directory
+      await page.locator('[data-shell=bottom-bar] [data-destination=sessions]').click(); // Home is the landing page now (U05)
+      // The Sessions destination lists sessions in groups (U05); the row's name starts with its state and agent icons.
+      const s1Row = page.locator('[data-session-groups] button').filter({ has: page.locator('b', { hasText: /^s1$/ }) }).first();
+      const sheetRow = page.locator('.session-sheet').getByRole('button', { name: /^s1(\s|$)/ }).first(); // with a session open, the list is the sheet
+      if (!(await s1Row.isVisible())) await page.locator('.sessions-button').click();
+      await s1Row.or(sheetRow).first().waitFor();
+      await s1Row.or(sheetRow).first().click();
       await page.locator('.dot.ok').waitFor({ timeout: 20000 }).catch(async (e) => {
         console.log('page errors:', errors, '\n', (await page.locator('body').innerText()).slice(0, 400));
         throw e;
