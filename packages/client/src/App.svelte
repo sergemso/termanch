@@ -32,6 +32,8 @@
   import AppFrame from './shell/AppFrame.svelte';
   import SettingsView from './shell/SettingsView.svelte';
   import { EmptyState } from './lib/ds';
+  import Home from './Home.svelte';
+  import SessionGroups from './SessionGroups.svelte';
   import { destination, navigate, startRouter, type Destination } from './lib/router';
   import ReportDialog from './ReportDialog.svelte';
   import { buildReport, noteError, recentErrors } from './lib/report';
@@ -328,17 +330,11 @@
   }
 
   const LAST_KEY = 'termenbox_last_session';
-  // The start screen picks up where the last visit left off, unless the user has already chosen something.
-  let resumable: string | null = localStorage.getItem(LAST_KEY);
-  $: if (resumable && !activeKey && !away && $allSessions.some(s => s.key === resumable) && $hubServers.find(s => s.id === hub.findSession(resumable!)?.serverId)?.state === 'connected') {
-    const key = resumable;
-    resumable = null;
-    void attach(key);
-  }
-  function forget(key: string) { if (localStorage.getItem(LAST_KEY) === key) localStorage.removeItem(LAST_KEY); }
+  // The app opens on Home; its Continue card offers the session last used (decision 0100). Nothing attaches by itself.
+  let lastKey: string | null = localStorage.getItem(LAST_KEY);
+  function forget(key: string) { if (localStorage.getItem(LAST_KEY) === key) { localStorage.removeItem(LAST_KEY); lastKey = null; } }
 
   async function attach(key: string) {
-    resumable = null;
     const session = hub.findSession(key);
     if (!session) return;
     if ($hubServers.find(s => s.id === session.serverId)?.state !== 'connected') {
@@ -356,6 +352,7 @@
     activeKey = key;
     activeServerId = session.serverId;
     localStorage.setItem(LAST_KEY, key);
+    lastKey = key;
     // Mount the receiving terminal before attach can produce a repaint on another server.
     await tick();
     if (activeKey === key) hub.sendToSession(key, { type: 'attach', session_id: key });
@@ -451,7 +448,6 @@
 
   /** The servers page is part of Settings; leaving the screen detaches the open session (syncAway). */
   function leaveServer() {
-    resumable = null;
     serversPage = true;
     navigate('settings');
     sheetHeight = 'closed';
@@ -624,7 +620,7 @@
     <NavigationBar sessions={tabSessions} agents={$allAgents} servers={$hubServers} windows={$allWindows} {expiring} {link} {activeKey} held={!!actionSession || !!menuSession || cardExpanded || sheetHeld} onopen={attach} onpeek={peek} ontabmenu={openWindowMenu} onactions={(key) => { actionConfirm = false; actionKey = key; }}
       onlink={() => link && showToast(link.text, link.ok ? 'success' : 'error')} onmenu={() => { titleTapped(); menuOpen = true; }} onsessions={() => { if (wide) { rightOpen = !rightOpen; return; } crumb('sessions sheet toggled'); showWorkspace(); sheetHeight = sheetHeight === 'closed' ? 'half' : 'closed'; }} />
     {/if}
-    <NeedsYouBanner {waiting} {now} collapsed={keyboardOpen} onopen={attach} ondismiss={(key, id) => sendAttention(key, { type: 'dismiss', attention_id: id })} onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} />
+    <NeedsYouBanner {waiting} {now} collapsed={keyboardOpen} onopen={attach} onhome={() => go('home')} ondismiss={(key, id) => sendAttention(key, { type: 'dismiss', attention_id: id })} onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} />
 
     {#if iosHint && !selectedServer}
       <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); font-size: 0.85rem;">
@@ -649,7 +645,8 @@
         {#if servers.length > 0}<button class="secondary" on:click={showWorkspace}>← Sessions</button>{/if}
         <ServerList {servers} states={$hubServers} onpause={(id) => { hub.pause(id); }} onresume={(id) => hub.resume(id)} onretry={(id) => hub.retry(id)} onadd={() => { addPrefill = null; showAddServer = true; }} onremove={removeServer} onshare={shareServer} />
       {:else if $destination === 'home'}
-        <EmptyState title="Home" body="What needs you will gather here. Until then, Sessions has every session." />
+        <Home sessions={$allSessions} agents={$allAgents} servers={$hubServers} {now} {lastKey} onopen={attach} onservers={leaveServer} onnew={newSession}
+          onanswer={(key, choice, prompt) => sendSession({ type: 'answer', session: key, prompt_id: prompt.id, seq: prompt.seq, choice })} />
       {:else if $destination === 'activity'}
         <EmptyState title="Activity" body="What your agents did, and what it cost, will appear here." />
       {:else if $destination === 'settings'}
@@ -657,13 +654,15 @@
       {:else}
         <div class="workspace" class:mobile={narrow}>
           <div class="terminal-pane">
-            {#if connection && connState !== 'paused'}
+            {#if !activeKey}
+              <SessionGroups sessions={$allSessions} agents={$allAgents} {now} onopen={attach} onnew={newSession} />
+            {:else if connection && connState !== 'paused'}
               {#key identityOf(connection)}<Terminal {connection} {activeSessionId} {connState} {profile} prefix={selected?.prefix || 'C-b'} {preview} />{/key}
             {:else}
               <div class="card" style="margin: auto;">{activeKey ? 'This server is paused. Resume it in Servers.' : 'Choose a session to open its terminal.'}<button class="secondary" on:click={leaveServer}>Servers</button></div>
             {/if}
           </div>
-          {#if !wide}
+          {#if !wide && activeKey}
             <SessionSheet sessions={$allSessions} agents={$allAgents} servers={$hubServers} windows={$allWindows} onpeek={peek} onwarm={keepWarm} {activeKey} mobile={narrow} bind:height={sheetHeight} held={!!actionSession}
               onexpanded={(open) => cardExpanded = open} onheld={(held) => sheetHeld = held} onopen={attach} onnew={newSession} onrefresh={() => { for (const s of $hubServers) hub.send(s.id, { type: 'list_sessions' }); }} onretry={(id) => hub.retry(id)} send={sendSession} />
           {/if}
@@ -679,7 +678,7 @@
   {/if}
 
   {#if menuOpen && user}<MenuSheet {user} {avatar} {serverVersion} onservers={leaveServer} onreport={openReport} onlogout={logout} onclose={() => menuOpen = false} unread={unreadCount($inbox)} oninbox={() => inboxOpen = true} push={pushView} onpush={togglePush} />{/if}
-  {#if inboxOpen}<InboxSheet items={$inbox} {now} onopen={attach} onread={() => inbox.update(markAllRead)} onclear={() => inbox.set([])} onclose={() => { inboxOpen = false; inbox.update(markAllRead); }} />{/if}
+  {#if inboxOpen}<InboxSheet items={$inbox} {now} onopen={attach} onhome={() => go('home')} onread={() => inbox.update(markAllRead)} onclear={() => inbox.set([])} onclose={() => { inboxOpen = false; inbox.update(markAllRead); }} />{/if}
   {#if actionSession}<SessionActions session={actionSession} canClose={backendOf(actionSession) === 'tmux'} confirmFirst={actionConfirm} ondetach={() => detach(actionSession.key)} onclosesession={() => closeSession(actionSession.key)} onclose={() => actionKey = null} />{/if}
   {#if menuSession && menuKey}
     <WindowMenu session={menuSession} data={$allWindows[menuSession.key]} supported={backendOf(menuSession) === 'tmux'}
