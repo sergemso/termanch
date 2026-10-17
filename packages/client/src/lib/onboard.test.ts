@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { installCommand, scanCommand, claimLink, parseClaim, parseServerLink, serverLink, pollDelay, waitForServer, ClaimTimeout, CLAIM_WINDOW_MS, type WaitDeps } from './onboard';
+import { installCommand, scanCommand, claimLink, parseClaim, parseServerLink, serverCode, serverLink, pollDelay, waitForServer, ClaimTimeout, CLAIM_WINDOW_MS, type WaitDeps } from './onboard';
 import type { DirRecord } from './directory';
 
 const S = 'A'.repeat(43);
@@ -80,7 +80,17 @@ describe('parseServerLink', () => {
     expect(parseServerLink(`https://app.example.dev/#server=${id}`)).toBe(id);
     expect(parseServerLink(`#server=${id}`)).toBe(id);
   });
+  it('reads the id from the code a share carries, alone or inside a pasted message', () => {
+    expect(serverCode(id)).toBe(`termenbox-server:${id}`);
+    expect(parseServerLink(serverCode(id))).toBe(id);
+    expect(parseServerLink(`Link not opening the app? In the app choose Add Server and paste: ${serverCode(id)}`)).toBe(id);
+    expect(parseServerLink(`https://app.example.dev/#server=${id}\n${serverCode(id)}`)).toBe(id);
+    expect(parseClaim(serverCode(id))).toBeNull(); // a server id is not a claim secret
+  });
   it('rejects claim links, short ids and junk', () => {
+    expect(parseServerLink(`termenbox-server:${'A'.repeat(42)}`)).toBeNull();
+    expect(parseServerLink(`xtermenbox-server:${id}`)).toBeNull();
+    expect(parseServerLink(id)).toBeNull();
     expect(parseServerLink(`https://app.example.dev/#claim=${id}`)).toBeNull();
     expect(parseServerLink('#server=short')).toBeNull();
     expect(parseServerLink('hello')).toBeNull();

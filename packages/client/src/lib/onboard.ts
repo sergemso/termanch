@@ -34,6 +34,14 @@ export function serverLink(origin: string, serverId: string): string {
   return `${origin.replace(/\/$/, '')}/#server=${serverId}`;
 }
 
+/**
+ * The same thing as a line of text for the case where a link cannot be followed: an iPhone opens a tapped link in Safari,
+ * never in the installed app, so the owner pastes this into Add Server inside the app instead.
+ */
+export function serverCode(serverId: string): string {
+  return `termenbox-server:${serverId}`;
+}
+
 /** Accepts a claim link, a URL fragment (`#claim=...`) or the bare secret. */
 export function parseClaim(text: string): string | null {
   const t = text.trim();
@@ -42,9 +50,9 @@ export function parseClaim(text: string): string | null {
   return SECRET.test(t) ? t : null;
 }
 
-/** The server id from a re-add link (`#server=...`), as printed by the installer for an already-registered server. */
+/** The server id from a re-add link (`#server=...`), as printed by the installer for an already-registered server, or from its `serverCode`. */
 export function parseServerLink(text: string): string | null {
-  const m = /[#&?]server=([A-Za-z0-9_-]{43})(?![A-Za-z0-9_-])/.exec(text.trim());
+  const m = /(?:[#&?]server=|(?:^|\s)termenbox-server:)([A-Za-z0-9_-]{43})(?![A-Za-z0-9_-])/.exec(text.trim());
   return m ? m[1] : null;
 }
 

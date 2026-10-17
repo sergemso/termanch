@@ -67,6 +67,14 @@
     sel.addRange(range);
   }
 
+  let linkText = '';
+  let linkError = '';
+  function submitLink() {
+    linkError = '';
+    if (!parseServerLink(linkText) && !parseClaim(linkText)) { linkError = 'That is not a Termenbox link or code.'; return; }
+    gotText(linkText);
+  }
+
   async function copy(text: string) {
     await navigator.clipboard.writeText(text);
     copied = true;
@@ -82,7 +90,7 @@
     }
     const s = parseClaim(text);
     if (!s) {
-      error = 'That QR is not a Termenbox code.';
+      error = 'That is not a Termenbox link, code or QR.';
       return;
     }
     stopScan();
@@ -144,6 +152,14 @@
 </script>
 
 <Dialog title="Add Server" {onclose}>
+    <form class="have-link" on:submit|preventDefault={submitLink} style="margin-bottom: 16px;">
+      <label for="have-link" style="display: block; font-size: 0.875rem; margin-bottom: 6px; color: var(--fg-muted);">Already added on another device? Paste its link or code</label>
+      <div style="display: flex; gap: 8px;">
+        <input id="have-link" bind:value={linkText} placeholder="termenbox-server:… or a link" autocapitalize="off" autocomplete="off" spellcheck="false" style="flex: 1; min-width: 0;" />
+        <button type="submit" class="secondary" disabled={!linkText.trim()}>Add</button>
+      </div>
+      {#if linkError}<p role="alert" style="color: var(--danger); margin-top: 6px; font-size: 0.875rem;">{linkError}</p>{/if}
+    </form>
     <div style="display: flex; gap: 8px; margin-bottom: 16px;">
       <button class={tab === 'paste' ? '' : 'secondary'} on:click={() => choose('paste')} style="flex: 1; padding: 8px;">Paste a command</button>
       <button class={tab === 'scan' ? '' : 'secondary'} on:click={() => choose('scan')} style="flex: 1; padding: 8px;">Scan a QR</button>
