@@ -38,6 +38,7 @@ mod release;
 mod requests;
 mod rtc;
 mod sessions;
+mod transcript;
 mod uninstall;
 mod updater;
 mod websocket;
