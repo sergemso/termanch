@@ -5,6 +5,7 @@
   import { canInstall, promptInstall, isIosBrowser } from './lib/pwa';
   import { updateAvailable } from './lib/update';
   import { APP_VERSION } from './lib/appVersion';
+  import KeyRowEditor from './KeyRowEditor.svelte';
 
   export let user: string;
   export let avatar = '';
@@ -52,6 +53,7 @@
       <label>Skin <select value={$settings.skin} on:change={(e) => changeSettings({ skin: e.currentTarget.value as Skin })}>{#each SKINS as skin}<option value={skin}>{skin[0].toUpperCase() + skin.slice(1)}</option>{/each}</select></label>
       <label>Terminal renderer <select value={$settings.renderer} on:change={(e) => changeSettings({ renderer: e.currentTarget.value as 'webgl' | 'dom' })}><option value="webgl">WebGL (fast)</option><option value="dom">Plain (if the screen flickers or goes blank)</option></select></label>
       {#if $settings.renderer !== initialRenderer}<p>Applies the next time a session opens.</p>{/if}
+      <KeyRowEditor />
     {/if}
     <button class="secondary" on:click={() => choose(onreport)}>Report a problem</button>
     {#if $canInstall}<button class="secondary" on:click={() => choose(promptInstall)}>Install app</button>
