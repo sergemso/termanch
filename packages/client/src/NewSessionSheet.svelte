@@ -7,13 +7,16 @@
 
   /** Servers a session can be created on (connected ones). */
   export let servers: HubServer[];
+  /** The server to start with, and whether the sheet is fixed to it (opened from that server's own "+ New"). */
+  export let initialServerId = '';
+  export let locked = false;
   export let sessions: HubSession[];
   export let windows: WindowMap;
   export let oncreate: (req: { serverId: string; backend?: string; dir?: string; template?: string; name: string }) => void;
   export let onclose: () => void;
 
   let dialog: HTMLDialogElement;
-  let serverId = servers[0]?.id ?? '';
+  let serverId = servers.find(s => s.id === initialServerId)?.id ?? servers[0]?.id ?? '';
   let backend = '';
   let template = 'claude';
   let dir = '';
@@ -40,8 +43,8 @@
 
 <dialog bind:this={dialog} aria-label="New session" on:cancel|preventDefault={onclose} on:click={(e) => { if (e.target === dialog) onclose(); }}>
   <form on:submit|preventDefault={create}>
-    <h2>New session</h2>
-    {#if servers.length > 1}
+    <h2>{locked && server ? `New session on ${server.server.server_name || 'Server'}` : 'New session'}</h2>
+    {#if servers.length > 1 && !locked}
       <label>Server <select bind:value={serverId}>{#each servers as s}<option value={s.id}>{s.server.server_name || 'Server'}</option>{/each}</select></label>
     {/if}
     {#if server && server.backends.length > 1}

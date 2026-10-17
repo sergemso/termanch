@@ -12,7 +12,7 @@
     sessions: HubSession[]; agents: AgentMap; servers: HubServer[]; now: number; lastKey: string | null;
     onopen: (key: string) => void;
     onanswer: (key: string, choice: number, prompt: NonNullable<SessionAgent['prompt']>) => void;
-    onservers: () => void; onnew: () => void;
+    onservers: () => void; onnew: (serverId?: string) => void;
   } = $props();
 
   const FILTERS = ['needs-you', 'working', 'failed', 'finished'] as const;
@@ -93,7 +93,7 @@
       {:else if !view.hero && !view.rest.length}
         {#if sessions.length === 0}
           <EmptyState title="No sessions yet" body="Start one and it shows up here.">
-            <button type="button" onclick={onnew} class="min-h-11 rounded-card bg-accent px-4 text-base font-semibold text-on-accent">Start a session</button>
+            <button type="button" onclick={() => onnew()} class="min-h-11 rounded-card bg-accent px-4 text-base font-semibold text-on-accent">Start a session</button>
           </EmptyState>
         {:else}
           <EmptyState title="All quiet" body="Nothing needs you right now." />

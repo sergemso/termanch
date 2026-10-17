@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import { ServerHub, serverKey, sessionDestinations, type HubConnection } from './hub';
+import { ServerHub, newSessionTargets, serverKey, sessionDestinations, type HubConnection } from './hub';
 import type { ConnectionOptions } from './connection';
 import type { ClientMessage, ServerListItem, ServerMessage } from './protocol';
 import type { Target } from './transport';
@@ -50,6 +50,17 @@ describe('ServerHub', () => {
     expect(connections).toHaveLength(3);
     expect(get(hub.servers)[0].state).toBe('paused');
     hub.resume('a'); expect(connections[3].opts.claim).toBe('new');
+  });
+  it('offers every connected server for a new session and preselects the asked-for one, else the first', () => {
+    const { hub, connections } = setup(); hub.start([server('a'), server('b'), server('c')]);
+    connections.forEach(c => c.ready()); hub.pause('a');
+    const servers = get(hub.servers);
+    expect(newSessionTargets(servers).servers.map(s => s.id)).toEqual(['b', 'c']);
+    expect(newSessionTargets(servers).serverId).toBe('b');
+    expect(newSessionTargets(servers, 'c').serverId).toBe('c');
+    expect(newSessionTargets(servers, 'a').serverId).toBe('b'); // paused: not a target
+    connections[1].opts.onState('unreachable'); connections[2].opts.onState('unreachable');
+    expect(newSessionTargets(get(hub.servers))).toEqual({ servers: [], serverId: '' });
   });
   it('requires a choice among connected peers when the selected server is unavailable', () => {
     const { hub, connections } = setup(); hub.start([server('a'), server('b'), server('c')]);

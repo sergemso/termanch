@@ -6,7 +6,7 @@
   import { sessionGroups, type Row } from './lib/home';
 
   /** The Sessions destination without an open session: every session, grouped by state, in the rows Home uses. */
-  let { sessions, agents, now, onopen, onnew }: { sessions: HubSession[]; agents: AgentMap; now: number; onopen: (key: string) => void; onnew: () => void } = $props();
+  let { sessions, agents, now, onopen, onnew }: { sessions: HubSession[]; agents: AgentMap; now: number; onopen: (key: string) => void; onnew: (serverId?: string) => void } = $props();
   const groups = $derived(sessionGroups(sessions, agents));
   const meta = (r: Row) => [r.serverName, r.since ? `waiting ${ageText(r.since, now)}` : ''].filter(Boolean).join(' · ');
 </script>
@@ -21,7 +21,7 @@
     </section>
   {:else}
     <EmptyState title="No sessions yet" body="Start one and it shows up here.">
-      <button type="button" onclick={onnew} class="min-h-11 rounded-card bg-accent px-4 text-base font-semibold text-on-accent">Start a session</button>
+      <button type="button" onclick={() => onnew()} class="min-h-11 rounded-card bg-accent px-4 text-base font-semibold text-on-accent">Start a session</button>
     </EmptyState>
   {/each}
 </div>
