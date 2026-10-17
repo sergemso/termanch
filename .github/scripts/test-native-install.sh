@@ -91,7 +91,13 @@ i=0
 while [ -n "$(ls -A $requests)" ] && [ $i -lt 30 ]; do i=$((i + 1)); sleep 1; done
 [ -z "$(ls -A $requests)" ] || fail "the helper did not consume the requests"
 [ -f /etc/hostname ] || fail "a link in the requests directory damaged its target"
-journalctl -u termenbox-request --no-pager | grep -q "up to date\|updated" || { journalctl -u termenbox-request --no-pager | tail; fail "the helper did not act on the update request"; }
+# The helper takes the request files first and reports when it has finished, so the line can lag the files: wait for it.
+i=0
+until journalctl -u termenbox-request --no-pager | grep -q "up to date\|updated"; do
+  i=$((i + 1))
+  [ $i -lt 30 ] || { journalctl -u termenbox-request --no-pager | tail; fail "the helper did not act on the update request"; }
+  sleep 1
+done
 
 echo "== a changed release is refused"
 cp /release/manifest.json /tmp/manifest.good
