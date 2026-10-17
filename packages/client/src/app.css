@@ -1,25 +1,71 @@
 @import "tailwindcss";
+@import "./skins.css";
 /* Scan this folder even when a harness builds from another root (the browser e2e does). */
 @source "./";
 
-/* The existing CSS variables stay the source of truth (the light theme only swaps them); Tailwind
-   utilities read them through these tokens. */
-@theme inline {
-  --color-bg: var(--bg);
-  --color-bg-secondary: var(--bg-secondary);
-  --color-fg: var(--fg);
-  --color-fg-muted: var(--fg-muted);
-  --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
-  --color-border: var(--border);
-  --color-border-hover: var(--border-hover);
-  --color-danger: var(--danger);
-  --color-success: var(--success);
-  --animate-slide-in: slide-in 0.2s ease;
+/* Design tokens (U02, decisions 0110 and 0112). Skins (skins.css) set plain CSS variables; this block turns
+   them into utilities (bg-panel, text-soft, rounded-card) and fixes the scales, so a value off the scale
+   cannot be written by accident. Colour utilities take opacity modifiers (bg-warn/15) via color-mix. */
+@theme {
+  /* Scales replace Tailwind's defaults: type 12 13 15 16 22, spacing on a 4 px step, three motion lengths. */
+  --text-*: initial;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-input: 16px; /* inputs stay 16 so iOS does not zoom */
+  --text-title: 22px;
+  --spacing: 4px;
+  --radius-card: var(--radius);
+  --radius-control: var(--radius-sm);
+  --radius-full: 9999px;
+  --shadow-sheet: 0 -24px 60px rgb(0 0 0 / 0.5);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-slow: 250ms;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Monaco, Menlo, monospace;
+  --animate-slide-in: slide-in var(--duration-base) var(--ease-out);
   @keyframes slide-in {
     from { transform: translateX(100%); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }
   }
+}
+@theme inline {
+  --color-*: initial;
+  --color-black: #000;
+  --color-white: #fff;
+  --color-transparent: transparent;
+  --color-bg: var(--bg);
+  --color-sunken: var(--sunken);
+  --color-panel: var(--panel);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-fg: var(--text);
+  --color-soft: var(--soft);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-on-accent: var(--on-accent);
+  --color-warn: var(--warn);
+  --color-on-warn: var(--on-warn);
+  --color-ok: var(--ok);
+  --color-bad: var(--bad);
+  --color-info: var(--info);
+  --color-term: var(--term);
+  --color-term-fg: var(--term-fg);
+  /* Names the screens built before U02 use; they now follow the skin too. */
+  --color-bg-secondary: var(--panel);
+  --color-fg-muted: var(--muted);
+  --color-border: var(--line);
+  --color-border-hover: var(--soft);
+  --color-danger: var(--bad);
+  --color-success: var(--ok);
+  --color-accent-hover: color-mix(in oklab, var(--accent), white 15%);
+}
+
+/* Motion is off for people who ask for none (DR14). */
+@media (prefers-reduced-motion: reduce) {
+  :root { --duration-fast: 0.01ms; --duration-base: 0.01ms; --duration-slow: 0.01ms; }
 }
 
 /* Everything below predates Tailwind. It sits in the base layer, after Tailwind's preflight and under
@@ -30,18 +76,17 @@
   :root {
     /* Under the status bar, the Dynamic Island and the microphone/camera indicator: nothing may be drawn there. */
     --safe-top: env(safe-area-inset-top, 0px);
-    --bg: #0d1117;
-    --bg-secondary: #161b22;
-    --fg: #e6edf3;
-    --fg-muted: #8b949e;
-    --accent: #58a6ff;
-    --accent-hover: #79b8ff;
-    --border: #30363d;
-    --border-hover: #484f58;
-    --danger: #f85149;
-    --success: #3fb950;
-    --terminal-bg: #0d1117;
-    --terminal-fg: #e6edf3;
+    /* Names used by code written before U02; the skin sets the real values (skins.css). */
+    --bg-secondary: var(--panel);
+    --fg: var(--text);
+    --fg-muted: var(--muted);
+    --border: var(--line);
+    --border-hover: var(--soft);
+    --danger: var(--bad);
+    --success: var(--ok);
+    --accent-hover: color-mix(in oklab, var(--accent), white 15%);
+    --terminal-bg: var(--term);
+    --terminal-fg: var(--term-fg);
   }
 
   body {
@@ -65,7 +110,7 @@
     cursor: pointer;
     border: none;
     background: var(--accent);
-    color: var(--bg);
+    color: var(--on-accent);
     padding: 8px 16px;
     border-radius: 6px;
     font-weight: 600;
@@ -144,20 +189,6 @@
     white-space: nowrap;
   }
 
-  :root[data-theme="light"] {
-    --bg: #ffffff;
-    --bg-secondary: #f0f3f6;
-    --fg: #1f2328;
-    --fg-muted: #59636e;
-    --accent: #0969da;
-    --accent-hover: #0550ae;
-    --border: #d1d9e0;
-    --border-hover: #818b98;
-    --danger: #cf222e;
-    --success: #1a7f37;
-    --terminal-bg: #ffffff;
-    --terminal-fg: #1f2328;
-  }
   /* Preflight also changes defaults the screens were tuned against on the phone: restore the browser's
      (button and field text 13.33px, normal line height, inline media, default code size). */
   html { line-height: normal; }

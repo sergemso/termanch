@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { rememberFocus } from './lib/focus';
-  import { settings, changeSettings } from './lib/settings';
+  import { settings, changeSettings, SKINS, type Skin } from './lib/settings';
   import { canInstall, promptInstall, isIosBrowser } from './lib/pwa';
   import { updateAvailable } from './lib/update';
   import { APP_VERSION } from './lib/appVersion';
@@ -49,6 +49,7 @@
       <label>Cache TTL <select value={$settings.cacheTtlMs} on:change={(e) => changeSettings({ cacheTtlMs: Number(e.currentTarget.value) as 300000 | 3600000 })}><option value="300000">5 minutes</option><option value="3600000">1 hour</option></select></label>
       <label>Keep warm text <input value={$settings.keepWarm} placeholder="empty hides the button" maxlength="200" autocapitalize="off" on:change={(e) => changeSettings({ keepWarm: e.currentTarget.value })} /></label>
       <label>Theme <select value={$settings.theme} on:change={(e) => changeSettings({ theme: e.currentTarget.value as 'dark' | 'light' | 'system' })}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></label>
+      <label>Skin <select value={$settings.skin} on:change={(e) => changeSettings({ skin: e.currentTarget.value as Skin })}>{#each SKINS as skin}<option value={skin}>{skin[0].toUpperCase() + skin.slice(1)}</option>{/each}</select></label>
       <label>Terminal renderer <select value={$settings.renderer} on:change={(e) => changeSettings({ renderer: e.currentTarget.value as 'webgl' | 'dom' })}><option value="webgl">WebGL (fast)</option><option value="dom">Plain (if the screen flickers or goes blank)</option></select></label>
       {#if $settings.renderer !== initialRenderer}<p>Applies the next time a session opens.</p>{/if}
     {/if}

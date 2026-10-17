@@ -1,13 +1,16 @@
 import { writable } from 'svelte/store';
 
-export interface Settings { theme: 'dark' | 'light' | 'system'; cacheTtlMs: 300000 | 3600000; /** What Keep warm sends; empty hides the button. */ keepWarm: string; /** WebGL is fast; the DOM renderer is the plain fallback to try when the screen flickers or goes blank. */ renderer: 'webgl' | 'dom' }
+export const SKINS = ['navy', 'graphite', 'teal'] as const;
+export type Skin = (typeof SKINS)[number];
+export interface Settings { theme: 'dark' | 'light' | 'system'; /** The palette (decision 0110); the theme picks its dark or light variant. */ skin: Skin; cacheTtlMs: 300000 | 3600000; /** What Keep warm sends; empty hides the button. */ keepWarm: string; /** WebGL is fast; the DOM renderer is the plain fallback to try when the screen flickers or goes blank. */ renderer: 'webgl' | 'dom' }
 const KEY = 'termenbox_settings';
-const DEFAULT: Settings = { theme: 'dark', cacheTtlMs: 300000, keepWarm: '', renderer: 'webgl' };
+const DEFAULT: Settings = { theme: 'dark', skin: 'navy', cacheTtlMs: 300000, keepWarm: '', renderer: 'webgl' };
 const storage = () => typeof localStorage === 'undefined' ? undefined : localStorage;
 export function loadSettings(store: Pick<Storage, 'getItem'> | undefined = storage()): Settings {
   try {
     const saved = JSON.parse(store?.getItem(KEY) ?? 'null');
     return { theme: ['dark', 'light', 'system'].includes(saved?.theme) ? saved.theme : DEFAULT.theme,
+      skin: (SKINS as readonly string[]).includes(saved?.skin) ? saved.skin : DEFAULT.skin,
       cacheTtlMs: saved?.cacheTtlMs === 3600000 ? 3600000 : 300000,
       keepWarm: typeof saved?.keepWarm === 'string' ? saved.keepWarm.replace(/[\r\n]+/g, ' ').slice(0, 200) : '',
       renderer: saved?.renderer === 'dom' ? 'dom' : 'webgl' };
@@ -18,6 +21,7 @@ export function saveSettings(value: Settings, store: Pick<Storage, 'setItem'> | 
 }
 export const settings = writable(loadSettings());
 export function changeSettings(patch: Partial<Settings>) { settings.update(value => { const next = { ...value, ...patch }; saveSettings(next); return next; }); }
-export function applyTheme(theme: Settings['theme'], prefersLight: boolean) {
+export function applyTheme(theme: Settings['theme'], prefersLight: boolean, skin: Skin = DEFAULT.skin) {
   document.documentElement.dataset.theme = theme === 'system' ? (prefersLight ? 'light' : 'dark') : theme;
+  document.documentElement.dataset.skin = skin;
 }

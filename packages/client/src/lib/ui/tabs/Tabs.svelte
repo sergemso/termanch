@@ -12,7 +12,7 @@
     {#each items as item (item.value)}
       <Tabs.Trigger
         value={item.value}
-        class="flex-1 rounded-md border border-border bg-bg-secondary px-4 py-2 font-semibold text-fg data-[state=active]:border-accent data-[state=active]:bg-accent data-[state=active]:text-bg"
+        class="flex-1 rounded-md border border-border bg-bg-secondary px-4 py-2 font-semibold text-fg data-[state=active]:border-accent data-[state=active]:bg-accent data-[state=active]:text-on-accent"
       >
         {item.label}
       </Tabs.Trigger>

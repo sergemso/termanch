@@ -1,0 +1,55 @@
+/* Skins (decision 0110): token values only, no layout. Navy dark is the default; a skin is chosen with
+   data-skin on <html> and a mode with data-theme. Every block sets every colour so a skin never leaks
+   into another. Components read these only through the utilities in app.css (@theme). Values are the
+   audited ones from docs/plans/assets/ux/shared/skins.css (contrast >= 4.5:1 for text). */
+
+/* navy, dark (default) */
+:root {
+  --bg: #0a1120; --sunken: #080e1a; --panel: #0f1a2e; --raised: #14223b; --line: #1f2f4b;
+  --text: #e8eef9; --soft: #b6c3db; --muted: #7f90ae;
+  --accent: #2868f6; --accent-text: #5688f8; --on-accent: #ffffff;
+  --warn: #f6b83d; --on-warn: #1a1202; --ok: #3ccf86; --bad: #f47c77; --info: #54a8ff;
+  --term: #070d19; --term-fg: #cdd8ee; --t-ok: #3ccf86; --t-bad: #f47c77; --t-warn: #f6b83d; --t-info: #54a8ff; --t-accent: #5688f8; --t-dim: #7f90ae;
+  --radius: 14px; --radius-sm: 10px;
+}
+:root[data-theme='light'] {
+  --bg: #f3f6fb; --sunken: #eaf0f8; --panel: #ffffff; --raised: #f0f4fa; --line: #dbe3ef;
+  --text: #0f1b33; --soft: #3d4c69; --muted: #5d6981;
+  --accent: #1f5ae0; --accent-text: #1f5ae0; --on-accent: #ffffff;
+  --warn: #804d00; --on-warn: #ffffff; --ok: #11663a; --bad: #a32924; --info: #1858a4;
+  --term: #0d1526; --term-fg: #d5dff2; --t-ok: #1ba35d; --t-bad: #de6d69; --t-warn: #cd7b00; --t-info: #488fe4; --t-accent: #628ce9; --t-dim: #7b87a0;
+}
+
+/* graphite */
+:root[data-skin='graphite'] {
+  --bg: #0c0d11; --sunken: #090a0d; --panel: #14161c; --raised: #1b1e26; --line: #262a35;
+  --text: #eef0f5; --soft: #b9bfcc; --muted: #868da0;
+  --accent: #8b7bff; --accent-text: #8b7bff; --on-accent: #120d36;
+  --warn: #f5b73b; --on-warn: #1a1202; --ok: #4ad08a; --bad: #ff7070; --info: #6db3ff;
+  --term: #08090c; --term-fg: #d1d6e2; --t-ok: #4ad08a; --t-bad: #ff7070; --t-warn: #f5b73b; --t-info: #6db3ff; --t-accent: #8b7bff; --t-dim: #868da0;
+  --radius: 16px; --radius-sm: 12px;
+}
+:root[data-skin='graphite'][data-theme='light'] {
+  --bg: #f6f6f9; --sunken: #ececf2; --panel: #ffffff; --raised: #f1f1f6; --line: #dfe0ea;
+  --text: #14151c; --soft: #44485a; --muted: #616677;
+  --accent: #5a46e6; --accent-text: #5a46e6; --on-accent: #ffffff;
+  --warn: #804d00; --on-warn: #ffffff; --ok: #10623b; --bad: #a12b2b; --info: #1755a0;
+  --term: #101218; --term-fg: #d8dce8; --t-ok: #1a9f60; --t-bad: #d86e6e; --t-warn: #cd7b00; --t-info: #488fe5; --t-accent: #8a7ced; --t-dim: #7f8496;
+}
+
+/* teal */
+:root[data-skin='teal'] {
+  --bg: #0a1114; --sunken: #070c0e; --panel: #101a1e; --raised: #16232a; --line: #213038;
+  --text: #e9f1f3; --soft: #b4c4ca; --muted: #7d9199;
+  --accent: #22c1b0; --accent-text: #22c1b0; --on-accent: #04201c;
+  --warn: #f6b83d; --on-warn: #1a1202; --ok: #4ad08a; --bad: #ff7570; --info: #5ab4ff;
+  --term: #060a0c; --term-fg: #cfdde1; --t-ok: #4ad08a; --t-bad: #ff7570; --t-warn: #f6b83d; --t-info: #5ab4ff; --t-accent: #22c1b0; --t-dim: #7d9199;
+  --radius: 14px; --radius-sm: 10px;
+}
+:root[data-skin='teal'][data-theme='light'] {
+  --bg: #f1f6f7; --sunken: #e6eef0; --panel: #ffffff; --raised: #eef4f5; --line: #d6e1e4;
+  --text: #0d1c21; --soft: #3b5058; --muted: #596b71;
+  --accent: #098174; --accent-text: #087267; --on-accent: #ffffff;
+  --warn: #804d00; --on-warn: #ffffff; --ok: #106138; --bad: #9f2823; --info: #1755a0;
+  --term: #0d171b; --term-fg: #d5e2e6; --t-ok: #1ba35e; --t-bad: #de6d69; --t-warn: #cd7b00; --t-info: #4c91e5; --t-accent: #0ba292; --t-dim: #758b92;
+}
