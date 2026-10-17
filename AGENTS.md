@@ -21,9 +21,9 @@ session persistence. No native apps. No subscriptions. Self-hosted.
 
 ```
 docs/
-  facts/           # Descriptive truths (14 facts)
-  decisions/       # Axiomatic commitments (12 decisions)
-  guardrails/      # Normative rules (8 guardrails)
+  facts/           # Descriptive truths
+  decisions/       # Axiomatic commitments
+  guardrails/      # Normative rules
   skills/          # Procedural knowledge (tags, roles)
   plans/           # Implementation plans
 packages/
@@ -49,6 +49,10 @@ cd packages/core && wasm-pack build --target web --release
 
 # Docker
 docker build -t termenbox -f docker/Dockerfile .
+
+# No compiler on this machine? Run any command in the pinned build container (DECISION-0114)
+scripts/dev.sh cargo test --workspace
+scripts/dev.sh --full sh -c 'cd packages/client && node e2e/run.mjs'
 
 # Lint knowledge base
 # (requires go-getter plugin)
