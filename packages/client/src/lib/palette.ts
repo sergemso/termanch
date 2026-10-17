@@ -1,4 +1,5 @@
 // The command palette's entries, its search, and the app's keyboard shortcuts (decision 0101, item 8 of U04).
+import { writable } from 'svelte/store';
 import { DESTINATIONS } from './router';
 import type { AgentMap } from './agents';
 import type { HubServer, HubSession } from './hub';
@@ -102,3 +103,7 @@ export function loadShortcutsEnabled(store: Pick<Storage, 'getItem'> | undefined
 export function saveShortcutsEnabled(on: boolean, store: Pick<Storage, 'setItem'> | undefined = typeof localStorage === 'undefined' ? undefined : localStorage) {
   try { store?.setItem(KEY, on ? 'on' : 'off'); } catch { /* private mode: kept for this visit */ }
 }
+
+/** Shared by the frame (which listens) and Settings (which switches it). */
+export const shortcutsOn = writable(loadShortcutsEnabled());
+export function setShortcuts(on: boolean) { shortcutsOn.set(on); saveShortcutsEnabled(on); }

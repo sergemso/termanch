@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render } from 'svelte/server';
 import { createRawSnippet } from 'svelte';
+import { stripTarget } from './SessionStrip.svelte';
 import { StatusChip, AgentBadge, FleetTile, SessionStrip, DecisionCard, OptionButton, QueueItem, Composer, MoreSheet, ChartFrame, EmptyState, STATES } from './index';
 
 const text = (t: string) => createRawSnippet(() => ({ render: () => `<span>${t}</span>` }));
@@ -73,5 +74,22 @@ describe('cn keeps the custom type scale', () => {
     const { cn } = await import('../ui/utils');
     expect(cn('text-title', 'text-warn')).toBe('text-title text-warn');
     expect(cn('text-sm', 'text-base')).toBe('text-base');
+  });
+});
+
+describe('session strip keys', () => {
+  it('moves with arrows (wrapping), Home and End; ignores other keys', () => {
+    expect(stripTarget('ArrowRight', 2, 3)).toBe(0);
+    expect(stripTarget('ArrowLeft', 0, 3)).toBe(2);
+    expect(stripTarget('Home', 2, 3)).toBe(0);
+    expect(stripTarget('End', 0, 3)).toBe(2);
+    for (const k of ['a', 'Tab', 'Escape', 'ArrowUp']) expect(stripTarget(k, 1, 3)).toBeNull();
+    expect(stripTarget('ArrowRight', 0, 0)).toBeNull();
+  });
+  it('has one tab stop and names every tab with its state', () => {
+    const items = [{ id: 'a', name: 'api', state: 'needs-you' as const }, { id: 'b', name: 'web', state: 'idle' as const }];
+    const out = html(SessionStrip, { items, selected: 'b' });
+    expect(out.match(/tabindex="0"/g)).toHaveLength(1);
+    expect(out).toContain('aria-label="api, Needs you"');
   });
 });
