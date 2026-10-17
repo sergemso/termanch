@@ -1133,7 +1133,11 @@ async fn session_view_reads_the_screen_and_unknown_messages_are_ignored(kind: Ki
         tokio::time::sleep(Duration::from_millis(150)).await;
         c.send(json!({"type":"session_view","session":name})).await;
         view = c.recv_type("session_view").await;
-        if view["prompt"].is_object() {
+        // The typed command line also shows "(y/n)"; wait for its output, the line with the sum worked out.
+        if view["prompt"]["question"]
+            .as_str()
+            .is_some_and(|q| q.contains("Deploy42"))
+        {
             break;
         }
     }
