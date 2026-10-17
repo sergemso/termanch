@@ -1,13 +1,17 @@
 <script lang="ts">
-  import { AgentBadge, StatusChip, DecisionCard, OptionButton, Composer, type FleetState } from './lib/ds';
+  import { AgentBadge, StatusChip, Composer, type FleetState } from './lib/ds';
+  import DecisionPanel from './DecisionPanel.svelte';
+  import type { Step } from './lib/decision';
   import { TIER_LABEL, answerFor, type ViewModel } from './lib/sessionView';
   import type { ClientMessage } from './lib/protocol';
   import { ageText } from './lib/cards';
   /** Decision 0103: header (agent, task, time, state), the parsed decision, the cleaned tail, the composer, the
    *  tier in use and a way to the full terminal. Never an empty state for an agent: with no view yet it still
-   *  shows the header, the composer and the terminal button. */
-  let { name, agent, fleet = 'idle', task, startedAt, now = Date.now(), view = null, onreply, onanswer, onterminal }: {
-    name: string; agent?: string; fleet?: FleetState; task?: string; startedAt?: number; now?: number; view?: ViewModel | null;
+   *  shows the header, the composer and the terminal button. The decision is the shared card (decision 0104): its
+   *  free-text field is the composer below, so the card does not repeat it. `waitingSince` and `step` come from the
+   *  agent's events and the hook (T1 only). */
+  let { name, agent, fleet = 'idle', task, startedAt, waitingSince, step, now = Date.now(), view = null, onreply, onanswer, onterminal }: {
+    name: string; agent?: string; fleet?: FleetState; task?: string; startedAt?: number; waitingSince?: number; step?: Step; now?: number; view?: ViewModel | null;
     onreply?: (line: string) => void; onanswer?: (message: ClientMessage) => void; onterminal?: () => void;
   } = $props();
   let draft = $state('');
@@ -29,13 +33,10 @@
 
   <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
     {#if prompt}
-      <DecisionCard session={name} {agent} question={prompt.question || 'The agent is asking'} state="needs-you">
-        <div class="flex flex-col gap-2">
-          {#each prompt.options as o, i (i)}
-            <OptionButton hint={String(i + 1)} label={o.label} primary={i === 0} onclick={() => send(i)} />
-          {/each}
-        </div>
-      </DecisionCard>
+      <DecisionPanel composer={false} {now}
+        decision={{ key: view?.session ?? name, promptId: prompt.id, name, agent, task: title, since: waitingSince, question: prompt.question || 'The agent is asking', tier: view?.tier ?? 't3',
+          step: view?.tier === 't1' ? step : undefined, options: prompt.options.map((o) => o.label) }}
+        onpick={send} />
     {/if}
 
     <section aria-label="Screen" class="flex flex-col gap-1">

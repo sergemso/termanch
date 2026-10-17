@@ -1,31 +1,34 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { DecisionCard, EmptyState, FleetTile, OptionButton, QueueItem } from './lib/ds';
+  import { EmptyState, FleetTile, QueueItem } from './lib/ds';
+  import DecisionPanel from './DecisionPanel.svelte';
+  import { decisionFor, type Decision } from './lib/decision';
   import type { FleetState } from './lib/ds/states';
   import type { AgentMap, SessionAgent } from './lib/agents';
   import type { HubServer, HubSession } from './lib/hub';
   import { ageText } from './lib/cards';
-  import { continueTarget, fleetCounts, heroChoices, queueOf, rowOf, Settle, splitQueue, type HomeQueue, type Row } from './lib/home';
+  import { continueTarget, fleetCounts, queueOf, rowOf, Settle, splitQueue, type HomeQueue, type Row } from './lib/home';
 
   /** Home (decision 0100): the oldest waiting decision, the rest of the queue, the four fleet counts and Continue. */
-  let { sessions, agents, servers, now, lastKey, onopen, onanswer, onservers, onnew }: {
+  let { sessions, agents, servers, now, lastKey, onopen, onanswer, onreply, onservers, onnew }: {
     sessions: HubSession[]; agents: AgentMap; servers: HubServer[]; now: number; lastKey: string | null;
     onopen: (key: string) => void;
     onanswer: (key: string, choice: number, prompt: NonNullable<SessionAgent['prompt']>) => void;
+    onreply: (key: string, text: string) => void;
     onservers: () => void; onnew: (serverId?: string) => void;
   } = $props();
 
   const FILTERS = ['needs-you', 'working', 'failed', 'finished'] as const;
   let filter = $state<FleetState | null>(null);
   // The queue moves only when no touch is down and 2 s after a scroll (ui-never-moves-under-the-finger); a beat re-reads it afterwards.
-  const settle = new Settle<HomeQueue & { choices: string[] }>();
+  const settle = new Settle<HomeQueue & { decision?: Decision }>();
   let beat = $state(0);
   onMount(() => { const t = setInterval(() => beat++, 500); return () => clearInterval(t); });
 
   const counts = $derived(fleetCounts(sessions, agents));
   const live = $derived.by(() => {
     const q = splitQueue(queueOf(sessions, agents));
-    return { ...q, choices: q.hero ? heroChoices(q.hero, agents[q.hero.key], now) : [] };
+    return { ...q, decision: q.hero ? decisionFor(q.hero, agents[q.hero.key], now) : undefined };
   });
   const view = $derived.by(() => { beat; return settle.view(live, Date.now()); });
   const connected = $derived(new Set(servers.filter((s) => s.state === 'connected').map((s) => s.id)));
@@ -62,19 +65,11 @@
         {/each}
       </section>
     {:else}
-      {#if view.hero}
+      {#if view.hero && view.decision}
         {@const h = view.hero}
-        <DecisionCard agent={h.agent} session={h.name} waited={h.since ? ageText(h.since, now) : undefined} context={[h.serverName, h.title].filter(Boolean).join(' · ')} question={h.question ?? 'Needs your answer'}>
-          {#if view.choices.length && h.prompt}
-            {@const prompt = h.prompt}
-            <div class="flex flex-col gap-2" data-hero-options>
-              {#each view.choices as c, i (i)}
-                <OptionButton hint={String(i + 1)} label={c} primary={i === 0} onclick={() => onanswer(h.key, i, prompt)} />
-              {/each}
-            </div>
-          {/if}
-          <button type="button" onclick={() => onopen(h.key)} class="min-h-11 rounded-card bg-raised px-4 text-base font-semibold text-fg">Open session</button>
-        </DecisionCard>
+        {@const d = view.decision}
+        <DecisionPanel decision={d} {now} server={h.serverName}
+          onpick={(i) => d.prompt && onanswer(h.key, i, d.prompt)} onreply={(text) => onreply(h.key, text)} onopen={() => onopen(h.key)} />
       {/if}
 
       {#if view.rest.length}
