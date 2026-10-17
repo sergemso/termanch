@@ -147,6 +147,7 @@ pub async fn scan_tmux_once(
                     id,
                     prompt_kind: prompt_kind.into(),
                     choices,
+                    decision: None,
                 },
             );
         }

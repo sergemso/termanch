@@ -34,7 +34,7 @@ One roadmap file per step (the old numbering `U.n` equals `Un` with a zero pad: 
 | [U05](roadmap/archive/U05.md) | Home: Needs you queue, fleet summary, Continue | both | U04 | done (PR #161) |
 | [U06](roadmap/archive/U06.md) | Session-view framework: T3 view, composer, profile engine | both | U02 | done (PRs #160, #165) |
 | [U07](roadmap/archive/U07.md) | T2 profiles for the priority agents | n/a | U03, U06 | done (PR #186; codex has no profile) |
-| [U07a](roadmap/U07a.md) | ACP backend: agents termenbox starts itself | n/a | U03, U06 | pending |
+| [U07a](roadmap/archive/U07a.md) | ACP backend: agents termenbox starts itself | n/a | U03, U06 | done (PR #187) |
 | [U07b](roadmap/U07b.md) | ACP session view: a general TUI we render | both | U07a, U02, U06 | pending |
 | [U07c](roadmap/archive/U07c.md) | Configurable key row | both | U02 | done (PR #162) |
 | [U08](roadmap/archive/U08.md) | Decision card: context, options, composer, dictation | both | U05, U06 | done (PR #176; dictation moved to U16) |

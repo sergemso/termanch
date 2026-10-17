@@ -30,6 +30,8 @@ pub enum Source {
     Codex,
     Scan,
     Screen,
+    /// An ACP session the server started itself (tier T0, decision 0111).
+    Acp,
     #[serde(other)]
     Unknown,
 }
@@ -68,6 +70,9 @@ pub enum EventKind {
         id: String,
         prompt_kind: String,
         choices: Vec<String>,
+        /// T0 only: the options the agent offered, answered by id (decision 0111). Absent from older servers.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        decision: Option<Decision>,
     },
     Message {
         summary: String,
@@ -76,8 +81,48 @@ pub enum EventKind {
     Task {
         title: String,
     },
+    /// Context use of an ACP session; the percentage is `used / size`.
+    Usage {
+        used: u64,
+        size: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cost: Option<String>,
+    },
+    /// The agent's own title for the session.
+    Title {
+        title: String,
+    },
+    /// What the agent is thinking, capped like a message.
+    Thought {
+        summary: String,
+    },
+    /// The mode the agent is in now.
+    Mode {
+        mode: String,
+    },
+    /// The slash commands the agent offers.
+    Commands {
+        names: Vec<String>,
+    },
     #[serde(other)]
     Unknown,
+}
+
+/// One option of a permission request. Only `allow_once` and `reject_once` are ever carried (decision 0104).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct DecisionOption {
+    pub id: String,
+    pub kind: String,
+    pub name: String,
+}
+
+/// What a T0 prompt asks and how it is answered: by the id of exactly one of `options`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct Decision {
+    pub options: Vec<DecisionOption>,
+    /// A one-line summary of the tool the agent wants to run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 /// `seq` is a per-session counter and `ts` the server's clock (ms since the epoch), both stamped by the
