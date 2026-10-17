@@ -1,6 +1,7 @@
 <script lang="ts">
   import { AgentBadge, StatusChip, Composer, type FleetState } from './lib/ds';
   import DecisionPanel from './DecisionPanel.svelte';
+  import Timeline from './Timeline.svelte';
   import type { Step } from './lib/decision';
   import { TIER_LABEL, answerFor, type ViewModel } from './lib/sessionView';
   import type { ClientMessage } from './lib/protocol';
@@ -38,6 +39,8 @@
           step: view?.tier === 't1' ? step : undefined, options: prompt.options.map((o) => o.label) }}
         onpick={send} />
     {/if}
+
+    {#if view?.tier === 't1' && view.timeline}<Timeline timeline={view.timeline} />{/if}
 
     <section aria-label="Screen" class="flex flex-col gap-1">
       <div class="flex items-center justify-between gap-2">

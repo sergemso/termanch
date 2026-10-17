@@ -282,6 +282,9 @@ pub struct EventHub {
     rings: Arc<Mutex<HashMap<String, Ring>>>,
     /// The agent the scan found in each session; only sessions that have events report it.
     agents: Arc<Mutex<HashMap<String, String>>>,
+    /// The transcript file a Claude Code hook named for each session. Untrusted: `transcript::resolve` decides
+    /// whether it may be opened, and nothing here is logged.
+    transcripts: Arc<Mutex<HashMap<String, String>>>,
     tx: broadcast::Sender<AgentEvent>,
     attention: Arc<Mutex<Vec<Attention>>>,
     next_attention: Arc<std::sync::atomic::AtomicU64>,
@@ -296,6 +299,7 @@ impl EventHub {
             key: Arc::new(key),
             rings: Arc::default(),
             agents: Arc::default(),
+            transcripts: Arc::default(),
             tx: broadcast::channel(256).0,
             attention: Arc::default(),
             next_attention: Arc::default(),
@@ -679,6 +683,10 @@ impl EventHub {
             .lock()
             .unwrap()
             .retain(|k, _| !k.starts_with(prefix) || live.contains(k));
+        self.transcripts
+            .lock()
+            .unwrap()
+            .retain(|k, _| !k.starts_with(prefix) || live.contains(k));
         self.rings
             .lock()
             .unwrap()
@@ -695,6 +703,24 @@ impl EventHub {
             drop(list);
             let _ = self.status_tx.send(StatusChange::Attention(snapshot));
         }
+    }
+
+    /// Remembers the transcript path a hook of `session` named (only after its token was accepted).
+    pub fn set_transcript(&self, session: &str, path: &str) {
+        if path.is_empty() || path.len() > 1024 || !valid_event_session(session) {
+            return;
+        }
+        let mut map = self.transcripts.lock().unwrap();
+        if !map.contains_key(session) && map.len() >= MAX_SESSIONS * 4 {
+            return;
+        }
+        if map.get(session).map(String::as_str) != Some(path) {
+            map.insert(session.to_string(), path.to_string());
+        }
+    }
+
+    pub fn transcript(&self, session: &str) -> Option<String> {
+        self.transcripts.lock().unwrap().get(session).cloned()
     }
 
     /// Records which agent the process scan found in `session`.
@@ -876,7 +902,15 @@ pub async fn serve_socket(hub: EventHub, path: std::path::PathBuf) -> Result<()>
             else {
                 return;
             };
-            let _ = hub.ingest(&w.session, &w.token, source, confidence, kinds);
+            if hub
+                .ingest(&w.session, &w.token, source, confidence, kinds)
+                .is_ok()
+                && w.adapter == "claude"
+            {
+                if let Some(path) = w.data.get("transcript_path").and_then(|p| p.as_str()) {
+                    hub.set_transcript(&w.session, path);
+                }
+            }
         });
     }
 }
@@ -1509,7 +1543,7 @@ mod tests {
         );
         let send = |session: &str, token: String| {
             let line = serde_json::json!({"session": session, "token": token, "adapter": "claude",
-                "data": {"hook_event_name": "UserPromptSubmit", "prompt": "fix the login\nthe second line stays in the hook payload"}})
+                "data": {"hook_event_name": "UserPromptSubmit", "transcript_path": "/home/u/.claude/projects/p/s.jsonl", "prompt": "fix the login\nthe second line stays in the hook payload"}})
             .to_string()
                 + "\n";
             let sock = sock.clone();
@@ -1522,8 +1556,17 @@ mod tests {
         send("one", h.token("two")).await;
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         assert_eq!(h.sessions_with_events(), 0);
+        assert_eq!(
+            h.transcript("one"),
+            None,
+            "a refused hook names no transcript"
+        );
         send("one", h.token("one")).await;
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        assert_eq!(
+            h.transcript("one").as_deref(),
+            Some("/home/u/.claude/projects/p/s.jsonl")
+        );
         let ev = h.since("one", 0);
         assert_eq!(ev.len(), 2);
         assert_eq!(ev[0].kind, state(AgentState::Working));

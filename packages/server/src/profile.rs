@@ -47,9 +47,10 @@ const SCAN_LINES: usize = 14;
 const MAX_PATTERNS: usize = 32;
 const MAX_PATTERN_CHARS: usize = 80;
 
-/// How much the view knows about the agent (decision 0103). `T1` is added by the hook-based timeline (U09).
+/// How much the view knows about the agent (decision 0103). `T1` is the hook-based transcript timeline (U09); the screen profile still reads prompts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tier {
+    T1,
     T2,
     T3,
 }
@@ -57,6 +58,7 @@ pub enum Tier {
 impl Tier {
     pub fn as_str(self) -> &'static str {
         match self {
+            Tier::T1 => "t1",
             Tier::T2 => "t2",
             Tier::T3 => "t3",
         }
