@@ -31,6 +31,7 @@ mod journal;
 mod link;
 mod locale;
 mod netutil;
+mod profile;
 mod pty;
 mod push;
 mod release;

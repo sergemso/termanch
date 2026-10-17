@@ -1106,6 +1106,81 @@ async fn a_flood_of_output_on_the_single_pipe_still_reaches_the_client(kind: Kin
     panic!("end-42 never arrived: {} bytes", seen.len());
 }
 
+/// `session_view` answers with the cleaned tail, tier and a parsed prompt without attaching; a message the server does
+/// not know is ignored and the connection stays up; an answer for a prompt that is not on the pane is refused.
+async fn session_view_reads_the_screen_and_unknown_messages_are_ignored(kind: Kind) {
+    if std::process::Command::new("tmux")
+        .arg("-V")
+        .output()
+        .is_err()
+    {
+        eprintln!("tmux not installed; skipping");
+        return;
+    }
+    let f = fixture().await;
+    let name = format!("sv{}", &uuid::Uuid::new_v4().simple().to_string()[..8]);
+    let _cleanup = KillOnDrop(name.clone());
+    let alice = f.who(1, "alice");
+    let mut c = Conn::open(kind, &f).await;
+    c.login(&f, &alice, &f.claim).await;
+    c.recv_type("auth_ok").await;
+    c.send(json!({"type":"new_session","name":name})).await;
+    c.recv_type("sessions").await;
+    c.send(json!({"type":"reply","session":name,"text":"echo Deploy$((40+2)) now? '(y/n)'"}))
+        .await;
+    let mut view = json!(null);
+    for _ in 0..20 {
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        c.send(json!({"type":"session_view","session":name})).await;
+        view = c.recv_type("session_view").await;
+        if view["prompt"].is_object() {
+            break;
+        }
+    }
+    assert_eq!(view["tier"], "t3", "{view}");
+    assert_eq!(view["prompt"]["kind"], "yes_no", "{view}");
+    assert!(
+        view["prompt"]["question"]
+            .as_str()
+            .unwrap()
+            .contains("Deploy42"),
+        "{view}"
+    );
+    assert!(
+        !view.to_string().contains("\"keys\""),
+        "options carry no keys: {view}"
+    );
+    let hash = view["hash"].as_str().unwrap().to_string();
+    c.send(json!({"type":"session_view","session":name,"hash":hash}))
+        .await;
+    let again = c.recv_type("session_view").await;
+    assert_eq!(again["unchanged"], true);
+    assert_eq!(again["tail"], json!([]));
+    // an old server would skip this; this one must too, and keep serving
+    c.send(json!({"type":"a_message_from_the_future","x":1}))
+        .await;
+    c.send(json!({"type":"ping"})).await;
+    c.recv_type("pong").await;
+    c.send(json!({"type":"session_answer","session":name,"prompt_id":"v-000000000000","option":0}))
+        .await;
+    let err = c.recv_type("error").await;
+    assert!(
+        err["message"].as_str().unwrap().contains("changed"),
+        "{err}"
+    );
+    let id = view["prompt"]["id"].as_str().unwrap();
+    c.send(json!({"type":"session_answer","session":name,"prompt_id":id,"option":9}))
+        .await;
+    let err = c.recv_type("error").await;
+    assert!(
+        err["message"].as_str().unwrap().contains("No such choice"),
+        "{err}"
+    );
+    let _ = std::process::Command::new("tmux")
+        .args(["kill-session", "-t", &name])
+        .output();
+}
+
 macro_rules! over_both_transports {
     ($($name:ident),*) => {$(
         mod $name {
@@ -1125,6 +1200,7 @@ over_both_transports!(
     agent_events_flow_from_a_session_tool_to_the_client,
     a_burst_of_input_messages_does_not_drop_the_connection,
     peek_shows_a_session_screen_without_attaching,
+    session_view_reads_the_screen_and_unknown_messages_are_ignored,
     windows_close_window_and_close_session_go_through_the_handlers,
     terminal_bytes_use_their_own_lane_and_status_is_not_held_up_by_output,
     a_flood_of_output_on_the_single_pipe_still_reaches_the_client
