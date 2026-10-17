@@ -1,0 +1,11 @@
+# Claude Code (the first T2 profile; U07 adds the rest). Schema: see the top of src/profile.rs.
+agent = "claude"
+
+[prompt]
+# Claude asks "Do you want to ..." above a numbered list; the list is what gets parsed.
+question = ["do you want to", "would you like to"]
+numbered = true
+
+[markers]
+working = ["esc to interrupt"]
+idle = ["? for shortcuts", "auto mode on"]

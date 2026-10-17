@@ -133,6 +133,23 @@ pub enum ClientMessage {
     Dismiss {
         attention_id: String,
     },
+    /// Asks for the session view (decision 0103): the cleaned screen tail, the parsed prompt and the tier in use.
+    /// `hash` is the one the client already holds; the server then answers `unchanged`.
+    SessionView {
+        session: String,
+        #[serde(default)]
+        hash: Option<String>,
+    },
+    /// Taps option `option` (0-based, into the options the last `session_view` listed) of prompt `prompt_id`. The
+    /// server sends the keys its profile lists for that option and nothing the client supplies.
+    SessionAnswer {
+        session: String,
+        prompt_id: String,
+        option: u8,
+    },
+    /// A message from a newer client; ignored.
+    #[serde(other)]
+    Unknown,
 }
 
 /// Server → Client (WebSocket)
@@ -236,10 +253,47 @@ pub enum ServerMessage {
         agent: String,
         session_id: String,
     },
+    /// The session view (decision 0103); answers `session_view`.
+    SessionView {
+        session: String,
+        /// `t1` (structured), `t2` (agent profile) or `t3` (generic). Clients read any other value as `t3`.
+        tier: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agent: Option<String>,
+        /// The cleaned screen tail: at most 30 lines of 200 characters, control sequences and secrets removed.
+        /// Empty when `unchanged`.
+        tail: Vec<String>,
+        hash: String,
+        #[serde(default)]
+        unchanged: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        task: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        prompt: Option<ViewPrompt>,
+    },
     Error {
         message: String,
     },
     Pong,
+    /// A message from a newer server; ignored.
+    #[serde(other)]
+    Unknown,
+}
+
+/// A decision the screen is waiting on. The options carry labels only: the keys stay on the server.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ViewPrompt {
+    /// Names this prompt as drawn now; a `session_answer` for another id is refused.
+    pub id: String,
+    pub question: String,
+    /// `choice` or `yes_no`; clients read any other value as `choice`.
+    pub kind: String,
+    pub options: Vec<ViewOption>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ViewOption {
+    pub label: String,
 }
 
 /// One window of a multiplexer session, as the windows dropdown shows it.
@@ -328,6 +382,20 @@ mod tests {
         })
         .unwrap();
         assert_eq!(v["type"], "peek");
+        let v = serde_json::to_value(ClientMessage::SessionView {
+            session: "s".into(),
+            hash: None,
+        })
+        .unwrap();
+        assert_eq!(v["type"], "session_view");
+        let v = serde_json::to_value(ClientMessage::SessionAnswer {
+            session: "s".into(),
+            prompt_id: "v-ab".into(),
+            option: 2,
+        })
+        .unwrap();
+        assert_eq!(v["type"], "session_answer");
+        assert_eq!(v["option"], 2);
         let v = serde_json::to_value(ServerMessage::Snapshot {
             session: "s".into(),
             text: "x".into(),
@@ -506,5 +574,23 @@ mod tests {
         let ok: ServerMessage =
             serde_json::from_str(r#"{"type":"auth_ok","user":"u","server_name":"s"}"#).unwrap();
         assert!(matches!(ok, ServerMessage::AuthOk { channels, .. } if channels.is_empty()));
+    }
+
+    /// An older peer ignores a message or a field it does not know instead of failing (decision 0103).
+    #[test]
+    fn unknown_messages_parse_as_unknown_and_unknown_fields_are_ignored() {
+        let m: ClientMessage = serde_json::from_str(r#"{"type":"from_the_future","x":1}"#).unwrap();
+        assert_eq!(m, ClientMessage::Unknown);
+        let m: ServerMessage = serde_json::from_str(r#"{"type":"from_the_future"}"#).unwrap();
+        assert_eq!(m, ServerMessage::Unknown);
+        let m: ClientMessage =
+            serde_json::from_str(r#"{"type":"session_view","session":"s","extra":true}"#).unwrap();
+        assert_eq!(
+            m,
+            ClientMessage::SessionView {
+                session: "s".into(),
+                hash: None
+            }
+        );
     }
 }

@@ -166,7 +166,9 @@ impl ServerClient {
             | ServerMessage::Attention { .. }
             | ServerMessage::PushInfo { .. }
             | ServerMessage::Snapshot { .. }
-            | ServerMessage::WindowList { .. } => {}
+            | ServerMessage::WindowList { .. }
+            | ServerMessage::SessionView { .. }
+            | ServerMessage::Unknown => {}
             ServerMessage::Error { message } => {
                 info!("Server error: {}", message);
             }

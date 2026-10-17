@@ -458,6 +458,42 @@ impl SessionManager {
                     peek_window(self.backend.as_ref(), &session, hash.as_deref(), window).await;
                 send_r(tx, &reply).await?;
             }
+            ClientMessage::SessionView { session, hash } => {
+                // Only a counter in the audit log, as for a peek: the screen is never logged.
+                audit_peek(identity.id, &session);
+                let agent = self
+                    .events
+                    .as_ref()
+                    .and_then(|h| session_agent(h, &session));
+                let reply = session_view(
+                    self.backend.as_ref(),
+                    &session,
+                    agent.as_deref(),
+                    hash.as_deref(),
+                )
+                .await;
+                send_r(tx, &reply).await?;
+            }
+            ClientMessage::SessionAnswer {
+                session,
+                prompt_id,
+                option,
+            } => {
+                let agent = self
+                    .events
+                    .as_ref()
+                    .and_then(|h| session_agent(h, &session));
+                session_answer(
+                    self.backend.as_ref(),
+                    &session,
+                    agent.as_deref(),
+                    &prompt_id,
+                    option,
+                )
+                .await?;
+                info!(target: "audit", event = "session_answer_sent", github_id = identity.id, session = %session, option);
+            }
+            ClientMessage::Unknown => {}
             ClientMessage::ListSessions => {
                 let sessions = self.backend.list().await?;
                 send_r(tx, &ServerMessage::Sessions { sessions }).await?;
@@ -675,6 +711,93 @@ pub async fn peek_window(
 
 const PROMPT_CHANGED: &str = "That prompt changed";
 
+/// The agent the event layer found in a session, if any.
+fn session_agent(hub: &EventHub, session: &str) -> Option<String> {
+    hub.snapshot()
+        .into_iter()
+        .find(|s| s.session == session)
+        .and_then(|s| s.agent)
+}
+
+/// The session view (decision 0103): the screen read by the agent's profile (T2) or the generic rules (T3). Never
+/// fails; a manager that cannot capture gives an empty tail, which the client shows with the full-terminal button.
+pub async fn session_view(
+    backend: &dyn SessionBackend,
+    session: &str,
+    agent: Option<&str>,
+    known: Option<&str>,
+) -> ServerMessage {
+    use crate::profile::Profiles;
+    use sha2::{Digest, Sha256};
+    use termenbox_core::protocol::{ViewOption, ViewPrompt};
+    let (profile, tier) = Profiles::builtin().for_agent(agent);
+    let screen = backend.capture(session).await.unwrap_or_default();
+    let view = profile.read(&screen);
+    let prompt = view.prompt.as_ref().map(|p| ViewPrompt {
+        id: p.id(),
+        question: p.question.clone(),
+        kind: p.kind.to_string(),
+        options: p
+            .options
+            .iter()
+            .map(|o| ViewOption {
+                label: o.label.clone(),
+            })
+            .collect(),
+    });
+    let mut h = Sha256::new();
+    h.update(tier.as_str());
+    for l in &view.tail {
+        h.update(l.as_bytes());
+        h.update([b'\n']);
+    }
+    h.update(view.task.as_deref().unwrap_or("").as_bytes());
+    h.update(
+        prompt
+            .as_ref()
+            .map(|p| p.id.as_str())
+            .unwrap_or("")
+            .as_bytes(),
+    );
+    let hash: String = h.finalize()[..8]
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    let unchanged = known == Some(hash.as_str());
+    ServerMessage::SessionView {
+        session: session.to_string(),
+        tier: tier.as_str().into(),
+        agent: agent.map(str::to_string),
+        tail: if unchanged { Vec::new() } else { view.tail },
+        hash,
+        unchanged,
+        task: if unchanged { None } else { view.task },
+        prompt: if unchanged { None } else { prompt },
+    }
+}
+
+/// A tap on option `option` of the prompt the user saw. The screen is read again and the keys come from that
+/// reading: they are sent only if the prompt on the pane still has the id the client saw and lists that option.
+pub async fn session_answer(
+    backend: &dyn SessionBackend,
+    session: &str,
+    agent: Option<&str>,
+    prompt_id: &str,
+    option: u8,
+) -> Result<()> {
+    let (profile, _) = crate::profile::Profiles::builtin().for_agent(agent);
+    let screen = backend.capture(session).await?;
+    let prompt = profile
+        .read(&screen)
+        .prompt
+        .filter(|p| p.id() == prompt_id)
+        .ok_or_else(|| anyhow::anyhow!(PROMPT_CHANGED))?;
+    let keys = prompt
+        .keys(option as usize)
+        .ok_or_else(|| anyhow::anyhow!("No such choice"))?;
+    backend.send_text(session, keys).await
+}
+
 /// A one-tap answer (plan v8, K.4). It acts only on the prompt the user saw: the session's current prompt, with
 /// the same id and event number, confirmed by the agent's own hook (`confidence=high`), and still on the pane.
 /// The keys are the ones the screen's own choice list defines, never text from the client.
@@ -783,6 +906,74 @@ mod answer_tests {
             id,
             seq,
         )
+    }
+
+    fn view_of(
+        m: ServerMessage,
+    ) -> (
+        String,
+        Vec<String>,
+        String,
+        bool,
+        Option<termenbox_core::protocol::ViewPrompt>,
+    ) {
+        match m {
+            ServerMessage::SessionView {
+                tier,
+                tail,
+                hash,
+                unchanged,
+                prompt,
+                ..
+            } => (tier, tail, hash, unchanged, prompt),
+            other => panic!("not a session view: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn the_session_view_lists_labels_only_and_a_tap_sends_the_profiles_keys() {
+        let (b, _, _, _) = setup(Confidence::High, SCREEN);
+        let (tier, tail, hash, unchanged, prompt) =
+            view_of(session_view(&b, "s", None, None).await);
+        assert_eq!((tier.as_str(), unchanged), ("t3", false));
+        assert!(tail.iter().any(|l| l.contains("Do you want to proceed?")));
+        let prompt = prompt.expect("a numbered Yes/No list is a prompt");
+        let wire = serde_json::to_string(&prompt).unwrap();
+        assert!(!wire.contains("keys"), "{wire}");
+        assert_eq!(prompt.options.len(), 3);
+        // a known hash answers `unchanged` with nothing else
+        let (_, tail2, _, unchanged, prompt2) =
+            view_of(session_view(&b, "s", None, Some(&hash)).await);
+        assert!(unchanged && tail2.is_empty() && prompt2.is_none());
+        for (option, keys) in [(0u8, "1"), (1, "2"), (2, "3")] {
+            session_answer(&b, "s", None, &prompt.id, option)
+                .await
+                .unwrap();
+            assert_eq!(b.sent.lock().unwrap().last().unwrap(), keys);
+        }
+    }
+
+    #[tokio::test]
+    async fn a_session_answer_for_another_prompt_or_option_sends_nothing() {
+        let (b, _, _, _) = setup(Confidence::High, SCREEN);
+        let (_, _, _, _, prompt) = view_of(session_view(&b, "s", None, None).await);
+        let id = prompt.unwrap().id;
+        for (pid, option) in [
+            ("v-000000000000", 0u8),
+            (id.as_str(), 3),
+            (id.as_str(), 255),
+        ] {
+            assert!(session_answer(&b, "s", None, pid, option).await.is_err());
+        }
+        // the question is gone from the pane
+        *b.screen.lock().unwrap() = "$ ls\nfile\n".into();
+        assert!(session_answer(&b, "s", None, &id, 0).await.is_err());
+        assert!(b.sent.lock().unwrap().is_empty());
+        let (_, _, _, _, prompt) = view_of(session_view(&b, "s", None, None).await);
+        assert!(
+            prompt.is_none(),
+            "a screen where nothing should match gives no prompt"
+        );
     }
 
     #[tokio::test]
