@@ -115,3 +115,4 @@
 0110-skins-are-themeable-through-tokens,"The UI is skinnable: components are styled only through design tokens, and several skins ship and are user-selectable","client, design, theming, roadmap",active
 0111-acp-sessions-use-one-event-model-and-per-agent-quirk-profiles,"ACP sessions (tier T0) map into the existing agent event model, with per-agent quirk profiles as data","agents, protocol, architecture, roadmap",active
 0112-browser-floor-ios-16-4-chrome-111,"The minimum browsers are iOS Safari 16.4 and Chrome Android 111, so Tailwind v4 stays","client, browser-support, design, roadmap",active
+0113-host-me-needs-no-root,"The install for the current user needs no root; anything that does is optional and printed, not run","deployment, security, server",active

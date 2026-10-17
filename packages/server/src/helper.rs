@@ -17,6 +17,8 @@ pub const DEFAULT_RELEASE_URL: &str =
 pub struct Setup {
     pub root_dir: PathBuf,
     pub requests_dir: PathBuf,
+    /// The no-root install: the helper runs as the user who owns the service and drives their `systemctl --user`.
+    pub user: bool,
 }
 
 fn is_root() -> bool {
@@ -25,8 +27,13 @@ fn is_root() -> bool {
 
 /// Exit status: 0 fine (also "nothing to do"), 1 error, 2 an update was rolled back.
 pub async fn run(action: &str, setup: &Setup) -> Result<i32> {
-    // The helper changes system files; only root may run it (tests set the override).
-    if !is_root() && std::env::var_os("TERMENBOX_HELPER_ALLOW_NONROOT").is_none() {
+    // A system install's helper changes system files, so only root may run it (tests set the override). The no-root
+    // install's helper changes only the user's own files, and refuses to run as root so it cannot be mixed up with it.
+    if setup.user {
+        if is_root() {
+            bail!("the user helper must not run as root");
+        }
+    } else if !is_root() && std::env::var_os("TERMENBOX_HELPER_ALLOW_NONROOT").is_none() {
         bail!("the root helper must run as root");
     }
     match action {
@@ -69,6 +76,7 @@ async fn update(setup: &Setup) -> Result<i32> {
     let fetch = HttpFetch(http.clone());
     let service = Systemd {
         unit: "termenbox.service".into(),
+        user: setup.user,
         health_url: format!("http://127.0.0.1:{}/health", port.trim()),
         http,
     };

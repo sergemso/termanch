@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs the native installer inside a machine that runs systemd and checks what it did (CI job "installer").
-#   test-native-install.sh host-user|host
+#   test-native-install.sh host-user|host   (host-me needs no root and has its own test: test-user-install.sh)
 # Expects: /install.sh (the installer), /release (a signed test release), /keys.txt (the test release key),
 # curl, ssh-keygen and iproute2 installed. Exits non-zero on the first thing that is wrong.
 set -eu
@@ -10,13 +10,6 @@ ORIGIN=https://app.termenbox.dev
 SECRET="$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 43)"
 RUN_USER=termenbox
 [ "$MODE" = host ] && RUN_USER=root
-# host-me runs sessions as whoever invoked the installer; sudo hands the name over as SUDO_USER, which is set here the same way.
-if [ "$MODE" = host-me ]; then
-  RUN_USER=alice
-  useradd --create-home --shell /bin/bash alice
-  export SUDO_USER=alice
-fi
-
 # /release (first install), /release2 (9.0.1 works), /release3 (9.0.2 starts but never serves), /release4 (9.0.3 is frozen)
 export TERMENBOX_RELEASE_URL=file:///release
 TERMENBOX_RELEASE_KEYS="$(cat /keys.txt)"
@@ -27,12 +20,6 @@ fail() { echo "FAIL: $*"; exit 1; }
 snapshot() { ls -A /etc/systemd/system /usr/local/bin /var/lib /home 2>/dev/null | sort | md5sum; }
 
 before="$(snapshot)"
-
-if [ "$MODE" = host-me ]; then
-  echo "== host-me refuses to guess the user when it runs as plain root"
-  if env -u SUDO_USER sh /install.sh "$SECRET" "$ORIGIN" host-me >/tmp/noroot.txt 2>&1; then fail "host-me installed for root"; fi
-  grep -q "this is root" /tmp/noroot.txt || { cat /tmp/noroot.txt; fail "the refusal does not say why"; }
-fi
 
 echo "== a dry run changes nothing"
 TERMENBOX_DRY_RUN=1 sh /install.sh "$SECRET" "$ORIGIN" "$MODE"
@@ -47,8 +34,6 @@ pid="$(systemctl show -p MainPID --value termenbox)"
 [ "$pid" -gt 0 ] || fail "the service has no main process"
 [ "$(stat -c %U "/proc/$pid")" = "$RUN_USER" ] || fail "the server does not run as $RUN_USER"
 [ "$MODE" != host-user ] || id termenbox >/dev/null || fail "the user termenbox was not created"
-[ "$MODE" != host-me ] || ! id termenbox >/dev/null 2>&1 || fail "host-me created a user"
-[ "$MODE" != host-me ] || grep -q '^User=alice' /etc/systemd/system/termenbox.service || fail "the unit does not run as the invoking user"
 command -v tmux >/dev/null || fail "tmux was not installed"
 grep -q '^KillMode=process' /etc/systemd/system/termenbox.service || fail "sessions would die with the service"
 [ -f /var/lib/termenbox/server_key ] || fail "the server did not create its state"
@@ -130,6 +115,5 @@ sh /uninstall.sh --yes
 [ ! -e /usr/local/bin/termenbox-server ] || fail "the binary is still there"
 [ ! -e /var/lib/termenbox ] || fail "the state directory is still there"
 [ "$MODE" != host-user ] || ! id termenbox >/dev/null 2>&1 || fail "the user is still there"
-[ "$MODE" != host-me ] || [ -d /home/alice ] || fail "the invoking user's home was touched"
 [ "$MODE" != host-user ] || [ -d /home/termenbox ] || fail "the created user's home was deleted without --delete-home"
 echo "OK: $MODE"

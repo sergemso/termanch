@@ -244,12 +244,15 @@ jobs:
             -v "$PWD/work/release3:/release3" -v "$PWD/work/release4:/release4" \
             -v "$PWD/packages/client/public/install.sh:/install.sh:ro" -v "$PWD/packages/client/public/uninstall.sh:/uninstall.sh:ro" \
             -v "$PWD/work/keys.txt:/keys.txt:ro" -v "$PWD/.github/scripts/test-native-install.sh:/test.sh:ro" \
+            -v "$PWD/.github/scripts/test-user-install.sh:/test-user.sh:ro" \
             ${{ matrix.image }}
           sleep 8
           docker exec machine sh -c 'apt-get update -qq && apt-get install -y -qq curl openssh-client ca-certificates iproute2 >/dev/null'
 
       - name: Install, update, roll back, handle requests, refuse tampering, revert
-        run: docker exec machine sh /test.sh ${{ matrix.mode }}
+        # host-me needs no root (decision 0113): it is tested as a normal user in a machine of its own, by its own script.
+        run: |
+          if [ "${{ matrix.mode }}" = host-me ]; then docker exec machine sh /test-user.sh; else docker exec machine sh /test.sh ${{ matrix.mode }}; fi
 
       - name: Service log (on failure)
         if: failure()

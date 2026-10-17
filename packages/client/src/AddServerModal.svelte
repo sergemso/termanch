@@ -182,15 +182,15 @@
         <div class="sub">
           <label class="choice">
             <input type="radio" bind:group={hostAs} value="user" />
-            <span>As a dedicated user <code>termenbox</code> (recommended)<br /><small>Created for you. It can only touch its own files and what you give it access to.</small></span>
+            <span>As a dedicated user <code>termenbox</code> (recommended)<br /><small>Created for you. It can only touch its own files and what you give it access to. Needs sudo; the command asks for it.</small></span>
           </label>
           <label class="choice">
             <input type="radio" bind:group={hostAs} value="me" />
-            <span>As the user who runs the command<br /><small>Sessions open as you, in your home, with your repos, keys and agent logins. Nothing new is created.</small></span>
+            <span>As the user who runs the command<br /><small>Sessions open as you, in your home, with your repos, keys and agent logins. Nothing new is created and <strong>no root is needed</strong>: it runs as a service of your own. Anything that would need root (starting at boot when your system does not allow it, a firewall rule) is listed at the end, for you to run if you want it.</small></span>
           </label>
           <label class="choice">
             <input type="radio" bind:group={hostAs} value="root" />
-            <span>As <code>root</code><br /><small>Full control of the machine.</small></span>
+            <span>As <code>root</code><br /><small>Full control of the machine. Needs sudo; the command asks for it.</small></span>
           </label>
         </div>
         <div class="warning" role="note">
@@ -206,7 +206,7 @@
     </fieldset>
 
     {#if tab === 'paste'}
-      <p style="color: var(--fg-muted); margin-bottom: 8px;">Run this once on your VPS (any Linux with root access). It installs and starts everything, and the server appears here by itself.</p>
+      <p style="color: var(--fg-muted); margin-bottom: 8px;">Run this once on your VPS. It installs and starts everything, and the server appears here by itself. Running as your own user needs no root; the other choices ask for sudo.</p>
       {#if allowed}
         <pre class="command" on:click={selectAll}>{command}</pre>
         <button on:click={() => copy(command)} style="width: 100%; margin-bottom: 12px;">{copied ? 'Copied' : 'Copy command'}</button>
