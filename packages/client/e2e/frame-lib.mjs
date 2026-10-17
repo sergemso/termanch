@@ -23,6 +23,7 @@ export async function start(contextOptions) {
   });
   const ctx = await browser.newContext(contextOptions);
   const page = await ctx.newPage();
+  if (process.env.E2E_CPU_THROTTLE) await (await ctx.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.E2E_CPU_THROTTLE) });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });

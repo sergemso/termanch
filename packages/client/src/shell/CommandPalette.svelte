@@ -16,6 +16,17 @@
   $effect(() => { if (!open) { query = ''; } });
   $effect(() => { value = results[0]?.id ?? ''; });
   function pick(e: PaletteEntry) { ran = true; open = false; onrun(e); }
+  // The highlighted row is read from the list the library keeps, which can lag a keystroke or two behind the text on a
+  // slow machine: Enter right after typing then opened the previous top result (or nothing). The text is the truth, so
+  // the highlight follows it at once, and Enter opens the highlighted row of what is shown now.
+  function typed(ev: Event) { value = searchEntries(entries, (ev.currentTarget as HTMLInputElement).value)[0]?.id ?? ''; }
+  function enter(ev: KeyboardEvent) {
+    if (ev.key !== 'Enter' || ev.isComposing) return;
+    ev.preventDefault();
+    ev.stopPropagation(); // the library's own Enter would open its (possibly stale) selection a second time
+    const e = results.find((r) => r.id === value) ?? results[0];
+    if (e) pick(e);
+  }
   function closeFocus(ev: Event) {
     ev.preventDefault();
     if (!ran && returnTo?.isConnected) returnTo.focus({ preventScroll: true });
@@ -30,7 +41,7 @@
     <Dialog.Title class="sr-only">Command palette</Dialog.Title>
     <Dialog.Description class="sr-only">Type to find a session, server, destination or action. Up and Down choose, Enter opens, Escape closes.</Dialog.Description>
     <Command.Root shouldFilter={false} loop label="Search" bind:value class="flex min-h-0 flex-1 flex-col">
-      <Command.Input bind:value={query} placeholder="Jump to a session, server or action"
+      <Command.Input bind:value={query} oninput={typed} onkeydowncapture={enter} placeholder="Jump to a session, server or action"
         class="h-14 w-full shrink-0 border-0 border-b border-line bg-transparent px-4 text-input text-fg outline-none placeholder:text-muted" />
       <Command.List class="min-h-0 flex-1 overflow-y-auto p-2">
         <Command.Viewport>
